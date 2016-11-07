@@ -1,0 +1,187 @@
+{
+    "specimen": {
+        "dynamic": "strict",
+        "_all": {"enabled": false},
+        "properties": {
+            "biosampleId": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "name": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "sampleDescription": {
+                "type": "string"
+            },
+            "material": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "derivedFrom": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "availibility": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "specimenFromOrganism": {
+                "properties": {
+                    "specimenCollectionDate": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "animalAgeAtCollection": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "developmentalStage": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "healthStatusAtCollection": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "OrganismPart": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "SpecimenCollectionProtocol": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "fastedStatus": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "numberOfPieces": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "specimenVolume": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "specimenSize": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "specimenWeight": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "specimenPictureUrl": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "specimenPictureUrl": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
+            },
+            "cellSpecimen": {
+                "properties": {
+                    "markers": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "cellType": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "purificationProtocol": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
+            },
+            "cellCulture": {
+                "properties": {
+                    "cultureType": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "cellType": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "cellCultureProtocol": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "cultureConditions": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "NumberOfPassages": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
+            },
+            "cellLine": {
+                "properties": {
+                    "organism": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "sex": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "cellLine": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "biomaterialProvider": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "catalogueNumber": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "passageNumber": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "dateEstablished": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "publication": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "breed": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "cellType": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "cultureConditions": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "cultureProtocol": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "disease": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "karyotype": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
+            }
+        }
+    }
+}
