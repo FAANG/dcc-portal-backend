@@ -11,60 +11,160 @@
                 "type": "string",
                 "index": "not_analyzed"
             },
-            "sampleDescription": {
+            "description": {
                 "type": "string"
             },
-            "material": {
+            "standardMet": {
                 "type": "string",
                 "index": "not_analyzed"
+            },
+            "material": {
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "ontologyTerms": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
             },
             "availability": {
                 "type": "string",
                 "index": "not_analyzed"
             },
             "organism": {
-                "type": "string",
-                "index": "not_analyzed"
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "ontologyTerms": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
             },
             "sex": {
-                "type": "string",
-                "index": "not_analyzed"
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "ontologyTerms": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
             },
             "breed": {
-                "type": "string",
-                "index": "not_analyzed"
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "ontologyTerms": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
             },
             "birthDate": {
-                "type": "string",
-                "index": "not_analyzed"
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                        },
+                    "unit": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
             },
             "healthStatus   ": {
-                "type": "string",
-                "index": "not_analyzed"
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "ontologyTerms": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
             },
             "birthLocation": {
-                "type": "string",
-                "index": "not_analyzed"
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                        },
+                    "unit": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
             },
             "birthLocationLongitude": {
-                "type": "string",
-                "index": "not_analyzed"
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                        },
+                    "unit": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
             },
             "birthLocationLatitude": {
-                "type": "string",
-                "index": "not_analyzed"
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                        },
+                    "unit": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
             },
             "birthWeight": {
-                "type": "string",
-                "index": "not_analyzed"
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                        },
+                    "unit": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
             },
             "placentalWeight": {
-                "type": "string",
-                "index": "not_analyzed"
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                        },
+                    "unit": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
             },
             "pregnancyLength": {
-                "type": "string",
-                "index": "not_analyzed"
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                        },
+                    "unit": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
             },
             "deliveryTiming": {
                 "type": "string",
