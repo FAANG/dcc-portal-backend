@@ -30,7 +30,7 @@ my @samples = fetch_specimens_by_project($project);
 my $number_specimens_check = keys %specimen_from_organism;
 croak "Did not obtain any specimens from BioSamples" unless ( $number_specimens_check > 0);
 
-#process_specimens(%specimen_from_organism);
+process_specimens(%specimen_from_organism);
 process_cell_specimens(%cell_specimen);
 #process_cell_cultures(%cell_culture);
 #process_cell_lines(%cell_line);
@@ -54,6 +54,7 @@ sub process_specimens{
         ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0],
       },
       availibility => $$specimen{characteristics}{availibility}[0]{text},
+      project => $$specimen{characteristics}{project}[0]{text},
       derivedFrom => $$derivedFrom{_embedded}{samplesrelations}[0]{accession},
       specimenFromOrganism => {
         specimenCollectionDate => {
@@ -124,8 +125,17 @@ sub process_cell_specimens{
         ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0],
       },
       availibility => $$specimen{characteristics}{availibility}[0]{text},
-      derivedFrom => $$derivedFrom{_embedded}{samplesrelations}[0]{accession}
+      project => $$specimen{characteristics}{project}[0]{text},
+      derivedFrom => $$derivedFrom{_embedded}{samplesrelations}[0]{accession},
+      cellSpecimen => {
+        markers => $$specimen{characteristics}{markers}[0]{text},
+        purificationProtocol => $$specimen{characteristics}{purificationProtocol}[0]{text},
+      },
     );
+    foreach my $cellType (@{$$specimen{characteristics}{cellType}}){
+      push(@{$es_doc{cellSpecimen}{cellType}}, $cellType);
+    }
+    print Dumper(%es_doc), "\n\n\n";
   }
 }
 
