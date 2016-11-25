@@ -30,7 +30,11 @@ my @samples = fetch_specimens_by_project($project);
 my $number_specimens_check = keys %specimen_from_organism;
 croak "Did not obtain any specimens from BioSamples" unless ( $number_specimens_check > 0);
 
-process_specimens(%specimen_from_organism);
+#process_specimens(%specimen_from_organism);
+process_cell_specimens(%cell_specimen);
+#process_cell_cultures(%cell_culture);
+#process_cell_lines(%cell_line);
+#process_organisms(%organism, @derivedFromOrganismList);
 
 sub process_specimens{
   my ( %specimen_from_organism ) = @_;
@@ -98,6 +102,30 @@ sub process_specimens{
       push(@{$es_doc{specimenFromOrganism}{healthStatusAtCollection}}, $healthStatusAtCollection);
     }
 #      standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
+  }
+}
+
+sub process_cell_specimens{
+  my ( %cell_specimen ) = @_;
+  foreach my $key (keys %cell_specimen){
+    my $specimen = $cell_specimen{$key};
+    #Pull in derived from accession from BioSamples.  #TODO This is slow, better way to do this?    
+    my $relations = fetch_relations_json($$specimen{_links}{relations}{href});
+    my $derivedFrom = fetch_relations_json($$relations{_links}{derivedFrom}{href}); #Specimen from Organism
+    my $derivedFrom_organism = fetch_relations_json($$derivedFrom{_embedded}{samplesrelations}[0]{_links}{derivedFrom}{href});
+    push(@derivedFromOrganismList, $$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession});
+    
+    my %es_doc = (
+      name => $$specimen{name},
+      biosampleId => $$specimen{accession},
+      description => $$specimen{description},
+      material => {
+        text => $$specimen{characteristics}{material}[0]{text},
+        ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0],
+      },
+      availibility => $$specimen{characteristics}{availibility}[0]{text},
+      derivedFrom => $$derivedFrom{_embedded}{samplesrelations}[0]{accession}
+    );
   }
 }
 
