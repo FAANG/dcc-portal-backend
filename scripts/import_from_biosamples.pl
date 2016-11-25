@@ -21,6 +21,9 @@ my %cell_specimen;
 my %cell_culture;
 my %cell_line;
 
+# Store of derived from to track non-FAANG organisms (mainly from legacy samples)
+my @derivedFromOrganismList;
+
 my @samples = fetch_specimens_by_project($project);
 
 #Check that specimens were obtained from BioSamples
@@ -33,17 +36,21 @@ sub process_specimens{
   my ( %specimen_from_organism ) = @_;
   foreach my $key (keys %specimen_from_organism){
     my $specimen = $specimen_from_organism{$key};
-    
+
+    #Pull in derived from accession from BioSamples.  #TODO This is slow, better way to do this?    
+    my $relations = fetch_relations_json($$specimen{_links}{relations}{href});
+    my $derivedFrom = fetch_relations_json($$relations{_links}{derivedFrom}{href});
+    push(@derivedFromOrganismList, $$derivedFrom{_embedded}{samplesrelations}[0]{accession});
     my %es_doc = (
       name => $$specimen{name},
       biosampleId => $$specimen{accession},
       description => $$specimen{description},
-#      standardMet => , #TODO Need to validate sample to know if standard is met
       material => {
         text => $$specimen{characteristics}{material}[0]{text},
         ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0],
       },
       availibility => $$specimen{characteristics}{availibility}[0]{text},
+      derivedFrom => $$derivedFrom{_embedded}{samplesrelations}[0]{accession},
       specimenFromOrganism => {
         specimenCollectionDate => {
           text => $$specimen{characteristics}{specimenCollectionDate}[0]{text},
@@ -81,28 +88,16 @@ sub process_specimens{
         }
       }
     );
-    
-    #Pull in derived from accession
-    #my derivedURL = "https://www.ebi.ac.uk/biosamples/api/samplesrelations/".$$specimen{accession}."/derivedFrom"
-#   derivedFrom =>
-    #"derivedFrom" : {
-    #"href" : "https://www.ebi.ac.uk/biosamples/api/samplesrelations/SAMEA6270418/derivedFrom"
-
-    #TODO Decide whether to pull in parent information such as organism
-
-    #TODO Add existing parents to list to ensure that non FAANG parents are imported
-
-    #Add items that can have multiples
-    #organization => { #TODO Can have multiple orgs?
-#        name => ,
-#        role => ,
-#        URL => ,
-#      },
-#        specimenPictureUrl => $specimen{specimenPictureUrl}[0]{text} #TODO Can be multiple
-#        healthStatusAtCollection => {
-#          text =>
-#          ontologyTerms =>
-#        },
+    foreach my $organization (@{$$specimen{organization}}){
+      push(@{$es_doc{organization}}, $organization);
+    }
+    foreach my $specimenPictureUrl (@{$$specimen{characteristics}{specimenPictureUrl}}){
+      push(@{$es_doc{specimenFromOrganism}{specimenPictureUrl}}, $$specimenPictureUrl{text});
+    }
+    foreach my $healthStatusAtCollection (@{$$specimen{characteristics}{healthStatusAtCollection}}){
+      push(@{$es_doc{specimenFromOrganism}{healthStatusAtCollection}}, $healthStatusAtCollection);
+    }
+#      standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
   }
 }
 
@@ -147,13 +142,24 @@ sub fetch_biosamples_json{
     push(@pages, $item);
   }
   
-  while ($$json_text{_links}{next}{href}){  # Iterate until no more pages
+  while ($$json_text{_links}{next}{href}){  # Iterate until no more pages using HAL links
     $browser->get( $$json_text{_links}{next}{href});  # Get next page
     $content = $browser->content();
     $json_text = $json->decode($content);
     foreach my $item ($json_text->{_embedded}){
-      push(@pages, $item);  # Store each page
+      push(@pages, $item);  # Store each additional page
     }
   }
   return @pages;
+}
+
+sub fetch_relations_json{
+  my ($json_url) = @_;
+
+  my $browser = WWW::Mechanize->new();
+  $browser->get( $json_url );
+  my $content = $browser->content();
+  my $json = new JSON;
+  my $json_text = $json->decode($content);
+  return $json_text;
 }
