@@ -6,13 +6,21 @@ use Getopt::Long;
 use Carp;
 use WWW::Mechanize;
 use JSON -support_by_pp;
+use Search::Elasticsearch;
 use Data::Dumper;
 
-my $project;
+my ($project, $es_host);
+my $es_index_name = 'faang';
+
 GetOptions(
-  "project=s" => \$project
+  'project=s' => \$project,
+  'es_host=s' =>\$es_host,
+  'es_index_name=s' =>\$es_index_name,
 );
 croak "Need -project" unless ( $project);
+
+my $es = Search::Elasticsearch->new(nodes => $es_host, client => '1_0::Direct');
+my %indexed_samples;
 
 #Sample Material storage
 my %organism;
@@ -31,13 +39,13 @@ my $number_specimens_check = keys %specimen_from_organism;
 croak "Did not obtain any specimens from BioSamples" unless ( $number_specimens_check > 0);
 
 #Entities dependent on organism
-process_specimens(%specimen_from_organism);
-process_cell_specimens(%cell_specimen);
-process_cell_cultures(%cell_culture);
+#process_specimens(%specimen_from_organism);
+#process_cell_specimens(%cell_specimen);
+#process_cell_cultures(%cell_culture);
 
 #Independent entities
-process_cell_lines(%cell_line); #TODO Need to know how organism, sex and breed is stored
-process_organisms(%organism, @derivedFromOrganismList);
+#process_cell_lines(%cell_line); #TODO Need to know how organism, sex and breed is stored
+process_organisms(\%organism, \@derivedFromOrganismList);
 
 sub process_specimens{
   my ( %specimen_from_organism ) = @_;
@@ -113,6 +121,7 @@ sub process_specimens{
       push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
     }
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET  }
+    update_elasticsearch(\%es_doc, 'specimen');
   }
 }
 
@@ -153,6 +162,7 @@ sub process_cell_specimens{
       push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
     }
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
+    update_elasticsearch(\%es_doc, 'specimen');
   }
 }
 
@@ -198,6 +208,7 @@ sub process_cell_cultures{
       push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
     }
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
+    update_elasticsearch(\%es_doc, 'specimen');
   }
 }
 
@@ -233,11 +244,14 @@ sub process_cell_lines{
       push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
     }
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
+    update_elasticsearch(\%es_doc, 'specimen');
   }
 }
 
 sub process_organisms{
-  my ( %organism, @derivedFromOrganismList ) = @_;
+  my ( $organism_ref, $derivedFromOrganismListref ) = @_;
+  my @derivedFromOrganismList = @$derivedFromOrganismListref;
+  my %organism = %$organism_ref;
   foreach my $key (keys %organism){
     my $specimen = $organism{$key};
 
@@ -310,6 +324,7 @@ sub process_organisms{
     }
     #TODO do something with @derivedFromOrganismList to check whether all required organisms have been imported
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
+    update_elasticsearch(\%es_doc, 'organism');
   }
 }
 
@@ -374,4 +389,35 @@ sub fetch_relations_json{
   my $json = new JSON;
   my $json_text = $json->decode($content);
   return $json_text;
+}
+
+sub update_elasticsearch{
+  my ($es_doc_ref, $type) = @_;
+  my %es_doc = %$es_doc_ref;
+  eval{$es->index(
+    index => $es_index_name,
+    type => '$type',
+    id => $es_doc{biosampleId},
+    body => \%es_doc,
+  );};
+  if (my $error = $@) {
+    die "error indexing sample in $es_index_name index:".$error->{text};
+  }
+  $indexed_samples{$es_doc{biosampleId}} = 1;
+
+  my $scroll = $es->scroll_helper(
+    index => $es_index_name,
+    type => '$type',
+    search_type => 'scan',
+    size => 500,
+  );
+  SCROLL:
+  while (my $es_doc = $scroll->next) {
+    next SCROLL if $indexed_samples{$es_doc->{_id}};
+    $es->delete(
+      index => $es_index_name,
+      type => '$type',
+      id => $es_doc->{_id},
+    );
+  }
 }
