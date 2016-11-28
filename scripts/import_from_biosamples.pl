@@ -30,11 +30,14 @@ my @samples = fetch_specimens_by_project($project);
 my $number_specimens_check = keys %specimen_from_organism;
 croak "Did not obtain any specimens from BioSamples" unless ( $number_specimens_check > 0);
 
+#Entities dependent on organism
 #process_specimens(%specimen_from_organism);
 #process_cell_specimens(%cell_specimen);
-process_cell_cultures(%cell_culture);
-#process_cell_lines(%cell_line);
-#process_organisms(%organism, @derivedFromOrganismList);
+#process_cell_cultures(%cell_culture);
+
+#Independent entities
+#process_cell_lines(%cell_line); #TODO Need to know how organism, sex and breed is stored
+process_organisms(%organism, @derivedFromOrganismList);
 
 sub process_specimens{
   my ( %specimen_from_organism ) = @_;
@@ -51,7 +54,7 @@ sub process_specimens{
       description => $$specimen{description},
       material => {
         text => $$specimen{characteristics}{material}[0]{text},
-        ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0],
+        ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0]
       },
       availibility => $$specimen{characteristics}{availibility}[0]{text},
       project => $$specimen{characteristics}{project}[0]{text},
@@ -175,7 +178,99 @@ sub process_cell_cultures{
         NumberOfPassages => $$specimen{characteristics}{numberOfPassages}[0]{text},
       }
     );
+    # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
+  }
+}
+
+sub process_cell_lines{
+  my ( %cell_line ) = @_;
+  foreach my $key (keys %cell_line){
+    my $specimen = $cell_line{$key};
+    #Pull in derived from accession from BioSamples.  #TODO This is slow, better way to do this?    
+    my $relations = fetch_relations_json($$specimen{_links}{relations}{href});
+    my $derivedFrom = fetch_relations_json($$relations{_links}{derivedFrom}{href}); #Specimen from Organism
+    my $derivedFrom_organism = fetch_relations_json($$derivedFrom{_embedded}{samplesrelations}[0]{_links}{derivedFrom}{href});
+    push(@derivedFromOrganismList, $$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession});
+    my %es_doc = (
+      name => $$specimen{name},
+      biosampleId => $$specimen{accession},
+      description => $$specimen{description},
+      material => {
+        text => $$specimen{characteristics}{material}[0]{text},
+        ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0],
+      },
+      availibility => $$specimen{characteristics}{availibility}[0]{text},
+      project => $$specimen{characteristics}{project}[0]{text},
+      derivedFrom => $$derivedFrom{_embedded}{samplesrelations}[0]{accession},
+      cellLine => {
+
+      }
+    );
+    # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
+  }
+}
+
+sub process_organisms{
+  my ( %organism, @derivedFromOrganismList ) = @_;
+  foreach my $key (keys %organism){
+    my $specimen = $organism{$key};
+    my %es_doc = (
+      name => $$specimen{name},
+      biosampleId => $$specimen{accession},
+      description => $$specimen{description},
+      material => {
+        text => $$specimen{characteristics}{material}[0]{text},
+        ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0]
+      },
+      availibility => $$specimen{characteristics}{availibility}[0]{text},
+      project => $$specimen{characteristics}{project}[0]{text},
+      organism => {
+        text => $$specimen{characteristics}{organism}[0]{text},
+        ontologyTerms => $$specimen{characteristics}{organism}[0]{ontologyTerms}[0]
+      },
+      sex => {
+        text => $$specimen{characteristics}{sex}[0]{text},
+        ontologyTerms => $$specimen{characteristics}{sex}[0]{ontologyTerms}[0]
+      },
+      breed => {
+        text => $$specimen{characteristics}{breed}[0]{text},
+        ontologyTerms => $$specimen{characteristics}{breed}[0]{ontologyTerms}[0]
+      },
+      birthDate => {
+          text => $$specimen{characteristics}{birthDate}[0]{text},
+          unit => $$specimen{characteristics}{birthDate}[0]{unit}
+      },
+      birthLocation => $$specimen{characteristics}{birthLocation}[0]{text},
+      birthLocationLongitude => {
+          text => $$specimen{characteristics}{birthLocationLongitude}[0]{text},
+          unit => $$specimen{characteristics}{birthLocationLongitude}[0]{unit}
+      },
+      birthLocationLatitude => {
+          text => $$specimen{characteristics}{birthLocationLatitude}[0]{text},
+          unit => $$specimen{characteristics}{birthLocationLatitude}[0]{unit}
+      },
+      birthWeight => {
+          text => $$specimen{characteristics}{birthWeight}[0]{text},
+          unit => $$specimen{characteristics}{birthWeight}[0]{unit}
+      },
+      placentalWeight => {
+          text => $$specimen{characteristics}{placentalWeight}[0]{text},
+          unit => $$specimen{characteristics}{placentalWeight}[0]{unit}
+      },
+      pregnancyLength => {
+          text => $$specimen{characteristics}{pregnancyLength}[0]{text},
+          unit => $$specimen{characteristics}{pregnancyLength}[0]{unit}
+      },
+      deliveryTiming => $$specimen{characteristics}{deliveryTiming}[0]{text},
+      deliveryEase => $$specimen{characteristics}{deliveryEase}[0]{text},
+      pedigree => $$specimen{characteristics}{pedigree}[0]{text},
+    );
+    foreach my $healthStatus (@{$$specimen{characteristics}{healthStatus}}){
+      push(@{$es_doc{healthStatus}}, $healthStatus);
+    }
+    #childOf
     print Dumper(%es_doc), "\n\n\n\n\n";
+    #TODO do something with @derivedFromOrganismList to check whether all required organisms have been imported
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
   }
 }
