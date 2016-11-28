@@ -109,13 +109,13 @@ sub process_specimens{
       }
     );
     foreach my $organization (@{$$specimen{organization}}){
-      push(@{$es_doc{organization}}, $organization);
+      push(@{$es_doc{organization}}, {name => $$organization{Name}, role => $$organization{Role}, URL => $$organization{URL}});
     }
     foreach my $specimenPictureUrl (@{$$specimen{characteristics}{specimenPictureUrl}}){
       push(@{$es_doc{specimenFromOrganism}{specimenPictureUrl}}, $$specimenPictureUrl{text});
     }
     foreach my $healthStatusAtCollection (@{$$specimen{characteristics}{healthStatusAtCollection}}){
-      push(@{$es_doc{specimenFromOrganism}{healthStatusAtCollection}}, $healthStatusAtCollection);
+      push(@{$es_doc{specimenFromOrganism}{healthStatusAtCollection}}, {text => $$healthStatusAtCollection{text}, ontologyTerms => $$healthStatusAtCollection{ontologyTerms}[0]});
     }
     foreach my $sameasrelations (@{$$sameAs{_embedded}{samplesrelations}}){
       push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
@@ -314,7 +314,7 @@ sub process_organisms{
       pedigree => $$specimen{characteristics}{pedigree}[0]{text}
     );
     foreach my $healthStatus (@{$$specimen{characteristics}{healthStatus}}){
-      push(@{$es_doc{healthStatus}}, $healthStatus);
+      push(@{$es_doc{healthStatus}}, {text => $$healthStatus{text}, ontologyTerms => $$healthStatus{ontologyTerms}[0]});
     }
     foreach my $samplesrelations (@{$$childOf{_embedded}{samplesrelations}}){
       push(@{$es_doc{childOf}}, $$samplesrelations{accession});
