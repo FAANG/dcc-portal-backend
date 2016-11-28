@@ -112,7 +112,7 @@
                             }
                         }
                     },
-                    "OrganismPart": {
+                    "organismPart": {
                         "properties": {
                             "text": {
                                 "type": "string",
@@ -124,7 +124,7 @@
                             }
                         }
                     },
-                    "SpecimenCollectionProtocol": {
+                    "specimenCollectionProtocol": {
                         "type": "string",
                         "index": "not_analyzed"
                     },
@@ -236,7 +236,7 @@
                         "type": "string",
                         "index": "not_analyzed"
                     },
-                    "NumberOfPassages": {
+                    "numberOfPassages": {
                         "type": "string",
                         "index": "not_analyzed"
                     }

@@ -39,12 +39,12 @@ my $number_specimens_check = keys %specimen_from_organism;
 croak "Did not obtain any specimens from BioSamples" unless ( $number_specimens_check > 0);
 
 #Entities dependent on organism
-#process_specimens(%specimen_from_organism);
-#process_cell_specimens(%cell_specimen);
-#process_cell_cultures(%cell_culture);
+process_specimens(%specimen_from_organism);
+process_cell_specimens(%cell_specimen);
+process_cell_cultures(%cell_culture);
 
 #Independent entities
-#process_cell_lines(%cell_line); #TODO Need to know how organism, sex and breed is stored
+process_cell_lines(%cell_line); #TODO Need to know how organism, sex and breed is stored
 process_organisms(\%organism, \@derivedFromOrganismList);
 
 sub process_specimens{
@@ -88,7 +88,7 @@ sub process_specimens{
           text => $$specimen{characteristics}{organismPart}[0]{text},
           ontologyTerms => $$specimen{characteristics}{organismPart}[0]{ontologyTerms}[0]
         },
-        SpecimenCollectionProtocol => $$specimen{characteristics}{specimenCollectionProtocol}[0]{text},
+        specimenCollectionProtocol => $$specimen{characteristics}{specimenCollectionProtocol}[0]{text},
         fastedStatus => $$specimen{characteristics}{fastedStatus}[0]{text},
         numberOfPieces => {
           text => $$specimen{characteristics}{numberOfPieces}[0]{text},
@@ -201,7 +201,7 @@ sub process_cell_cultures{
         },
         cellCultureProtocol => $$specimen{characteristics}{cellCultureProtocol}[0]{text},
         cultureConditions => $$specimen{characteristics}{cultureConditions}[0]{text},
-        NumberOfPassages => $$specimen{characteristics}{numberOfPassages}[0]{text},
+        numberOfPassages => $$specimen{characteristics}{numberOfPassages}[0]{text},
       }
     );
     foreach my $sameasrelations (@{$$sameAs{_embedded}{samplesrelations}}){
@@ -396,7 +396,7 @@ sub update_elasticsearch{
   my %es_doc = %$es_doc_ref;
   eval{$es->index(
     index => $es_index_name,
-    type => '$type',
+    type => $type,
     id => $es_doc{biosampleId},
     body => \%es_doc,
   );};
@@ -407,7 +407,7 @@ sub update_elasticsearch{
 
   my $scroll = $es->scroll_helper(
     index => $es_index_name,
-    type => '$type',
+    type => $type,
     search_type => 'scan',
     size => 500,
   );
@@ -416,7 +416,7 @@ sub update_elasticsearch{
     next SCROLL if $indexed_samples{$es_doc->{_id}};
     $es->delete(
       index => $es_index_name,
-      type => '$type',
+      type => $type,
       id => $es_doc->{_id},
     );
   }
