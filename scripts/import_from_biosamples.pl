@@ -7,6 +7,7 @@ use Carp;
 use WWW::Mechanize;
 use JSON -support_by_pp;
 use Search::Elasticsearch;
+use List::Compare;
 use Data::Dumper;
 
 my ($project, $es_host);
@@ -251,6 +252,7 @@ sub process_cell_lines{
 sub process_organisms{
   my ( $organism_ref, $derivedFromOrganismListref ) = @_;
   my @derivedFromOrganismList = @$derivedFromOrganismListref;
+  my @obserbedOrganismList;
   my %organism = %$organism_ref;
   foreach my $key (keys %organism){
     my $specimen = $organism{$key};
@@ -322,10 +324,13 @@ sub process_organisms{
     foreach my $sameasrelations (@{$$sameAs{_embedded}{samplesrelations}}){
       push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
     }
-    #TODO do something with @derivedFromOrganismList to check whether all required organisms have been imported
+    push(@obserbedOrganismList, $$specimen{accession});
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
     update_elasticsearch(\%es_doc, 'organism');
   }
+  my $lc = List::Compare->new(\@derivedFromOrganismList, \@obserbedOrganismList);
+  my @organismsNotImported = $lc->get_unique;
+  croak "Have Organisms that have not been imported" unless ( length(@organismsNotImported) < 1);
 }
 
 sub fetch_specimens_by_project {
