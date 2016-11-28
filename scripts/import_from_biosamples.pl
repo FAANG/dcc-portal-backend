@@ -31,15 +31,13 @@ my $number_specimens_check = keys %specimen_from_organism;
 croak "Did not obtain any specimens from BioSamples" unless ( $number_specimens_check > 0);
 
 #Entities dependent on organism
-#process_specimens(%specimen_from_organism);
-#process_cell_specimens(%cell_specimen);
-#process_cell_cultures(%cell_culture);
+process_specimens(%specimen_from_organism);
+process_cell_specimens(%cell_specimen);
+process_cell_cultures(%cell_culture);
 
 #Independent entities
-#process_cell_lines(%cell_line); #TODO Need to know how organism, sex and breed is stored
+process_cell_lines(%cell_line); #TODO Need to know how organism, sex and breed is stored
 process_organisms(%organism, @derivedFromOrganismList);
-
-#TODO Add sameas lookups to each import
 
 sub process_specimens{
   my ( %specimen_from_organism ) = @_;
@@ -50,6 +48,10 @@ sub process_specimens{
     my $relations = fetch_relations_json($$specimen{_links}{relations}{href});
     my $derivedFrom = fetch_relations_json($$relations{_links}{derivedFrom}{href});
     push(@derivedFromOrganismList, $$derivedFrom{_embedded}{samplesrelations}[0]{accession});
+
+    #Pull in sameas accession from BioSamples.  #TODO This is slow, better way to do this?
+    my $sameAs = fetch_relations_json($$relations{_links}{sameAs}{href});
+
     my %es_doc = (
       name => $$specimen{name},
       biosampleId => $$specimen{accession},
@@ -107,6 +109,9 @@ sub process_specimens{
     foreach my $healthStatusAtCollection (@{$$specimen{characteristics}{healthStatusAtCollection}}){
       push(@{$es_doc{specimenFromOrganism}{healthStatusAtCollection}}, $healthStatusAtCollection);
     }
+    foreach my $sameasrelations (@{$$sameAs{_embedded}{samplesrelations}}){
+      push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
+    }
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET  }
   }
 }
@@ -121,6 +126,9 @@ sub process_cell_specimens{
     my $derivedFrom = fetch_relations_json($$relations{_links}{derivedFrom}{href}); #Specimen from Organism
     my $derivedFrom_organism = fetch_relations_json($$derivedFrom{_embedded}{samplesrelations}[0]{_links}{derivedFrom}{href});
     push(@derivedFromOrganismList, $$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession});
+
+    #Pull in sameas accession from BioSamples.  #TODO This is slow, better way to do this?
+    my $sameAs = fetch_relations_json($$relations{_links}{sameAs}{href});
     
     my %es_doc = (
       name => $$specimen{name},
@@ -141,6 +149,9 @@ sub process_cell_specimens{
     foreach my $cellType (@{$$specimen{characteristics}{cellType}}){
       push(@{$es_doc{cellSpecimen}{cellType}}, $cellType);
     }
+    foreach my $sameasrelations (@{$$sameAs{_embedded}{samplesrelations}}){
+      push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
+    }
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
   }
 }
@@ -154,6 +165,9 @@ sub process_cell_cultures{
     my $derivedFrom = fetch_relations_json($$relations{_links}{derivedFrom}{href}); #Specimen from Organism
     my $derivedFrom_organism = fetch_relations_json($$derivedFrom{_embedded}{samplesrelations}[0]{_links}{derivedFrom}{href});
     push(@derivedFromOrganismList, $$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession});
+
+    #Pull in sameas accession from BioSamples.  #TODO This is slow, better way to do this?
+    my $sameAs = fetch_relations_json($$relations{_links}{sameAs}{href});
 
     my %es_doc = (
       name => $$specimen{name},
@@ -180,6 +194,9 @@ sub process_cell_cultures{
         NumberOfPassages => $$specimen{characteristics}{numberOfPassages}[0]{text},
       }
     );
+    foreach my $sameasrelations (@{$$sameAs{_embedded}{samplesrelations}}){
+      push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
+    }
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
   }
 }
@@ -193,6 +210,10 @@ sub process_cell_lines{
     my $derivedFrom = fetch_relations_json($$relations{_links}{derivedFrom}{href}); #Specimen from Organism
     my $derivedFrom_organism = fetch_relations_json($$derivedFrom{_embedded}{samplesrelations}[0]{_links}{derivedFrom}{href});
     push(@derivedFromOrganismList, $$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession});
+    
+    #Pull in sameas accession from BioSamples.  #TODO This is slow, better way to do this?
+    my $sameAs = fetch_relations_json($$relations{_links}{sameAs}{href});
+
     my %es_doc = (
       name => $$specimen{name},
       biosampleId => $$specimen{accession},
@@ -208,6 +229,9 @@ sub process_cell_lines{
 
       }
     );
+    foreach my $sameasrelations (@{$$sameAs{_embedded}{samplesrelations}}){
+      push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
+    }
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
   }
 }
@@ -217,9 +241,12 @@ sub process_organisms{
   foreach my $key (keys %organism){
     my $specimen = $organism{$key};
 
-    #Pull in childof from accession from BioSamples.  #TODO This is slow, better way to do this?    
+    #Pull in childof accession from BioSamples.  #TODO This is slow, better way to do this?    
     my $relations = fetch_relations_json($$specimen{_links}{relations}{href});
     my $childOf = fetch_relations_json($$relations{_links}{childOf}{href});
+
+    #Pull in sameas accession from BioSamples.  #TODO This is slow, better way to do this?
+    my $sameAs = fetch_relations_json($$relations{_links}{sameAs}{href});
 
     my %es_doc = (
       name => $$specimen{name},
@@ -277,6 +304,9 @@ sub process_organisms{
     }
     foreach my $samplesrelations (@{$$childOf{_embedded}{samplesrelations}}){
       push(@{$es_doc{childOf}}, $$samplesrelations{accession});
+    }
+    foreach my $sameasrelations (@{$$sameAs{_embedded}{samplesrelations}}){
+      push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
     }
     #TODO do something with @derivedFromOrganismList to check whether all required organisms have been imported
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
