@@ -39,6 +39,8 @@ croak "Did not obtain any specimens from BioSamples" unless ( $number_specimens_
 #process_cell_lines(%cell_line); #TODO Need to know how organism, sex and breed is stored
 process_organisms(%organism, @derivedFromOrganismList);
 
+#TODO Add sameas lookups to each import
+
 sub process_specimens{
   my ( %specimen_from_organism ) = @_;
   foreach my $key (keys %specimen_from_organism){
@@ -214,6 +216,11 @@ sub process_organisms{
   my ( %organism, @derivedFromOrganismList ) = @_;
   foreach my $key (keys %organism){
     my $specimen = $organism{$key};
+
+    #Pull in childof from accession from BioSamples.  #TODO This is slow, better way to do this?    
+    my $relations = fetch_relations_json($$specimen{_links}{relations}{href});
+    my $childOf = fetch_relations_json($$relations{_links}{childOf}{href});
+
     my %es_doc = (
       name => $$specimen{name},
       biosampleId => $$specimen{accession},
@@ -263,13 +270,14 @@ sub process_organisms{
       },
       deliveryTiming => $$specimen{characteristics}{deliveryTiming}[0]{text},
       deliveryEase => $$specimen{characteristics}{deliveryEase}[0]{text},
-      pedigree => $$specimen{characteristics}{pedigree}[0]{text},
+      pedigree => $$specimen{characteristics}{pedigree}[0]{text}
     );
     foreach my $healthStatus (@{$$specimen{characteristics}{healthStatus}}){
       push(@{$es_doc{healthStatus}}, $healthStatus);
     }
-    #childOf
-    print Dumper(%es_doc), "\n\n\n\n\n";
+    foreach my $samplesrelations (@{$$childOf{_embedded}{samplesrelations}}){
+      push(@{$es_doc{childOf}}, $$samplesrelations{accession});
+    }
     #TODO do something with @derivedFromOrganismList to check whether all required organisms have been imported
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
   }
