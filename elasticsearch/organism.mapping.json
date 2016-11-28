@@ -90,7 +90,7 @@
                     }
                 }
             },
-            "healthStatus   ": {
+            "healthStatus": {
                 "properties": {
                     "text": {
                         "type": "string",
