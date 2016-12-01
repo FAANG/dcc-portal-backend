@@ -69,7 +69,7 @@ sub process_specimens{
         text => $$specimen{characteristics}{material}[0]{text},
         ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0]
       },
-      availibility => $$specimen{characteristics}{availibility}[0]{text},
+      availability => $$specimen{characteristics}{availability}[0]{text},
       project => $$specimen{characteristics}{project}[0]{text},
       derivedFrom => $$derivedFrom{_embedded}{samplesrelations}[0]{accession},
       specimenFromOrganism => {
@@ -148,7 +148,7 @@ sub process_cell_specimens{
         text => $$specimen{characteristics}{material}[0]{text},
         ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0],
       },
-      availibility => $$specimen{characteristics}{availibility}[0]{text},
+      availability => $$specimen{characteristics}{availability}[0]{text},
       project => $$specimen{characteristics}{project}[0]{text},
       derivedFrom => $$derivedFrom{_embedded}{samplesrelations}[0]{accession},
       cellSpecimen => {
@@ -188,7 +188,7 @@ sub process_cell_cultures{
         text => $$specimen{characteristics}{material}[0]{text},
         ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0],
       },
-      availibility => $$specimen{characteristics}{availibility}[0]{text},
+      availability => $$specimen{characteristics}{availability}[0]{text},
       project => $$specimen{characteristics}{project}[0]{text},
       derivedFrom => $$derivedFrom{_embedded}{samplesrelations}[0]{accession},
       cellCulture => {
@@ -234,7 +234,7 @@ sub process_cell_lines{
         text => $$specimen{characteristics}{material}[0]{text},
         ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0],
       },
-      availibility => $$specimen{characteristics}{availibility}[0]{text},
+      availability => $$specimen{characteristics}{availability}[0]{text},
       project => $$specimen{characteristics}{project}[0]{text},
       derivedFrom => $$derivedFrom{_embedded}{samplesrelations}[0]{accession},
       cellLine => {
@@ -272,7 +272,7 @@ sub process_organisms{
         text => $$specimen{characteristics}{material}[0]{text},
         ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0]
       },
-      availibility => $$specimen{characteristics}{availibility}[0]{text},
+      availability => $$specimen{characteristics}{availability}[0]{text},
       project => $$specimen{characteristics}{project}[0]{text},
       organism => {
         text => $$specimen{characteristics}{organism}[0]{text},
@@ -330,7 +330,7 @@ sub process_organisms{
   }
   my $lc = List::Compare->new(\@derivedFromOrganismList, \@obserbedOrganismList);
   my @organismsNotImported = $lc->get_unique;
-  croak "Have Organisms that have not been imported" unless ( length(@organismsNotImported) < 1);
+  croak "Have Organisms that have not been imported" unless ( scalar(@organismsNotImported) < 1);
 }
 
 sub fetch_specimens_by_project {
