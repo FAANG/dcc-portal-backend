@@ -62,6 +62,58 @@
                 "type": "string",
                 "index": "not_analyzed"
             },
+            "organism": {
+                "properties": {
+                    "organism": {
+                        "properties": {
+                            "text": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            },
+                            "ontologyTerms": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
+                    },
+                    "sex": {
+                        "properties": {
+                            "text": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            },
+                            "ontologyTerms": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
+                    },
+                    "breed": {
+                        "properties": {
+                            "text": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            },
+                            "ontologyTerms": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
+                    },
+                    "healthStatus": {
+                        "properties": {
+                            "text": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            },
+                            "ontologyTerms": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
+                    }
+                }
+            },
             "specimenFromOrganism": {
                 "properties": {
                     "specimenCollectionDate": {
