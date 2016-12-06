@@ -19,6 +19,7 @@ GetOptions(
   'es_index_name=s' =>\$es_index_name,
 );
 croak "Need -project" unless ( $project);
+croak "Need -es_host" unless ( $es_host);
 
 my $es = Search::Elasticsearch->new(nodes => $es_host, client => '1_0::Direct');
 my %indexed_samples;
