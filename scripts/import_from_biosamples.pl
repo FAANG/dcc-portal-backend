@@ -30,8 +30,8 @@ my %cell_specimen;
 my %cell_culture;
 my %cell_line;
 
-# Store of derived from to track non-FAANG organisms (mainly from legacy samples)
-my @derivedFromOrganismList;
+# Store specimen to sample relationships for embedding search data and importing legacy organisms
+my %derivedFromOrganism;
 
 my @samples = fetch_specimens_by_project($project);
 
@@ -45,8 +45,8 @@ process_cell_specimens(%cell_specimen);
 process_cell_cultures(%cell_culture);
 
 #Independent entities
-process_cell_lines(%cell_line); #TODO Need to know how organism, sex and breed is stored
-process_organisms(\%organism, \@derivedFromOrganismList);
+process_cell_lines(%cell_line);
+process_organisms(\%organism, \%derivedFromOrganism);
 
 sub process_specimens{
   my ( %specimen_from_organism ) = @_;
@@ -56,7 +56,6 @@ sub process_specimens{
     #Pull in derived from accession from BioSamples.  #TODO This is slow, better way to do this?    
     my $relations = fetch_relations_json($$specimen{_links}{relations}{href});
     my $derivedFrom = fetch_relations_json($$relations{_links}{derivedFrom}{href});
-    push(@derivedFromOrganismList, $$derivedFrom{_embedded}{samplesrelations}[0]{accession});
 
     #Pull in sameas accession from BioSamples.  #TODO This is slow, better way to do this?
     my $sameAs = fetch_relations_json($$relations{_links}{sameAs}{href});
@@ -122,7 +121,11 @@ sub process_specimens{
       push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
     }
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET  }
-    update_elasticsearch(\%es_doc, 'specimen');
+    if($derivedFromOrganism{$$derivedFrom{_embedded}{samplesrelations}[0]{accession}}){
+      push($derivedFromOrganism{$$derivedFrom{_embedded}{samplesrelations}[0]{accession}}, \%es_doc);
+    }else{
+      $derivedFromOrganism{$$derivedFrom{_embedded}{samplesrelations}[0]{accession}} = [\%es_doc];
+    }
   }
 }
 
@@ -135,7 +138,6 @@ sub process_cell_specimens{
     my $relations = fetch_relations_json($$specimen{_links}{relations}{href});
     my $derivedFrom = fetch_relations_json($$relations{_links}{derivedFrom}{href}); #Specimen from Organism
     my $derivedFrom_organism = fetch_relations_json($$derivedFrom{_embedded}{samplesrelations}[0]{_links}{derivedFrom}{href});
-    push(@derivedFromOrganismList, $$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession});
 
     #Pull in sameas accession from BioSamples.  #TODO This is slow, better way to do this?
     my $sameAs = fetch_relations_json($$relations{_links}{sameAs}{href});
@@ -163,7 +165,11 @@ sub process_cell_specimens{
       push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
     }
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
-    update_elasticsearch(\%es_doc, 'specimen');
+    if($derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}}){
+      push($derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}}, \%es_doc);
+    }else{
+      $derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}} = [\%es_doc];
+    }
   }
 }
 
@@ -175,7 +181,6 @@ sub process_cell_cultures{
     my $relations = fetch_relations_json($$specimen{_links}{relations}{href});
     my $derivedFrom = fetch_relations_json($$relations{_links}{derivedFrom}{href}); #Specimen from Organism
     my $derivedFrom_organism = fetch_relations_json($$derivedFrom{_embedded}{samplesrelations}[0]{_links}{derivedFrom}{href});
-    push(@derivedFromOrganismList, $$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession});
 
     #Pull in sameas accession from BioSamples.  #TODO This is slow, better way to do this?
     my $sameAs = fetch_relations_json($$relations{_links}{sameAs}{href});
@@ -209,7 +214,11 @@ sub process_cell_cultures{
       push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
     }
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
-    update_elasticsearch(\%es_doc, 'specimen');
+    if($derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}}){
+      push($derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}}, \%es_doc);
+    }else{
+      $derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}} = [\%es_doc];
+    }
   }
 }
 
@@ -221,7 +230,6 @@ sub process_cell_lines{
     my $relations = fetch_relations_json($$specimen{_links}{relations}{href});
     my $derivedFrom = fetch_relations_json($$relations{_links}{derivedFrom}{href}); #Specimen from Organism
     my $derivedFrom_organism = fetch_relations_json($$derivedFrom{_embedded}{samplesrelations}[0]{_links}{derivedFrom}{href});
-    push(@derivedFromOrganismList, $$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession});
     
     #Pull in sameas accession from BioSamples.  #TODO This is slow, better way to do this?
     my $sameAs = fetch_relations_json($$relations{_links}{sameAs}{href});
@@ -245,13 +253,17 @@ sub process_cell_lines{
       push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
     }
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
-    update_elasticsearch(\%es_doc, 'specimen');
+    if($derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}}){
+      push($derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}}, \%es_doc);
+    }else{
+      $derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}} = [\%es_doc];
+    }
   }
 }
 
 sub process_organisms{
-  my ( $organism_ref, $derivedFromOrganismListref ) = @_;
-  my @derivedFromOrganismList = @$derivedFromOrganismListref;
+  my ( $organism_ref, $derivedFromOrganismref ) = @_;
+  my %derivedFromOrganism = %$derivedFromOrganismref;
   my @obserbedOrganismList;
   my %organism = %$organism_ref;
   foreach my $key (keys %organism){
@@ -327,10 +339,26 @@ sub process_organisms{
     push(@obserbedOrganismList, $$specimen{accession});
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
     update_elasticsearch(\%es_doc, 'organism');
+
+    foreach my $specimen_es_doc (@{$derivedFromOrganism{$$specimen{accession}}}){
+      push(@{$$specimen_es_doc{organism}{organism}}, {text => $$specimen{characteristics}{organism}[0]{text}, ontologyTerms => $$specimen{characteristics}{organism}[0]{ontologyTerms}[0]});
+      push(@{$$specimen_es_doc{organism}{sex}}, {text => $$specimen{characteristics}{sex}[0]{text}, ontologyTerms => $$specimen{characteristics}{sex}[0]{ontologyTerms}[0]});
+      push(@{$$specimen_es_doc{organism}{breed}}, {text => $$specimen{characteristics}{breed}[0]{text}, ontologyTerms => $$specimen{characteristics}{breed}[0]{ontologyTerms}[0]});
+      foreach my $healthStatus (@{$$specimen{characteristics}{healthStatus}}){
+        push(@{$$specimen_es_doc{organism}{healthStatus}}, {text => $$healthStatus{text}, ontologyTerms => $$healthStatus{ontologyTerms}[0]});
+      }
+      update_elasticsearch(\%$specimen_es_doc, 'specimen');
+    }
   }
+  my @derivedFromOrganismList = keys(%derivedFromOrganism);
   my $lc = List::Compare->new(\@derivedFromOrganismList, \@obserbedOrganismList);
   my @organismsNotImported = $lc->get_unique;
-  croak "Have Organisms that have not been imported" unless ( scalar(@organismsNotImported) < 1);
+  print Dumper(@organismsNotImported) unless ( scalar(@organismsNotImported) < 1);
+  croak "Have Organisms that have not been imported \@organismsNotImported" unless ( scalar(@organismsNotImported) < 1);
+
+  #Delete removed samples
+  clean_elasticsearch('specimen');
+  clean_elasticsearch('organism');
 }
 
 sub fetch_specimens_by_project {
@@ -409,7 +437,10 @@ sub update_elasticsearch{
     die "error indexing sample in $es_index_name index:".$error->{text};
   }
   $indexed_samples{$es_doc{biosampleId}} = 1;
+}
 
+sub clean_elasticsearch{
+  my ($type) = @_;
   my $scroll = $es->scroll_helper(
     index => $es_index_name,
     type => $type,
@@ -417,12 +448,12 @@ sub update_elasticsearch{
     size => 500,
   );
   SCROLL:
-  while (my $es_doc = $scroll->next) {
-    next SCROLL if $indexed_samples{$es_doc->{_id}};
+  while (my $loaded_doc = $scroll->next) {
+    next SCROLL if $indexed_samples{$loaded_doc->{_id}};
     $es->delete(
       index => $es_index_name,
       type => $type,
-      id => $es_doc->{_id},
+      id => $loaded_doc->{_id},
     );
   }
 }
