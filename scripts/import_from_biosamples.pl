@@ -266,69 +266,69 @@ sub process_organisms{
   my ( $organism_ref, $derivedFromOrganismref ) = @_;
   my %derivedFromOrganism = %$derivedFromOrganismref;
   my @obserbedOrganismList;
-  my %organism = %$organism_ref;
-  foreach my $key (keys %organism){
-    my $specimen = $organism{$key};
+  my %allorganisms = %$organism_ref;
+  foreach my $key (keys %allorganisms){
+    my $organism = $allorganisms{$key};
 
     #Pull in childof accession from BioSamples.  #TODO This is slow, better way to do this?    
-    my $relations = fetch_relations_json($$specimen{_links}{relations}{href});
+    my $relations = fetch_relations_json($$organism{_links}{relations}{href});
     my $childOf = fetch_relations_json($$relations{_links}{childOf}{href});
 
     #Pull in sameas accession from BioSamples.  #TODO This is slow, better way to do this?
     my $sameAs = fetch_relations_json($$relations{_links}{sameAs}{href});
 
     my %es_doc = (
-      name => $$specimen{name},
-      biosampleId => $$specimen{accession},
-      description => $$specimen{description},
+      name => $$organism{name},
+      biosampleId => $$organism{accession},
+      description => $$organism{description},
       material => {
-        text => $$specimen{characteristics}{material}[0]{text},
-        ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0]
+        text => $$organism{characteristics}{material}[0]{text},
+        ontologyTerms => $$organism{characteristics}{material}[0]{ontologyTerms}[0]
       },
-      availability => $$specimen{characteristics}{availability}[0]{text},
-      project => $$specimen{characteristics}{project}[0]{text},
+      availability => $$organism{characteristics}{availability}[0]{text},
+      project => $$organism{characteristics}{project}[0]{text},
       organism => {
-        text => $$specimen{characteristics}{organism}[0]{text},
-        ontologyTerms => $$specimen{characteristics}{organism}[0]{ontologyTerms}[0]
+        text => $$organism{characteristics}{organism}[0]{text},
+        ontologyTerms => $$organism{characteristics}{organism}[0]{ontologyTerms}[0]
       },
       sex => {
-        text => $$specimen{characteristics}{sex}[0]{text},
-        ontologyTerms => $$specimen{characteristics}{sex}[0]{ontologyTerms}[0]
+        text => $$organism{characteristics}{sex}[0]{text},
+        ontologyTerms => $$organism{characteristics}{sex}[0]{ontologyTerms}[0]
       },
       breed => {
-        text => $$specimen{characteristics}{breed}[0]{text},
-        ontologyTerms => $$specimen{characteristics}{breed}[0]{ontologyTerms}[0]
+        text => $$organism{characteristics}{breed}[0]{text},
+        ontologyTerms => $$organism{characteristics}{breed}[0]{ontologyTerms}[0]
       },
       birthDate => {
-          text => $$specimen{characteristics}{birthDate}[0]{text},
-          unit => $$specimen{characteristics}{birthDate}[0]{unit}
+          text => $$organism{characteristics}{birthDate}[0]{text},
+          unit => $$organism{characteristics}{birthDate}[0]{unit}
       },
-      birthLocation => $$specimen{characteristics}{birthLocation}[0]{text},
+      birthLocation => $$organism{characteristics}{birthLocation}[0]{text},
       birthLocationLongitude => {
-          text => $$specimen{characteristics}{birthLocationLongitude}[0]{text},
-          unit => $$specimen{characteristics}{birthLocationLongitude}[0]{unit}
+          text => $$organism{characteristics}{birthLocationLongitude}[0]{text},
+          unit => $$organism{characteristics}{birthLocationLongitude}[0]{unit}
       },
       birthLocationLatitude => {
-          text => $$specimen{characteristics}{birthLocationLatitude}[0]{text},
-          unit => $$specimen{characteristics}{birthLocationLatitude}[0]{unit}
+          text => $$organism{characteristics}{birthLocationLatitude}[0]{text},
+          unit => $$organism{characteristics}{birthLocationLatitude}[0]{unit}
       },
       birthWeight => {
-          text => $$specimen{characteristics}{birthWeight}[0]{text},
-          unit => $$specimen{characteristics}{birthWeight}[0]{unit}
+          text => $$organism{characteristics}{birthWeight}[0]{text},
+          unit => $$organism{characteristics}{birthWeight}[0]{unit}
       },
       placentalWeight => {
-          text => $$specimen{characteristics}{placentalWeight}[0]{text},
-          unit => $$specimen{characteristics}{placentalWeight}[0]{unit}
+          text => $$organism{characteristics}{placentalWeight}[0]{text},
+          unit => $$organism{characteristics}{placentalWeight}[0]{unit}
       },
       pregnancyLength => {
-          text => $$specimen{characteristics}{pregnancyLength}[0]{text},
-          unit => $$specimen{characteristics}{pregnancyLength}[0]{unit}
+          text => $$organism{characteristics}{pregnancyLength}[0]{text},
+          unit => $$organism{characteristics}{pregnancyLength}[0]{unit}
       },
-      deliveryTiming => $$specimen{characteristics}{deliveryTiming}[0]{text},
-      deliveryEase => $$specimen{characteristics}{deliveryEase}[0]{text},
-      pedigree => $$specimen{characteristics}{pedigree}[0]{text}
+      deliveryTiming => $$organism{characteristics}{deliveryTiming}[0]{text},
+      deliveryEase => $$organism{characteristics}{deliveryEase}[0]{text},
+      pedigree => $$organism{characteristics}{pedigree}[0]{text}
     );
-    foreach my $healthStatus (@{$$specimen{characteristics}{healthStatus}}){
+    foreach my $healthStatus (@{$$organism{characteristics}{healthStatus}}){
       push(@{$es_doc{healthStatus}}, {text => $$healthStatus{text}, ontologyTerms => $$healthStatus{ontologyTerms}[0]});
     }
     foreach my $samplesrelations (@{$$childOf{_embedded}{samplesrelations}}){
@@ -337,19 +337,20 @@ sub process_organisms{
     foreach my $sameasrelations (@{$$sameAs{_embedded}{samplesrelations}}){
       push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
     }
-    push(@obserbedOrganismList, $$specimen{accession});
+    push(@obserbedOrganismList, $$organism{accession});
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
-    update_elasticsearch(\%es_doc, 'organism');
 
-    foreach my $specimen_es_doc (@{$derivedFromOrganism{$$specimen{accession}}}){
-      push(@{$$specimen_es_doc{organism}{organism}}, {text => $$specimen{characteristics}{organism}[0]{text}, ontologyTerms => $$specimen{characteristics}{organism}[0]{ontologyTerms}[0]});
-      push(@{$$specimen_es_doc{organism}{sex}}, {text => $$specimen{characteristics}{sex}[0]{text}, ontologyTerms => $$specimen{characteristics}{sex}[0]{ontologyTerms}[0]});
-      push(@{$$specimen_es_doc{organism}{breed}}, {text => $$specimen{characteristics}{breed}[0]{text}, ontologyTerms => $$specimen{characteristics}{breed}[0]{ontologyTerms}[0]});
-      foreach my $healthStatus (@{$$specimen{characteristics}{healthStatus}}){
+    foreach my $specimen_es_doc (@{$derivedFromOrganism{$$organism{accession}}}){
+      push(@{$$specimen_es_doc{organism}{organism}}, {text => $$organism{characteristics}{organism}[0]{text}, ontologyTerms => $$organism{characteristics}{organism}[0]{ontologyTerms}[0]});
+      push(@{$$specimen_es_doc{organism}{sex}}, {text => $$organism{characteristics}{sex}[0]{text}, ontologyTerms => $$organism{characteristics}{sex}[0]{ontologyTerms}[0]});
+      push(@{$$specimen_es_doc{organism}{breed}}, {text => $$organism{characteristics}{breed}[0]{text}, ontologyTerms => $$organism{characteristics}{breed}[0]{ontologyTerms}[0]});
+      foreach my $healthStatus (@{$$organism{characteristics}{healthStatus}}){
         push(@{$$specimen_es_doc{organism}{healthStatus}}, {text => $$healthStatus{text}, ontologyTerms => $$healthStatus{ontologyTerms}[0]});
       }
       update_elasticsearch(\%$specimen_es_doc, 'specimen');
+      push(@{$es_doc{specimens}}, $$specimen_es_doc{biosampleId});
     }
+    update_elasticsearch(\%es_doc, 'organism');
   }
   my @derivedFromOrganismList = keys(%derivedFromOrganism);
   my $lc = List::Compare->new(\@derivedFromOrganismList, \@obserbedOrganismList);
