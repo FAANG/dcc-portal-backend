@@ -64,6 +64,10 @@
             },
             "organism": {
                 "properties": {
+                    "biosampleId": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
                     "organism": {
                         "properties": {
                             "text": {

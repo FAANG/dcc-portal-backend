@@ -26,10 +26,6 @@
                 "type": "string",
                 "index": "not_analyzed"
             },
-            "specimens": {
-                "type": "string",
-                "index": "not_analyzed"
-            },
             "material": {
                 "properties": {
                     "text": {

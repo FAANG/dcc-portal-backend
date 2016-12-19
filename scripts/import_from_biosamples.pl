@@ -341,6 +341,7 @@ sub process_organisms{
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
 
     foreach my $specimen_es_doc (@{$derivedFromOrganism{$$organism{accession}}}){
+      push(@{$$specimen_es_doc{organism}{biosampleId}}, $$organism{accession});
       push(@{$$specimen_es_doc{organism}{organism}}, {text => $$organism{characteristics}{organism}[0]{text}, ontologyTerms => $$organism{characteristics}{organism}[0]{ontologyTerms}[0]});
       push(@{$$specimen_es_doc{organism}{sex}}, {text => $$organism{characteristics}{sex}[0]{text}, ontologyTerms => $$organism{characteristics}{sex}[0]{ontologyTerms}[0]});
       push(@{$$specimen_es_doc{organism}{breed}}, {text => $$organism{characteristics}{breed}[0]{text}, ontologyTerms => $$organism{characteristics}{breed}[0]{ontologyTerms}[0]});
@@ -348,7 +349,6 @@ sub process_organisms{
         push(@{$$specimen_es_doc{organism}{healthStatus}}, {text => $$healthStatus{text}, ontologyTerms => $$healthStatus{ontologyTerms}[0]});
       }
       update_elasticsearch(\%$specimen_es_doc, 'specimen');
-      push(@{$es_doc{specimens}}, $$specimen_es_doc{biosampleId});
     }
     update_elasticsearch(\%es_doc, 'organism');
   }
