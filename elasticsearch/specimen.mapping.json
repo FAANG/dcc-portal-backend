@@ -239,6 +239,18 @@
                     "specimenPictureUrl": {
                         "type": "string",
                         "index": "not_analyzed"
+                    },
+                    "gestationalAgeAtSampleCollection": {
+                        "properties": {
+                            "text": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            },
+                            "unit": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
                     }
                 }
             },
