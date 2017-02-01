@@ -1,0 +1,25 @@
+{
+    "index": {
+        "analysis": {
+            "analyzer": {
+                "ftp_url": {
+                    "type": "custom",
+                    "tokenizer": "alphanumeric",
+                    "filter": ["lowercase", "file_stopwords"]
+                }
+            },
+            "tokenizer": {
+              "alphanumeric": {
+                "type": "pattern",
+                "pattern": "[^A-Za-z0-9]([^A-Za-z]*([^A-Za-z0-9]|$))?"
+              }
+            },
+            "filter": {
+              "file_stopwords": {
+                "type": "stop",
+                "stopwords": ["ftp", "sra", "ebi", "ac", "uk", "faang", "gz"]
+              }
+            }
+        }
+    }
+}
