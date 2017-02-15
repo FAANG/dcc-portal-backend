@@ -3,48 +3,52 @@
         "_all": {"enabled": false},
         "dynamic": "strict",
         "properties": {
-            "name": {
-                "type": "string",
-                "index": "not_analyzed",
-                "fields": {
-                  "std": {
-                    "type": "string",
-                    "analyzer": "standard"
-                  }
+            "files": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "index": "not_analyzed",
+                        "fields": {
+                            "std": {
+                                "type": "string",
+                                "analyzer": "standard"
+                            }
+                        }
+                    },
+                    "md5": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "dataType": {
+                        "type": "string",
+                        "index": "not_analyzed",
+                        "fields": {
+                            "std": {
+                                "type": "string",
+                                "analyzer": "standard"
+                            }
+                        }
+                    },
+                    "url": {
+                        "type": "string",
+                        "index": "not_analyzed",
+                        "fields": {
+                            "keywords": {
+                                "type": "string",
+                                "analyzer": "ftp_url"
+                            }
+                        }
+                    }
                 }
-            }, 
-            "dataType": {
-                "type": "string",
-                "index": "not_analyzed",
-                "fields": {
-                  "std": {
-                    "type": "string",
-                    "analyzer": "standard"
-                  }
-                }
-            }, 
-            "md5": {
-                "type": "string",
-                "index": "not_analyzed"
-            }, 
+            },
             "specimens": {
                 "type": "string",
                 "index": "not_analyzed",
                 "fields": {
-                  "std": {
-                    "type": "string",
-                    "analyzer": "standard"
-                  }
-                }
-            }, 
-            "url": {
-                "type": "string",
-                "index": "not_analyzed",
-                "fields": {
-                  "keywords": {
-                    "type": "string",
-                    "analyzer": "ftp_url"
-                  }
+                    "std": {
+                        "type": "string",
+                        "analyzer": "standard"
+                    }
                 }
             }
         }
