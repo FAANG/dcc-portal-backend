@@ -64,7 +64,13 @@
                 "properties": {
                     "text": {
                         "type": "string",
-                        "index": "not_analyzed"
+                        "index": "not_analyzed",
+                        "fields": {
+                            "whitespace": {
+                                "type": "string",
+                                "analyzer": "whitespace"
+                            }
+                        }
                     },
                     "ontologyTerms": {
                         "type": "string",
@@ -76,7 +82,13 @@
                 "properties": {
                     "text": {
                         "type": "string",
-                        "index": "not_analyzed"
+                        "index": "not_analyzed",
+                        "fields": {
+                            "whitespace": {
+                                "type": "string",
+                                "analyzer": "whitespace"
+                            }
+                        }
                     },
                     "ontologyTerms": {
                         "type": "string",
@@ -88,7 +100,13 @@
                 "properties": {
                     "text": {
                         "type": "string",
-                        "index": "not_analyzed"
+                        "index": "not_analyzed",
+                        "fields": {
+                            "whitespace": {
+                                "type": "string",
+                                "analyzer": "whitespace"
+                            }
+                        }
                     },
                     "ontologyTerms": {
                         "type": "string",
