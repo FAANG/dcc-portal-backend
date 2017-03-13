@@ -228,13 +228,17 @@ sub process_cell_lines{
   foreach my $key (keys %cell_line){
     my $specimen = $cell_line{$key};
     #Pull in derived from accession from BioSamples.  #TODO This is slow, better way to do this?    
-    my $relations = fetch_relations_json($$specimen{_links}{relations}{href});
-    my $derivedFrom = fetch_relations_json($$relations{_links}{derivedFrom}{href}); #Specimen from Organism
-    my $derivedFrom_organism = fetch_relations_json($$derivedFrom{_embedded}{samplesrelations}[0]{_links}{derivedFrom}{href});
+    my ($relations, $derivedFrom, $derivedFrom_organism, $sameAs);
+    $relations = fetch_relations_json($$specimen{_links}{relations}{href});
+    $derivedFrom = fetch_relations_json($$relations{_links}{derivedFrom}{href}); #Specimen from Organism
+    if($$derivedFrom{_embedded}{samplesrelations}[0]{_links}{derivedFrom}{href}){
+      $derivedFrom_organism = fetch_relations_json($$derivedFrom{_embedded}{samplesrelations}[0]{_links}{derivedFrom}{href});      
+    }
     
     #Pull in sameas accession from BioSamples.  #TODO This is slow, better way to do this?
-    my $sameAs = fetch_relations_json($$relations{_links}{sameAs}{href});
+    $sameAs = fetch_relations_json($$relations{_links}{sameAs}{href});
 
+    #TODO Need cellline data section filled
     my %es_doc = (
       name => $$specimen{name},
       biosampleId => $$specimen{accession},
@@ -245,18 +249,20 @@ sub process_cell_lines{
       },
       availability => $$specimen{characteristics}{availability}[0]{text},
       project => $$specimen{characteristics}{project}[0]{text},
-      derivedFrom => $$derivedFrom{_embedded}{samplesrelations}[0]{accession},
       cellLine => {
 
       }
     );
+    if($$derivedFrom{_embedded}{samplesrelations}[0]{accession}){
+      $es_doc{derivedFrom} = $$derivedFrom{_embedded}{samplesrelations}[0]{accession};
+    }
     foreach my $sameasrelations (@{$$sameAs{_embedded}{samplesrelations}}){
       push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
     }
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
     if($derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}}){
       push($derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}}, \%es_doc);
-    }else{
+    }elsif($$derivedFrom{_embedded}{samplesrelations}[0]{accession}){
       $derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}} = [\%es_doc];
     }
   }
@@ -419,6 +425,7 @@ sub fetch_relations_json{
   my ($json_url) = @_;
 
   my $browser = WWW::Mechanize->new();
+  $browser->show_progress(1);
   $browser->get( $json_url );
   my $content = $browser->content();
   my $json = new JSON;
