@@ -425,7 +425,7 @@ sub fetch_relations_json{
   my ($json_url) = @_;
 
   my $browser = WWW::Mechanize->new();
-  $browser->show_progress(1);
+  #$browser->show_progress(1);  # Enable for WWW::Mechanize GET logging
   $browser->get( $json_url );
   my $content = $browser->content();
   my $json = new JSON;
