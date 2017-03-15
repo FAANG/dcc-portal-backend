@@ -260,10 +260,12 @@ sub process_cell_lines{
       push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
     }
     # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
-    if($derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}}){
-      push($derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}}, \%es_doc);
-    }elsif($$derivedFrom{_embedded}{samplesrelations}[0]{accession}){
-      $derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}} = [\%es_doc];
+    if($$derivedFrom{_embedded}{samplesrelations}[0]{accession}){  # May not be a derived from organism for a cell line (as not mandatory)
+      if($derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}}){
+        push($derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}}, \%es_doc);
+      }else{
+        $derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}} = [\%es_doc];
+      }
     }
   }
 }
