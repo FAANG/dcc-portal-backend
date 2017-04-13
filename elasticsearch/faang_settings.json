@@ -6,23 +6,28 @@
                     "type": "custom",
                     "tokenizer": "alphanumeric",
                     "filter": ["lowercase", "file_stopwords"]
+                },
+                "autocomp": {
+                    "tokenizer" : "autocomplete",
+                    "filter": "lowercase"
                 }
             },
             "tokenizer": {
                 "alphanumeric": {
                     "type": "pattern",
                     "pattern": "[^A-Za-z0-9]([^A-Za-z]*([^A-Za-z0-9]|$))?"
+                },
+                "autocomplete": {
+                    "type": "edgeNGram",
+                    "min_gram": 3,
+                    "max_gram": 20,
+                    "token_chars": [ "letter", "digit" ]
                 }
             },
             "filter": {
                 "file_stopwords": {
                     "type": "stop",
                     "stopwords": ["ftp", "sra", "ebi", "ac", "uk", "faang", "gz"]
-                },
-                "prefixes_filter": {
-                    "type": "edge_ngram",
-                    "min_gram": 3,
-                    "max_gram": 20
                 }
             }
         }

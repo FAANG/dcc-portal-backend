@@ -68,8 +68,7 @@
                         "fields": {
                             "autocomp": {
                                 "type": "string",
-                                "analyzer": "whitespace",
-                                "filter": ["lowercase", "prefixes_filter"]
+                                "analyzer": "autocomp"
                             }
                         }
                     },
@@ -87,8 +86,7 @@
                         "fields": {
                             "autocomp": {
                                 "type": "string",
-                                "analyzer": "whitespace",
-                                "filter": ["lowercase", "prefixes_filter"]
+                                "analyzer": "autocomp"
                             }
                         }
                     },
@@ -107,7 +105,8 @@
                             "autocomp": {
                                 "type": "string",
                                 "analyzer": "whitespace",
-                                "filter": ["lowercase", "prefixes_filter"]
+                                "tokeniser": "autocomplete",
+                                "filter": "lowercase"
                             }
                         }
                     },
