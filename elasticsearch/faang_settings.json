@@ -9,16 +9,21 @@
                 }
             },
             "tokenizer": {
-              "alphanumeric": {
-                "type": "pattern",
-                "pattern": "[^A-Za-z0-9]([^A-Za-z]*([^A-Za-z0-9]|$))?"
-              }
+                "alphanumeric": {
+                    "type": "pattern",
+                    "pattern": "[^A-Za-z0-9]([^A-Za-z]*([^A-Za-z0-9]|$))?"
+                }
             },
             "filter": {
-              "file_stopwords": {
-                "type": "stop",
-                "stopwords": ["ftp", "sra", "ebi", "ac", "uk", "faang", "gz"]
-              }
+                "file_stopwords": {
+                    "type": "stop",
+                    "stopwords": ["ftp", "sra", "ebi", "ac", "uk", "faang", "gz"]
+                },
+                "prefixes_filter": {
+                    "type": "edge_ngram",
+                    "min_gram": 3,
+                    "max_gram": 20
+                }
             }
         }
     }
