@@ -9,7 +9,7 @@
                 },
                 "autocomp": {
                     "tokenizer" : "autocomplete",
-                    "filter": "lowercase"
+                    "filter": ["lowercase"]
                 }
             },
             "tokenizer": {

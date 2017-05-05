@@ -104,9 +104,9 @@
                                 "type": "string",
                                 "index": "not_analyzed",
                                 "fields": {
-                                    "whitespace": {
+                                    "autocomp": {
                                         "type": "string",
-                                        "analyzer": "whitespace"
+                                        "analyzer": "autocomp"
                                     }
                                 }
                             },
@@ -122,9 +122,9 @@
                                 "type": "string",
                                 "index": "not_analyzed",
                                 "fields": {
-                                    "whitespace": {
+                                    "autocomp": {
                                         "type": "string",
-                                        "analyzer": "whitespace"
+                                        "analyzer": "autocomp"
                                     }
                                 }
                             },
@@ -140,9 +140,9 @@
                                 "type": "string",
                                 "index": "not_analyzed",
                                 "fields": {
-                                    "whitespace": {
+                                    "autocomp": {
                                         "type": "string",
-                                        "analyzer": "whitespace"
+                                        "analyzer": "autocomp"
                                     }
                                 }
                             },
