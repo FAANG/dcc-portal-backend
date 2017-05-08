@@ -1,0 +1,17 @@
+{
+    "archive": {
+        "_all": {"enabled": false},
+        "dynamic": "strict",
+        "properties": {
+            "ENA": {
+                "properties": {
+                    "id": {
+                      "type": "string",
+                      "index": "not_analyzed"
+                    }
+
+                }
+            }
+        }
+    }
+}
