@@ -1,7 +1,7 @@
 {
     "archive": {
-        "_all": {"enabled": false},
         "dynamic": "strict",
+        "_all": {"enabled": false},
         "properties": {
             "ENA": {
                 "properties": {
@@ -9,7 +9,6 @@
                       "type": "string",
                       "index": "not_analyzed"
                     }
-
                 }
             }
         }
