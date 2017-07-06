@@ -29,6 +29,16 @@
                             }
                         }
                     },
+                    "archive": {
+                        "type": "string",
+                        "index": "not_analyzed",
+                        "fields": {
+                            "std": {
+                                "type": "string",
+                                "analyzer": "standard"
+                            }
+                        }
+                    },
                     "url": {
                         "type": "string",
                         "index": "not_analyzed",
