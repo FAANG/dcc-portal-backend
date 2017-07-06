@@ -20,32 +20,59 @@ GetOptions(
 
 croak "Need -es_host" unless ($es_host);
 
+#Import FAANG data from FAANG endpoint of ENA API
+#ENA API documentation available at: http://www.ebi.ac.uk/ena/portal/api/doc?format=pdf
+my $url = "https://www.ebi.ac.uk/ena/portal/api/search/?result=read_run&format=JSON&limit=0&dataPortal=faang&fields=all";
+my $browser = WWW::Mechanize->new();
+$browser->credentials('anon','anon');
+$browser->get( $url );
+my $content = $browser->content();
+my $json = new JSON;
+my $json_text = $json->decode($content);
+
 my $es = Search::Elasticsearch->new(nodes => $es_host, client => '1_0::Direct');
-my @ids_to_import;
+my %biosample_ids;
 
 my $scroll = $es->scroll_helper(
   index => $es_index_name,
-  type => 'archive',
+  type => 'specimen',
   search_type => 'scan',
   size => 500,
 );
 while (my $loaded_doc = $scroll->next) {
-  push(@ids_to_import, $loaded_doc->{_source}{ENA}{id});
+  $biosample_ids{$loaded_doc->{_id}}=1;
 }
 
-croak "No identifiers were availible for import" unless (@ids_to_import);
+croak "BioSample IDs were not imported" unless (%biosample_ids);
 
 my %docs;
-foreach my $ena_id (@ids_to_import){
-  #ENA API DOC: http://www.ebi.ac.uk/ena/portal/api/doc?format=pdf
-  my $url = "https://www.ebi.ac.uk/ena/portal/api/search?result=read_run&format=JSON&limit=0&fields=study_accession,sample_accession,experiment_alias,experiment_title,fastq_ftp,fastq_md5,last_updated&query=study_accession=".$ena_id;
-  my $browser = WWW::Mechanize->new();
-  $browser->credentials('anon','anon');
-  $browser->get( $url );
-  my $content = $browser->content();
-  my $json = new JSON;
-  my $json_text = $json->decode($content);
-  print Dumper($json_text);
+
+foreach my $record (@$json_text){
+  if ($biosample_ids{$record->{sample_accession}}){
+    my %es_doc;
+    my @urls = split(";", $record->{fastq_ftp});
+    my @md5s = split(";", $record->{fastq_md5});
+
+    while (@urls){
+      my @fullpath = split('/', $urls[0]);
+      my $name = $fullpath[-1];
+      push(@{$es_doc{files}}, {name => $name, md5 => shift(@md5s), datatype => $record->{assay_type}, url => shift(@urls)});
+    }
+    $es_doc{specimens => $record->{sample_accession}};
+    eval{$es->index(
+      index => $es_index_name,
+      type => 'file',
+      id => $es_doc{$record->run_accession},
+      body => \%es_doc,
+    );};
+    if (my $error = $@) {
+      die "error indexing sample in $es_index_name index:".$error->{text};
+    }
+    $indexed_samples{$es_doc{biosampleId}} = 1;
+  }
+}
+
+
 
 
 #   $sth_study->bind_param(1, $study_id);
@@ -74,7 +101,7 @@ foreach my $ena_id (@ids_to_import){
 #       specimens => \@specimens
 #     }
 #   }
-}
+#}
 
 # for my $es_id (keys %docs){
 #   eval{$es->index(
