@@ -46,6 +46,7 @@ while (my $loaded_doc = $scroll->next) {
 croak "BioSample IDs were not imported" unless (%biosample_ids);
 
 my %docs;
+my %indexed_files;
 
 foreach my $record (@$json_text){
   if ($biosample_ids{$record->{sample_accession}}){
@@ -56,78 +57,34 @@ foreach my $record (@$json_text){
     while (@urls){
       my @fullpath = split('/', $urls[0]);
       my $name = $fullpath[-1];
-      push(@{$es_doc{files}}, {name => $name, md5 => shift(@md5s), datatype => $record->{assay_type}, url => shift(@urls)});
+      push(@{$es_doc{files}}, {name => $name, md5 => shift(@md5s), dataType => $record->{assay_type}, url => shift(@urls), archive => 'ENA'});
     }
-    $es_doc{specimens => $record->{sample_accession}};
+    push(@{$es_doc{specimens}}, $record->{sample_accession});
     eval{$es->index(
       index => $es_index_name,
       type => 'file',
-      id => $es_doc{$record->run_accession},
+      id => $record->{run_accession},
       body => \%es_doc,
     );};
     if (my $error = $@) {
       die "error indexing sample in $es_index_name index:".$error->{text};
     }
-    $indexed_samples{$es_doc{biosampleId}} = 1;
+    $indexed_files{$record->{run_accession}} = 1;
   }
 }
 
-
-
-
-#   $sth_study->bind_param(1, $study_id);
-#   $sth_study->execute or die "could not execute";
-#   my $row = $sth_study->fetchrow_hashref;
-#   die "no study $study_id" if !$row;
-#   my $study_xml_hash = XMLin($row->{STUDY_XML});
-
-#   $sth_run->bind_param(1, $study_id);
-#   $sth_run->execute or die "could not execute";
-#   ROW:
-#   while (my $row = $sth_run->fetchrow_hashref) {
-#     my $run_xml_hash = XMLin($row->{RUN_XML});
-#     my $experiment_xml_hash = XMLin($row->{EXPERIMENT_XML});
-#     my @files;
-#     my @specimens;
-#     push(@specimens, $row->{BIOSAMPLE_ID});
-#     foreach my $file (@{$run_xml_hash->{RUN}{DATA_BLOCK}{FILES}{FILE}}){
-#       my ($filename, $dirname) = fileparse($file->{filename});
-#       push(@files, {name => $filename, md5 => $file->{checksum}, dataType => $file->{filetype}, url => sprintf('ftp://ftp.sra.ebi.ac.uk/vol1/%s%s', $dirname, uri_escape($filename))})
-#     }
-    
-#     my $es_id = join('-', $row->{EXPERIMENT_ID}, $row->{RUN_ID});
-#     $docs{$es_id} = {
-#       files => \@files,
-#       specimens => \@specimens
-#     }
-#   }
-#}
-
-# for my $es_id (keys %docs){
-#   eval{$es->index(
-#     index => $es_index_name,
-#     type => 'file',
-#     id => $es_id,
-#     body => $docs{$es_id},
-#   );};
-#   if (my $error = $@) {
-#     die "error indexing sample in $es_index_name index:".$error->{text};
-#   }
-#   $indexed_files{$es_id} = 1;
-# }
-
-# my $scroll = $es->scroll_helper(
-#   index => $es_index_name,
-#   type => 'file',
-#   search_type => 'scan',
-#   size => 500,
-# );
-# SCROLL:
-# while (my $loaded_doc = $scroll->next) {
-#   next SCROLL if $indexed_files{$loaded_doc->{_id}};
-#   $es->delete(
-#     index => $es_index_name,
-#     type => 'file',
-#     id => $loaded_doc->{_id},
-#   );
-# }
+my $filescroll = $es->scroll_helper(
+  index => $es_index_name,
+  type => 'file',
+  search_type => 'scan',
+  size => 500,
+);
+SCROLL:
+while (my $loaded_doc = $filescroll->next) {
+  next SCROLL if $indexed_files{$loaded_doc->{_id}};
+  $es->delete(
+    index => $es_index_name,
+    type => 'file',
+    id => $loaded_doc->{_id},
+  );
+}
