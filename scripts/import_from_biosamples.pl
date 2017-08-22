@@ -1,4 +1,8 @@
 #!/usr/bin/env perl
+#It is strongly recommended to read this code while referring to the sample ruleset http://www.ebi.ac.uk/vg/faang/rule_sets/FAANG%20Samples
+#similar to referring to corresponding xsd file while writing codes for parsing the xml file
+#e.g. whether use array or hash depends on cardinality
+#e.g. the description of deriveFrom and sameAs could determine how to deal with relationship
 
 use strict;
 use warnings;
@@ -21,7 +25,8 @@ GetOptions(
 croak "Need -project" unless ( $project);
 croak "Need -es_host" unless ( $es_host);
 
-my $es = Search::Elasticsearch->new(nodes => $es_host, client => '1_0::Direct');
+
+my $es = Search::Elasticsearch->new(nodes => $es_host, client => '1_0::Direct');#client option to make it compatiable with elasticsearch 1.x APIs
 my %indexed_samples;
 
 #Sample Material storage
@@ -30,9 +35,21 @@ my %specimen_from_organism;
 my %cell_specimen;
 my %cell_culture;
 my %cell_line;
+my %pool_specimen;
 
-# Store specimen to sample relationships for embedding search data and importing legacy organisms
+# Store specimen to animal relationships for embedding search data and importing legacy organisms
 my %derivedFromOrganism;
+
+##################################################################
+## the section below is for development purpose by checking individual BioSample
+#my %tmp = &fetch_single_record("SAMEA3540911"); 
+#&process_pool_specimen(%tmp);
+#%tmp = &fetch_single_record("SAMEA4447551");
+#&process_cell_cultures(%tmp);
+#%tmp = &fetch_single_record("SAMEA5421418");
+#&process_cell_specimens(%tmp);
+#print Dumper(\%derivedFromOrganism);
+#exit;
 
 my @samples = fetch_specimens_by_project($project);
 
@@ -44,6 +61,7 @@ croak "Did not obtain any specimens from BioSamples" unless ( $number_specimens_
 process_specimens(%specimen_from_organism);
 process_cell_specimens(%cell_specimen);
 process_cell_cultures(%cell_culture);
+process_pool_specimen(%pool_specimen);
 
 #Independent entities
 process_cell_lines(%cell_line);
@@ -270,6 +288,79 @@ sub process_cell_lines{
   }
 }
 
+sub process_pool_specimen{
+  my (%pool_specimen) = @_;
+  foreach my $accession(keys %pool_specimen){
+    my $specimen = $pool_specimen{$accession};#e.g. accession = SAMEA3540911
+
+    #Pull in derived from accession from BioSamples.  #TODO This is slow, better way to do this?
+    #relations have links for derivedFrom, childOf, parentOf, sameAs etc. 
+    my $relations = fetch_relations_json($$specimen{_links}{relations}{href});#e.g. url http://www.ebi.ac.uk/biosamples/api/samplesrelations/SAMEA3540911
+
+    my $derivedFrom = fetch_relations_json($$relations{_links}{derivedFrom}{href}); #Specimen from Organism e.g. url http://www.ebi.ac.uk/biosamples/api/samplesrelations/SAMEA3540911/derivedFrom
+    my @derivedFromAccession;
+    my %organismAccession;
+    foreach my $specimenFromOrganism(@{$$derivedFrom{_embedded}{samplesrelations}}){
+      push (@derivedFromAccession,$$specimenFromOrganism{accession});
+      my $organismJson = fetch_relations_json($$specimenFromOrganism{_links}{derivedFrom}{href});
+      foreach my $organism (@{$$organismJson{_embedded}{samplesrelations}}){
+        $organismAccession{$$organism{accession}} = 1;
+      }
+    }
+    #Pull in sameas accession from BioSamples.  #TODO This is slow, better way to do this?
+    my $sameAs = fetch_relations_json($$relations{_links}{sameAs}{href});
+
+    my %es_doc = (
+      name => $$specimen{name},
+      biosampleId => $$specimen{accession},
+      description => $$specimen{description},
+      material => {
+        text => $$specimen{characteristics}{material}[0]{text},
+        ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0],
+      },
+      project => $$specimen{characteristics}{project}[0]{text},
+      availability => $$specimen{characteristics}{availability}[0]{text}, #no example in the current FAANG collection for pool of specimens, use other type as a template
+#      sameAs => ,     #according to ruleset, it should be single value entry, i.e. use a hash. However for all other types, an array is used, to make it consistent, use array here as well
+      
+      poolOfSpecimens => {
+        poolCreationDate => {
+          text => $$specimen{characteristics}{poolCreationDate}[0]{text},
+          unit => $$specimen{characteristics}{poolCreationDate}[0]{unit}
+          },
+        poolCreationProtocol => $$specimen{characteristics}{poolCreationProtocol}[0]{text},
+        specimenVolume => {     #no example in the current FAANG collection for pool of specimens, pure guess, expect to change later when data becomes available
+          text => $$specimen{characteristics}{specimenVolume}[0]{text},
+          unit => $$specimen{characteristics}{specimenVolume}[0]{unit}
+          },
+        specimenSize => {       #no example in the current FAANG collection for pool of specimens, pure guess, expect to change later when data becomes available
+          text => $$specimen{characteristics}{specimenSize}[0]{text},
+          unit => $$specimen{characteristics}{specimenSize}[0]{unit}
+          },
+        specimenWeight => {     #no example in the current FAANG collection for pool of specimens, pure guess, expect to change later when data becomes available
+          text => $$specimen{characteristics}{specimenWeight}[0]{text},
+          unit => $$specimen{characteristics}{specimenWeight}[0]{unit}
+          }
+      }
+    );
+    foreach my $spu (@{$$specimen{characteristics}{specimenPictureUrl}}){ #no example in the current FAANG collection for pool of specimens, pure guess, expect to change later when data becomes available
+      push (@{$es_doc{poolOfSpecimens}{specimenPictureUrl}},$$spu{text});
+    }
+    @{$es_doc{derivedFrom}}=@derivedFromAccession;
+    foreach my $sameasrelations (@{$$sameAs{_embedded}{samplesrelations}}){
+      push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
+    }
+
+    foreach my $organismAccession(keys %organismAccession){
+      # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
+      if($derivedFromOrganism{$organismAccession}){
+        push($derivedFromOrganism{$organismAccession}, \%es_doc);
+      }else{
+        $derivedFromOrganism{$organismAccession} = [\%es_doc];
+      }
+    }
+  }
+}
+
 sub process_organisms{
   my ( $organism_ref, $derivedFromOrganismref ) = @_;
   my %derivedFromOrganism = %$derivedFromOrganismref;
@@ -370,14 +461,13 @@ sub process_organisms{
   clean_elasticsearch('specimen');
   clean_elasticsearch('organism');
 }
-
+#fetch specimen data from BioSample and populate six hashes according to their material type
 sub fetch_specimens_by_project {
   my ( $project_keyword ) = @_;
-  
+  my %hash;
   my $url = "https://www.ebi.ac.uk/biosamples/api/samples/search/findByText?text=project_crt:".$project_keyword;
-  my @pages = fetch_biosamples_json($url);
-  foreach my $page (@pages){
-    foreach my $sample (@{$page->{samples}}){
+  my @samples = fetch_biosamples_json($url);
+  foreach my $sample (@samples){
       my $material = $$sample{characteristics}{material}[0]{text};
       if($material eq "organism"){
         $organism{$$sample{accession}} = $sample;
@@ -394,7 +484,10 @@ sub fetch_specimens_by_project {
       if($material eq "cell line"){
         $cell_line{$$sample{accession}} = $sample;
       }
-    }
+      if($material eq "pool of specimens"){
+        $pool_specimen{$$sample{accession}} = $sample;
+      }
+      $hash{$material}++;
   }
 }
 
@@ -407,20 +500,21 @@ sub fetch_biosamples_json{
   my $json = new JSON;
   my $json_text = $json->decode($content);
   
-  my @pages;
-  foreach my $item ($json_text->{_embedded}){ #Store page 0
-    push(@pages, $item);
+  my @biosamples;
+  # Store the first page 
+  foreach my $item (@{$json_text->{_embedded}{samples}}){ 
+    push(@biosamples, $item);
   }
-  
+  # Store each additional page
   while ($$json_text{_links}{next}{href}){  # Iterate until no more pages using HAL links
     $browser->get( $$json_text{_links}{next}{href});  # Get next page
     $content = $browser->content();
     $json_text = $json->decode($content);
-    foreach my $item ($json_text->{_embedded}){
-      push(@pages, $item);  # Store each additional page
+    foreach my $item (@{$json_text->{_embedded}{samples}}){
+      push(@biosamples, $item);  
     }
   }
-  return @pages;
+  return @biosamples;
 }
 
 sub fetch_relations_json{
@@ -433,6 +527,19 @@ sub fetch_relations_json{
   my $json = new JSON;
   my $json_text = $json->decode($content);
   return $json_text;
+}
+
+sub fetch_single_record{
+  my ($accession) = @_;
+  my $url = "http://www.ebi.ac.uk/biosamples/api/samples/$accession";
+  my $browser = WWW::Mechanize->new();
+  $browser->get( $url );
+  my $content = $browser->content();
+  my $json = new JSON;
+  my $json_text = $json->decode($content);
+  my %hash;
+  $hash{$json_text->{accession}} = $json_text;
+  return %hash;
 }
 
 sub update_elasticsearch{
