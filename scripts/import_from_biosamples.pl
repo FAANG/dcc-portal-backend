@@ -563,7 +563,9 @@ sub clean_elasticsearch{
     );
   }
 }
-
+#get information for derivedFrom, sameAs and organism from the relations url and save in a hash 
+#which has key as one of derivedFrom, sameAs and organism and value as an array of BioSample accessions
+#two parameters: relationship url and level (1 for specimen from organism or 2 for all other specimen types)
 sub parseRelationships(){
   my %relationships;
   my ($url,$level) = @_;

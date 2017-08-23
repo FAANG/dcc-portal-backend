@@ -339,6 +339,66 @@
                     }
                 }
             },
+            "poolOfSpecimens": {
+                "properties": {
+                    "poolCreationDate": {
+                        "properties": {
+                            "text": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            },
+                            "unit": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
+                    },
+                    "poolCreationProtocol": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "specimenVolume": {
+                        "properties": {
+                            "text": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            },
+                            "unit": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
+                    },
+                    "specimenSize": {
+                        "properties": {
+                            "text": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            },
+                            "unit": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
+                    },
+                    "specimenWeight": {
+                        "properties": {
+                            "text": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            },
+                            "unit": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
+                    },
+                    "specimenPictureUrl": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
+            },
             "cellSpecimen": {
                 "properties": {
                     "markers": {
