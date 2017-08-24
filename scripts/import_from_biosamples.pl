@@ -65,6 +65,17 @@ my $savedTime = time;
 #retrieve all FAANG BioSamples from BioSample database
 my @samples = fetch_specimens_by_project($project);
 print "Finish retrieving data from BioSample at ".localtime."\n";
+#print "Pool of specimen\n";
+#print Dumper (\%pool_specimen);
+#print "Cell specimen\n";
+#print Dumper (\%cell_specimen);
+#print "Cell culture\n";
+#print Dumper (\%cell_culture);
+#print "Cell line\n";
+#print Dumper (\%cell_line);
+
+print Dumper (\%organism);
+exit;
 my $current = time;
 &convertSeconds($current - $pastTime);
 $pastTime = $current;
@@ -184,6 +195,10 @@ sub process_specimens{
         specimenWeight => {
           text => $$specimen{characteristics}{specimenWeight}[0]{text},
           unit => $$specimen{characteristics}{specimenWeight}[0]{unit}
+        },
+        gestationalAgeAtSampleCollection => {
+          text => $$specimen{characteristics}{gestationalAgeAtSampleCollection}[0]{text},
+          unit => $$specimen{characteristics}{gestationalAgeAtSampleCollection}[0]{unit}
         }
       }
     );
