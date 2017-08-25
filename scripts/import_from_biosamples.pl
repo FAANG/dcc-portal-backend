@@ -65,6 +65,9 @@ my $savedTime = time;
 #retrieve all FAANG BioSamples from BioSample database
 my @samples = fetch_specimens_by_project($project);
 print "Finish retrieving data from BioSample at ".localtime."\n";
+################################################################
+## this section is to dump all current BioSample records into files 
+## for development purpose, e.g. check the data structure
 #print "Pool of specimen\n";
 #print Dumper (\%pool_specimen);
 #print "Cell specimen\n";
@@ -73,9 +76,9 @@ print "Finish retrieving data from BioSample at ".localtime."\n";
 #print Dumper (\%cell_culture);
 #print "Cell line\n";
 #print Dumper (\%cell_line);
+#print Dumper (\%organism);
+#exit;
 
-print Dumper (\%organism);
-exit;
 my $current = time;
 &convertSeconds($current - $pastTime);
 $pastTime = $current;
@@ -89,6 +92,7 @@ print "Indexing organism starts at ".localtime."\n";
 $current = time;
 &convertSeconds($current - $pastTime);
 $pastTime = $current;
+
 #parse all types of specimen, at the moment the order does not matter
 print "Indexing specimen from organism starts at ".localtime."\n";
 &process_specimens(\%specimen_from_organism);
@@ -114,12 +118,11 @@ $current = time;
 &convertSeconds($current - $pastTime);
 $pastTime = $current;
 
-#the code does not work properly at the moment, so not turn on
-#print "Indexing cell line starts at ".localtime."\n";
-#&process_cell_lines(\%cell_line);
-#$current = time;
-#&convertSeconds($current - $pastTime);
-#$pastTime = $current;
+print "Indexing cell line starts at ".localtime."\n";
+&process_cell_lines(\%cell_line);
+$current = time;
+&convertSeconds($current - $pastTime);
+$pastTime = $current;
 
 print "Finish indexing into ElasticSearch at ".localtime."\n";
 
@@ -345,21 +348,11 @@ sub process_cell_cultures{
 }
 
 sub process_cell_lines{
-  my ( %cell_line ) = @_;
+  my %cell_line = %{$_[0]};
   foreach my $key (keys %cell_line){
     my $specimen = $cell_line{$key};
-    #Pull in derived from accession from BioSamples.  #TODO This is slow, better way to do this?    
-    my ($relations, $derivedFrom, $derivedFrom_organism, $sameAs);
-    $relations = fetch_json_by_url($$specimen{_links}{relations}{href});
-    $derivedFrom = fetch_json_by_url($$relations{_links}{derivedFrom}{href}); #Specimen from Organism
-    if($$derivedFrom{_embedded}{samplesrelations}[0]{_links}{derivedFrom}{href}){
-      $derivedFrom_organism = fetch_json_by_url($$derivedFrom{_embedded}{samplesrelations}[0]{_links}{derivedFrom}{href});      
-    }
-    
-    #Pull in sameas accession from BioSamples.  #TODO This is slow, better way to do this?
-    $sameAs = fetch_json_by_url($$relations{_links}{sameAs}{href});
+    my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},2)};
 
-    #TODO Need cellline data section filled
     my %es_doc = (
       name => $$specimen{name},
       biosampleId => $$specimen{accession},
@@ -371,24 +364,48 @@ sub process_cell_lines{
       project => $$specimen{characteristics}{project}[0]{text},
       availability => $$specimen{characteristics}{availability}[0]{text},
       cellLine => {
-
+        organism => {
+          text => $$specimen{characteristics}{organism}[0]{text},
+          ontologyTerms => $$specimen{characteristics}{organism}[0]{ontologyTerms}[0]
+        },
+        sex => {
+          text => $$specimen{characteristics}{sex}[0]{text},
+          ontologyTerms => $$specimen{characteristics}{sex}[0]{ontologyTerms}[0]
+        },
+        cellLine => $$specimen{characteristics}{cellLine}[0]{text},
+        biomaterialProvider => $$specimen{characteristics}{biomaterialProvider}[0]{text},
+        catalogueNumber => $$specimen{characteristics}{catalogueNumber}[0]{text},
+        numberOfPassages => $$specimen{characteristics}{numberOfPassages}[0]{text},
+        dateEstablished => { 
+          text => $$specimen{characteristics}{dateEstablished}[0]{text},
+          unit => $$specimen{characteristics}{dateEstablished}[0]{unit}
+        },
+        publication => $$specimen{characteristics}{publication}[0]{text},
+        breed => {
+          text => $$specimen{characteristics}{breed}[0]{text},
+          ontologyTerms => $$specimen{characteristics}{breed}[0]{ontologyTerms}[0]
+        },
+        cellType => {
+          text => $$specimen{characteristics}{cellType}[0]{text},
+          ontologyTerms => $$specimen{characteristics}{cellType}[0]{ontologyTerms}[0]
+        },
+        cultureConditions => $$specimen{characteristics}{cultureConditions}[0]{text},
+        cultureProtocol => $$specimen{characteristics}{cultureProtocol}[0]{text},
+        disease => {
+          text => $$specimen{characteristics}{disease}[0]{text},
+          ontologyTerms => $$specimen{characteristics}{disease}[0]{ontologyTerms}[0]
+        },
+        karyotype => $$specimen{characteristics}{karyotype}[0]{text}
       }
     );
-    if($$derivedFrom{_embedded}{samplesrelations}[0]{accession}){
-      $es_doc{derivedFrom} = $$derivedFrom{_embedded}{samplesrelations}[0]{accession};
+    $es_doc{derivedFrom} = $relationships{derivedFrom}[0] if (exists $relationships{derivedFrom});
+    @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
+    if (exists $relationships{organism} && (scalar @{$relationships{organism}})>0){
+      my $organismAccession = $relationships{organism}[0];
+      $es_doc{organism}=$organismInfoForSpecimen{$organismAccession};
+      $organismReferredBySpecimen{$organismAccession}++;
     }
-    foreach my $sameasrelations (@{$$sameAs{_embedded}{samplesrelations}}){
-      push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
-    }
-    # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
-    if($$derivedFrom{_embedded}{samplesrelations}[0]{accession}){  # May not be a derived from organism for a cell line (as not mandatory)
-#      if($derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}}){
-#        push($derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}}, \%es_doc);
-#      }else{
-#        $derivedFromOrganism{$$derivedFrom_organism{_embedded}{samplesrelations}[0]{accession}} = [\%es_doc];
-#      }
-    }
-#    $organismReferredBySpecimen{$organismAccession}++;
+    update_elasticsearch(\%es_doc, 'specimen');
   }
 }
 
@@ -468,8 +485,12 @@ sub process_organisms(){
     $organismInfoForSpecimen{$accession}{sex} = {text => $$organism{characteristics}{sex}[0]{text}, ontologyTerms => $$organism{characteristics}{sex}[0]{ontologyTerms}[0]};
     $organismInfoForSpecimen{$accession}{breed} = {text => $$organism{characteristics}{breed}[0]{text}, ontologyTerms => $$organism{characteristics}{breed}[0]{ontologyTerms}[0]};
     @{$organismInfoForSpecimen{$accession}{healthStatus}} = @healthStatus;
+    if (exists $$organism{characteristics}{strain}){
+      $es_doc{breed} = {text => $$organism{characteristics}{strain}[0]{text}, ontologyTerms => $$organism{characteristics}{strain}[0]{ontologyTerms}[0]};
+      $organismInfoForSpecimen{$accession}{breed} = {text => $$organism{characteristics}{strain}[0]{text}, ontologyTerms => $$organism{characteristics}{strain}[0]{ontologyTerms}[0]};
+    }
     #insert into elasticsearch server
-#    update_elasticsearch(\%es_doc, 'organism');
+    update_elasticsearch(\%es_doc, 'organism');
   }
 }
 
@@ -607,6 +628,7 @@ sub parseRelationships(){
     my $derivedFrom = fetch_json_by_url($$relations{_links}{derivedFrom}{href}); #Specimen from Organism e.g. url http://www.ebi.ac.uk/biosamples/api/samplesrelations/SAMEA3540911/derivedFrom
     foreach my $specimenFromOrganism(@{$$derivedFrom{_embedded}{samplesrelations}}){
       push (@derivedFromAccession,$$specimenFromOrganism{accession});
+      next unless (exists $$specimenFromOrganism{_links}{derivedFrom}{href});#cell line may not have organism info
       my $organismJson = fetch_json_by_url($$specimenFromOrganism{_links}{derivedFrom}{href});
       foreach my $organism (@{$$organismJson{_embedded}{samplesrelations}}){
         $organismAccession{$$organism{accession}} = 1;

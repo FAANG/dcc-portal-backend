@@ -519,7 +519,7 @@
                         "type": "string",
                         "index": "not_analyzed"
                     },
-                    "passageNumber": {
+                    "numberOfPassages": {
                         "type": "string",
                         "index": "not_analyzed"
                     },
