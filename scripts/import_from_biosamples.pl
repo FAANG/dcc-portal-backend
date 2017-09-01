@@ -14,6 +14,16 @@ use Search::Elasticsearch;
 use List::Compare;
 use Data::Dumper;
 
+#the code to test the judgement for type of derived from for cell line
+#as currently no data in cell line, use specimen from organism to do a fake test
+#my $accession = "SAMEA3540916"; #only cell line
+#my $accession = "SAMEA5584168"; #specimen from organism
+#my %tmp = &fetch_single_record($accession);
+#my $spec = $tmp{$accession};
+#my %relationships = %{&parseRelationships($$spec{_links}{relations}{href},3)};
+#print Dumper(\%relationships);
+#exit;
+
 #the parameters expected to be retrieved from the command line
 my ($project, $es_host, $es_index_name);
 #Parse the command line options
@@ -154,17 +164,6 @@ sub process_specimens{
     my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},1)};
 
     my %es_doc = (
-#      name => $$specimen{name},
-#      biosampleId => $$specimen{accession},
-#      description => $$specimen{description},
-#      releaseDate => $$specimen{releaseDate},
-#      updateDate => $$specimen{updateDate},
-#      material => {
-#        text => $$specimen{characteristics}{material}[0]{text},
-#        ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0]
-#      },
-#      project => $$specimen{characteristics}{project}[0]{text},
-#      availability => $$specimen{characteristics}{availability}[0]{text},
       derivedFrom => $relationships{derivedFrom}[0],
       specimenFromOrganism => {
         specimenCollectionDate => {
@@ -208,9 +207,7 @@ sub process_specimens{
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
-#    foreach my $organization (@{$$specimen{organization}}){
-#      push(@{$es_doc{organization}}, {name => $$organization{Name}, role => $$organization{Role}, URL => $$organization{URL}});
-#    }
+
     foreach my $specimenPictureUrl (@{$$specimen{characteristics}{specimenPictureUrl}}){
       push(@{$es_doc{specimenFromOrganism}{specimenPictureUrl}}, $$specimenPictureUrl{text});
     }
@@ -233,17 +230,6 @@ sub process_pool_specimen{
     my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},2)};
 
     my %es_doc = (
-#      name => $$specimen{name},
-#      biosampleId => $$specimen{accession},
-#      description => $$specimen{description},
-#      releaseDate => $$specimen{releaseDate},
-#      updateDate => $$specimen{updateDate},
-#      material => {
-#        text => $$specimen{characteristics}{material}[0]{text},
-#        ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0],
-#      },
-#      project => $$specimen{characteristics}{project}[0]{text},
-#      availability => $$specimen{characteristics}{availability}[0]{text}, #no example in the current FAANG collection for pool of specimens, use other type as a template
 #      sameAs => ,     #according to ruleset, it should be single value entry, i.e. use a hash. However for all other types, an array is used, to make it consistent, use array here as well
       poolOfSpecimens => {
         poolCreationDate => {
@@ -266,9 +252,7 @@ sub process_pool_specimen{
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
-#    foreach my $organization (@{$$specimen{organization}}){
-#      push(@{$es_doc{organization}}, {name => $$organization{Name}, role => $$organization{Role}, URL => $$organization{URL}});
-#    }
+
     foreach my $spu (@{$$specimen{characteristics}{specimenPictureUrl}}){ #no example in the current FAANG collection for pool of specimens, pure guess, expect to change later when data becomes available
       push (@{$es_doc{poolOfSpecimens}{specimenPictureUrl}},$$spu{text});
     }
@@ -290,17 +274,6 @@ sub process_cell_specimens{
     my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},2)};
     
     my %es_doc = (
-#      name => $$specimen{name},
-#      biosampleId => $$specimen{accession},
-#      description => $$specimen{description},
-#      releaseDate => $$specimen{releaseDate},
-#      updateDate => $$specimen{updateDate},
-#      material => {
-#        text => $$specimen{characteristics}{material}[0]{text},
-#        ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0],
-#      },
-#      project => $$specimen{characteristics}{project}[0]{text},
-#      availability => $$specimen{characteristics}{availability}[0]{text},
       derivedFrom => $relationships{derivedFrom}[0],
       cellSpecimen => {
         markers => $$specimen{characteristics}{markers}[0]{text},
@@ -308,9 +281,7 @@ sub process_cell_specimens{
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
-#    foreach my $organization (@{$$specimen{organization}}){
-#      push(@{$es_doc{organization}}, {name => $$organization{Name}, role => $$organization{Role}, URL => $$organization{URL}});
-#    }
+
     foreach my $cellType (@{$$specimen{characteristics}{cellType}}){
       push(@{$es_doc{cellSpecimen}{cellType}}, $cellType);
     }
@@ -330,17 +301,6 @@ sub process_cell_cultures{
     my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},2)};
 
     my %es_doc = (
-#      name => $$specimen{name},
-#      biosampleId => $$specimen{accession},
-#      description => $$specimen{description},
-#      releaseDate => $$specimen{releaseDate},
-#      updateDate => $$specimen{updateDate},
-#      material => {
-#        text => $$specimen{characteristics}{material}[0]{text},
-#        ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0],
-#      },
-#      project => $$specimen{characteristics}{project}[0]{text},
-#      availability => $$specimen{characteristics}{availability}[0]{text},
       derivedFrom => $relationships{derivedFrom}[0],
       cellCulture => {
         cultureType => {
@@ -357,9 +317,7 @@ sub process_cell_cultures{
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
-#    foreach my $organization (@{$$specimen{organization}}){
-#      push(@{$es_doc{organization}}, {name => $$organization{Name}, role => $$organization{Role}, URL => $$organization{URL}});
-#    }
+
     @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
     my $organismAccession = $relationships{organism}[0];
     $es_doc{organism}=$organismInfoForSpecimen{$organismAccession};
@@ -372,20 +330,9 @@ sub process_cell_lines{
   my %cell_line = %{$_[0]};
   foreach my $key (keys %cell_line){
     my $specimen = $cell_line{$key};
-    my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},2)};
+    my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},3)};
 
     my %es_doc = (
-#      name => $$specimen{name},
-#      biosampleId => $$specimen{accession},
-#      description => $$specimen{description},
-#      releaseDate => $$specimen{releaseDate},
-#      updateDate => $$specimen{updateDate},
-#      material => {
-#        text => $$specimen{characteristics}{material}[0]{text},
-#        ontologyTerms => $$specimen{characteristics}{material}[0]{ontologyTerms}[0],
-#      },
-#      project => $$specimen{characteristics}{project}[0]{text},
-#      availability => $$specimen{characteristics}{availability}[0]{text},
       cellLine => {
         organism => {
           text => $$specimen{characteristics}{organism}[0]{text},
@@ -422,9 +369,7 @@ sub process_cell_lines{
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
-#    foreach my $organization (@{$$specimen{organization}}){
-#      push(@{$es_doc{organization}}, {name => $$organization{Name}, role => $$organization{Role}, URL => $$organization{URL}});
-#    }
+
     $es_doc{derivedFrom} = $relationships{derivedFrom}[0] if (exists $relationships{derivedFrom});
     @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
     if (exists $relationships{organism} && (scalar @{$relationships{organism}})>0){
@@ -445,17 +390,6 @@ sub process_organisms(){
     my $sameAs = fetch_json_by_url($$relations{_links}{sameAs}{href});
 
     my %es_doc = (
-#      name => $$organism{name},
-#      biosampleId => $$organism{accession},
-#      description => $$organism{description},
-#      releaseDate => $$organism{releaseDate},
-#      updateDate => $$organism{updateDate},
-#      material => {
-#        text => $$organism{characteristics}{material}[0]{text},
-#        ontologyTerms => $$organism{characteristics}{material}[0]{ontologyTerms}[0]
-#      },
-#      project => $$organism{characteristics}{project}[0]{text},
-#      availability => $$organism{characteristics}{availability}[0]{text},
       #animal section of ruleset
       organism => {
         text => $$organism{characteristics}{organism}[0]{text},
@@ -499,9 +433,7 @@ sub process_organisms(){
       pedigree => $$organism{characteristics}{pedigree}[0]{text}
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$organism)};
-#    foreach my $organization (@{$$organism{organization}}){
-#      push(@{$es_doc{organization}}, {name => $$organization{Name}, role => $$organization{Role}, URL => $$organization{URL}});
-#    }
+
     my @healthStatus;
     foreach my $healthStatus (@{$$organism{characteristics}{healthStatus}}){
       push(@healthStatus, {text => $$healthStatus{text}, ontologyTerms => $$healthStatus{ontologyTerms}[0]});
@@ -677,7 +609,7 @@ sub parseRelationships(){
 
   my @derivedFromAccession;
   my %organismAccession;
-  if($level == 2){
+  if($level >= 2){
     my $derivedFrom = fetch_json_by_url($$relations{_links}{derivedFrom}{href}); #Specimen from Organism e.g. url http://www.ebi.ac.uk/biosamples/api/samplesrelations/SAMEA3540911/derivedFrom
     foreach my $specimenFromOrganism(@{$$derivedFrom{_embedded}{samplesrelations}}){
       push (@derivedFromAccession,$$specimenFromOrganism{accession});
@@ -691,6 +623,13 @@ sub parseRelationships(){
     my $derivedFrom = fetch_json_by_url($$relations{_links}{derivedFrom}{href});
     push(@derivedFromAccession,$$derivedFrom{_embedded}{samplesrelations}[0]{accession});
     $organismAccession{$$derivedFrom{_embedded}{samplesrelations}[0]{accession}}=1;
+  }
+  if($level == 3){
+    foreach my $acc(@derivedFromAccession){
+      my %tmp = &fetch_single_record($acc);
+      my $material = $tmp{$acc}{characteristics}{material}[0]{text};
+      $organismAccession{$acc} = 1 if ($material eq "organism");
+    }
   }
   @{$relationships{derivedFrom}} = @derivedFromAccession;
   @{$relationships{organism}} = keys %organismAccession;
