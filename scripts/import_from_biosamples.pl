@@ -53,7 +53,7 @@ my %organismInfoForSpecimen;
 #keys are organism accession and values are how many specimens related to that organism
 my %organismReferredBySpecimen;
 
-print "The program starts at ".localtime."\n";
+#print "The program starts at ".localtime."\n";
 my $pastTime = time;
 my $savedTime = time;
 ##################################################################
@@ -74,7 +74,7 @@ my $savedTime = time;
 
 #retrieve all FAANG BioSamples from BioSample database
 my @samples = fetch_specimens_by_project($project);
-print "Finish retrieving data from BioSample at ".localtime."\n";
+#print "Finish retrieving data from BioSample at ".localtime."\n";
 ################################################################
 ## this section is to dump all current BioSample records into files 
 ## for development purpose, e.g. check the data structure
@@ -90,51 +90,51 @@ print "Finish retrieving data from BioSample at ".localtime."\n";
 #exit;
 
 my $current = time;
-&convertSeconds($current - $pastTime);
+#&convertSeconds($current - $pastTime);
 $pastTime = $current;
 
 #Check whether specimens were obtained from BioSamples
 my $number_specimens_check = keys %specimen_from_organism;
 croak "Did not obtain any specimens from BioSamples" unless ( $number_specimens_check > 0);
 #organism needs to be processed first which populates %organismInfoForSpecimen
-print "Indexing organism starts at ".localtime."\n";
+#print "Indexing organism starts at ".localtime."\n";
 &process_organisms(\%organism);
 $current = time;
-&convertSeconds($current - $pastTime);
+#&convertSeconds($current - $pastTime);
 $pastTime = $current;
 
 #parse all types of specimen, at the moment the order does not matter
-print "Indexing specimen from organism starts at ".localtime."\n";
+#print "Indexing specimen from organism starts at ".localtime."\n";
 &process_specimens(\%specimen_from_organism);
 $current = time;
-&convertSeconds($current - $pastTime);
+#&convertSeconds($current - $pastTime);
 $pastTime = $current;
 
-print "Indexing cell specimens starts at ".localtime."\n";
+#print "Indexing cell specimens starts at ".localtime."\n";
 &process_cell_specimens(\%cell_specimen);
 $current = time;
-&convertSeconds($current - $pastTime);
+#&convertSeconds($current - $pastTime);
 $pastTime = $current;
 
-print "Indexing cell culture starts at ".localtime."\n";
+#print "Indexing cell culture starts at ".localtime."\n";
 &process_cell_cultures(\%cell_culture);
 $current = time;
-&convertSeconds($current - $pastTime);
+#&convertSeconds($current - $pastTime);
 $pastTime = $current;
 
-print "Indexing pool of specimen starts at ".localtime."\n";
+#print "Indexing pool of specimen starts at ".localtime."\n";
 &process_pool_specimen(\%pool_specimen);
 $current = time;
-&convertSeconds($current - $pastTime);
+#&convertSeconds($current - $pastTime);
 $pastTime = $current;
 
-print "Indexing cell line starts at ".localtime."\n";
+#print "Indexing cell line starts at ".localtime."\n";
 &process_cell_lines(\%cell_line);
 $current = time;
-&convertSeconds($current - $pastTime);
+#&convertSeconds($current - $pastTime);
 $pastTime = $current;
 
-print "Finish indexing into ElasticSearch at ".localtime."\n";
+#print "Finish indexing into ElasticSearch at ".localtime."\n";
 
 #compare the list of all organisms and organisms with specimen
 #if they differ, could be 1) organism without specimen 2) organism with specimen is not marked as organism or not saved in BioSample
@@ -152,9 +152,9 @@ unless ( scalar(@organismsNotImported) < 1){
 clean_elasticsearch('specimen');
 clean_elasticsearch('organism');
 $current = time;
-print "Total ";
-&convertSeconds($current - $savedTime);
-print "The program ends at ".localtime."\n";
+#print "Total ";
+#&convertSeconds($current - $savedTime);
+#print "The program ends at ".localtime."\n";
 
 sub process_specimens{
   my %specimen_from_organism = %{$_[0]};
@@ -507,9 +507,9 @@ sub fetch_specimens_by_project {
     }
     $hash{$material}++;
   }
-  foreach my $type(keys %hash){
-    print "There are $hash{$type} $type records\n";
-  }
+#  foreach my $type(keys %hash){
+#    print "There are $hash{$type} $type records\n";
+#  }
 }
 #use BioSample API to retrieve BioSample records
 sub fetch_biosamples_json{
