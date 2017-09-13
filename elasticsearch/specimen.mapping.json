@@ -107,6 +107,24 @@
                 "type": "string",
                 "index": "not_analyzed"
             },
+            "cellType": {
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "index": "not_analyzed",
+                        "fields": {
+                            "autocomp": {
+                                "type": "string",
+                                "analyzer": "autocomp"
+                            }
+                        }
+                    },
+                    "ontologyTerms": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
+            },
             "organism": {
                 "properties": {
                     "biosampleId": {

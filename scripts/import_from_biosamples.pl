@@ -207,6 +207,7 @@ sub process_specimens{
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
+    $es_doc{cellType} = {text => $$specimen{characteristics}{organismPart}[0]{text}, ontologyTerms => $$specimen{characteristics}{organismPart}[0]{ontologyTerms}[0]};
 
     foreach my $specimenPictureUrl (@{$$specimen{characteristics}{specimenPictureUrl}}){
       push(@{$es_doc{specimenFromOrganism}{specimenPictureUrl}}, $$specimenPictureUrl{text});
@@ -252,6 +253,7 @@ sub process_pool_specimen{
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
+    $es_doc{cellType} = {text => "Not Applicable"};
 
     foreach my $spu (@{$$specimen{characteristics}{specimenPictureUrl}}){ #no example in the current FAANG collection for pool of specimens, pure guess, expect to change later when data becomes available
       push (@{$es_doc{poolOfSpecimens}{specimenPictureUrl}},$$spu{text});
@@ -260,8 +262,22 @@ sub process_pool_specimen{
     @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
     #at the moment, organism information is not stored as it can be retrieved from each individual derivedFrom specimen
     #if in future it is needed, e.g. to reduce calculation time for frontend, the logic should be placed in the foreach loop below
+    my %tmp;
     foreach my $organismAccession(@{$relationships{organism}}){
       $organismReferredBySpecimen{$organismAccession}++;
+      $tmp{organism}{$organismInfoForSpecimen{$organismAccession}{organism}{text}} = $organismInfoForSpecimen{$organismAccession}{organism}{ontologyTerms};
+      $tmp{sex}{$organismInfoForSpecimen{$organismAccession}{sex}{text}} = $organismInfoForSpecimen{$organismAccession}{sex}{ontologyTerms};
+      $tmp{breed}{$organismInfoForSpecimen{$organismAccession}{breed}{text}} = $organismInfoForSpecimen{$organismAccession}{breed}{ontologyTerms};
+    }
+    my @arr = ("organism","sex","breed");
+    foreach my $type(@arr){
+      my @values = keys %{$tmp{$type}};
+      if (scalar @values == 1){
+        $es_doc{organism}{$type}{text} = $values[0];
+        $es_doc{organism}{$type}{ontologyTerms} = $tmp{$type}{$values[0]};
+      }else{
+        $es_doc{organism}{$type}{text} = join (";", @values);
+      }
     }
     update_elasticsearch(\%es_doc, 'specimen');
   }
@@ -281,6 +297,7 @@ sub process_cell_specimens{
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
+    $es_doc{cellType} = {text => $$specimen{characteristics}{cellType}[0]{text}, ontologyTerms => $$specimen{characteristics}{cellType}[0]{ontologyTerms}[0]};
 
     foreach my $cellType (@{$$specimen{characteristics}{cellType}}){
       push(@{$es_doc{cellSpecimen}{cellType}}, $cellType);
@@ -317,6 +334,7 @@ sub process_cell_cultures{
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
+    $es_doc{cellType} = {text => $$specimen{characteristics}{cellType}[0]{text}, ontologyTerms => $$specimen{characteristics}{cellType}[0]{ontologyTerms}[0]};
 
     @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
     my $organismAccession = $relationships{organism}[0];
@@ -369,13 +387,19 @@ sub process_cell_lines{
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
+    $es_doc{cellType} = {text => $$specimen{characteristics}{cellType}[0]{text}, ontologyTerms => $$specimen{characteristics}{cellType}[0]{ontologyTerms}[0]};
 
     $es_doc{derivedFrom} = $relationships{derivedFrom}[0] if (exists $relationships{derivedFrom});
     @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
-    if (exists $relationships{organism} && (scalar @{$relationships{organism}})>0){
+    if (exists $relationships{organism} && (scalar @{$relationships{organism}})>0){ #derive from an animal, use animal as its organism
       my $organismAccession = $relationships{organism}[0];
       $es_doc{organism}=$organismInfoForSpecimen{$organismAccession};
       $organismReferredBySpecimen{$organismAccession}++;
+    }else{ #derive from specimen, use the cellLine organism info
+      my @arr = ("organism","sex","breed");
+      foreach my $type(@arr){
+        $es_doc{organism}{$type} = $es_doc{cellLine}{$type};
+      }
     }
     update_elasticsearch(\%es_doc, 'specimen');
   }
