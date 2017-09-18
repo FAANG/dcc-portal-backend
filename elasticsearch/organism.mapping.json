@@ -142,6 +142,10 @@
                             "autocomp": {
                                 "type": "string",
                                 "analyzer": "autocomp"
+                            },
+                            "lower_case_sort": { 
+                                "type": "string",
+                                "analyzer": "case_insensitive_sort"
                             }
                         }
                     },

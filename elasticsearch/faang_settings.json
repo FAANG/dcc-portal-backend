@@ -10,6 +10,10 @@
                 "autocomp": {
                     "tokenizer" : "autocomplete",
                     "filter": ["lowercase"]
+                },
+                "case_insensitive_sort": {
+                    "tokenizer": "keyword",    
+                    "filter":  ["lowercase"] 
                 }
             },
             "tokenizer": {
