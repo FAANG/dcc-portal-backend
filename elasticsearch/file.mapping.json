@@ -3,61 +3,175 @@
         "_all": {"enabled": false},
         "dynamic": "strict",
         "properties": {
-            "files": {
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "index": "not_analyzed",
-                        "fields": {
-                            "std": {
-                                "type": "string",
-                                "analyzer": "standard"
-                            }
-                        }
-                    },
-                    "md5": {
-                        "type": "string",
-                        "index": "not_analyzed"
-                    },
-                    "dataType": {
-                        "type": "string",
-                        "index": "not_analyzed",
-                        "fields": {
-                            "std": {
-                                "type": "string",
-                                "analyzer": "standard"
-                            }
-                        }
-                    },
-                    "archive": {
-                        "type": "string",
-                        "index": "not_analyzed",
-                        "fields": {
-                            "std": {
-                                "type": "string",
-                                "analyzer": "standard"
-                            }
-                        }
-                    },
-                    "url": {
-                        "type": "string",
-                        "index": "not_analyzed",
-                        "fields": {
-                            "keywords": {
-                                "type": "string",
-                                "analyzer": "ftp_url"
-                            }
-                        }
-                    }
-                }
-            },
-            "specimens": {
+            "specimen": {
                 "type": "string",
                 "index": "not_analyzed",
                 "fields": {
                     "std": {
                         "type": "string",
                         "analyzer": "standard"
+                    }
+                }
+            },
+            "organism": {
+                "type": "string",
+                "index": "not_analyzed",
+                "fields": {
+                    "std": {
+                        "type": "string",
+                        "analyzer": "standard"
+                    }
+                }
+            },
+            "species": {
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "index": "not_analyzed",
+                        "fields": {
+                            "autocomp": {
+                                "type": "string",
+                                "analyzer": "autocomp"
+                            }
+                        }
+                    },
+                    "ontologyTerms": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
+            },
+            "url": {
+                "type": "string",
+                "index": "not_analyzed",
+                "fields": {
+                    "keywords": {
+                        "type": "string",
+                        "analyzer": "ftp_url"
+                    }
+                }
+            },
+            "name": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "type": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "size": {
+                "type": "long",
+                "index": "not_analyzed"
+            },
+            "checksum": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "checksumMethod": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "archive": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "readCount": {
+                "type": "long",
+                "index": "not_analyzed"
+            },
+            "baseCount": {
+                "type": "long",
+                "index": "not_analyzed"
+            },
+            "releaseDate": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "updateDate": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "submission": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "experiment": {
+                "properties": {
+                    "accession": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "target": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "assayType": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
+            },
+            "study": {
+                "properties": {
+                    "accession": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "alias": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "type": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "secondaryAccession": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "title": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
+            },
+            "run": {
+                "properties": {
+                    "accession": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "alias": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "platform": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "instrument": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "centerName": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "sequencingDate": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "sequencingLocation": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "sequencingLatitude": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "sequencingLongitude": {
+                        "type": "string",
+                        "index": "not_analyzed"
                     }
                 }
             }
