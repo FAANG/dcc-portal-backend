@@ -49,6 +49,16 @@ my $es = Search::Elasticsearch->new(nodes => $es_host, client => '1_0::Direct');
 my %biosample_ids = &getAllSpecimenIDs();
 croak "BioSample IDs were not imported" unless (%biosample_ids);
 
+my $error_record_file = "ena_not_in_biosample.txt";
+my %known_errors;
+my %new_errors;
+open IN, "$error_record_file";
+while (my $line=<IN>){
+  chomp($line);
+  my ($study,$biosample) = split("\t",$line);
+  $known_errors{$study}{$biosample} = 1;
+}
+
 #used for deleting no longer existant ES records, e.g. record with old id system
 my %indexed_files;
 
@@ -91,17 +101,24 @@ foreach my $record (@$json_text){
   for (my $i=0;$i<scalar @files;$i++){
 #    print "$$record{sample_accession}\t$$record{run_accession}\t$archive\t$file_type\t$source_type\n";
 #    print "$file\n";
+    my $specimen_biosample_id = $$record{sample_accession};
+    unless (exists $biosample_ids{$specimen_biosample_id}){
+      $new_errors{$$record{study_accession}}{$specimen_biosample_id} = 1 unless (exists $known_errors{$$record{study_accession}}{$specimen_biosample_id});
+      next;
+    }
     my $file = $files[$i]; #full path
     my $idx = rindex ($file,"/");
-    my $filename = substr($file,$idx+1);
+    my $fullname = substr($file,$idx+1);
+    $idx = index ($fullname,".");
+    my $filename = substr($fullname,0,$idx);
 #    print "$filename\n";
 #    next;
     my %es_doc = (
-      specimen => $$record{sample_accession},
+      specimen => $specimen_biosample_id,
       organism => $biosample_ids{$$record{sample_accession}}{organism},
       species => $biosample_ids{$$record{sample_accession}}{species},
       url => $file,
-      name => $filename,
+      name => $fullname,
       type => $types[$i],
       size => $sizes[$i],
       checksumMethod => "md5",
@@ -156,6 +173,16 @@ foreach my $record (@$json_text){
 #    print "\n";
   }
 }
+
+open OUT,">>$error_record_file";
+foreach my $study(keys %new_errors){
+  my %tmp = %{$new_errors{$study}};
+  foreach my $biosample(sort keys %tmp){
+    print "$biosample from $study does not exist in BioSamples at the moment\n";
+    print OUT "$study\t$biosample\n";
+  }
+}
+close OUT;
 
 &clean_elasticsearch();
 #delete records in ES which no longer exists in BioSample
