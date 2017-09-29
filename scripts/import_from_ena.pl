@@ -10,6 +10,12 @@ use JSON -support_by_pp;
 use List::Compare;
 use Data::Dumper;
 
+#my @sizes = qw/822938429 204 3475424256 107868/;
+#foreach my $size(@sizes){
+#  print "$size\t";
+#  print &convertReadable($size);
+#  print "\n";
+#}
 
 #my $pipe;
 #open $pipe,"SAMEA3540911_ena.json" or die "Could not find the file";
@@ -121,6 +127,7 @@ foreach my $record (@$json_text){
       name => $fullname,
       type => $types[$i],
       size => $sizes[$i],
+      readableSize => &convertReadable($sizes[$i]),
       checksumMethod => "md5",
       checksum => $checksums[$i],
       archive => $archive,
@@ -258,4 +265,19 @@ sub investigateENAfields(){
   }
   print "\n\nAll messages above are printed from investigateENAfields subroutine which prints the fields used in ENA for FAANG and exits the program. To do the real business, comment the call of this subroutine out.\n";
   exit;
+}
+
+sub convertReadable(){
+  my @units = qw/B K M G T P/;
+  my $size = $_[0];
+  my $i;
+  for ($i=0;$i<6;$i++){
+    $size /=1024;
+    last if $size<1;
+  }
+  $size *=1024;
+  return "${size}B" if ($i==0);
+  my $out = sprintf('%.2f', $size);
+  $out.=$units[$i];
+  return $out;
 }
