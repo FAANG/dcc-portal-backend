@@ -14,6 +14,12 @@ use Search::Elasticsearch;
 use List::Compare;
 use Data::Dumper;
 
+#the code to test getFilenameFromURL
+#my $url = "http://www.ncbi.nlm.nih.gov/pubmed/16215741";
+#$url = "ftp://ftp.faang.ebi.ac.uk/ftp/protocols/samples/KU_Pool_creation_protocol_20170523.pdf";
+#my $filename = &getFilenameFromURL($url);
+#print "$filename\n";
+
 #the code to test the judgement for type of derived from for cell line
 #as currently no data in cell line, use specimen from organism to do a fake test
 #my $accession = "SAMEA3540916"; #only cell line
@@ -163,6 +169,9 @@ sub process_specimens{
 
     my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},1)};
 
+    my $url = $$specimen{characteristics}{specimenCollectionProtocol}[0]{text};
+    my $filename = &getFilenameFromURL($url);
+
     my %es_doc = (
       derivedFrom => $relationships{derivedFrom}[0],
       specimenFromOrganism => {
@@ -182,7 +191,11 @@ sub process_specimens{
           text => $$specimen{characteristics}{organismPart}[0]{text},
           ontologyTerms => $$specimen{characteristics}{organismPart}[0]{ontologyTerms}[0]
         },
-        specimenCollectionProtocol => $$specimen{characteristics}{specimenCollectionProtocol}[0]{text},
+#        specimenCollectionProtocol => $$specimen{characteristics}{specimenCollectionProtocol}[0]{text},
+        specimenCollectionProtocol => {
+          url => $url,
+          filename => $filename
+        },
         fastedStatus => $$specimen{characteristics}{fastedStatus}[0]{text},
         numberOfPieces => {
           text => $$specimen{characteristics}{numberOfPieces}[0]{text},
@@ -230,26 +243,32 @@ sub process_pool_specimen{
     my $specimen = $pool_specimen{$accession};#e.g. accession = SAMEA3540911
     my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},2)};
 
+    my $url = $$specimen{characteristics}{poolCreationProtocol}[0]{text};
+    my $filename = &getFilenameFromURL($url);
+
     my %es_doc = (
 #      sameAs => ,     #according to ruleset, it should be single value entry, i.e. use a hash. However for all other types, an array is used, to make it consistent, use array here as well
       poolOfSpecimens => {
         poolCreationDate => {
           text => $$specimen{characteristics}{poolCreationDate}[0]{text},
           unit => $$specimen{characteristics}{poolCreationDate}[0]{unit}
-          },
-        poolCreationProtocol => $$specimen{characteristics}{poolCreationProtocol}[0]{text},
+        },
+        poolCreationProtocol => {
+          url => $url,
+          filename => $filename
+        },
         specimenVolume => {     #no example in the current FAANG collection for pool of specimens, pure guess, expect to change later when data becomes available
           text => $$specimen{characteristics}{specimenVolume}[0]{text},
           unit => $$specimen{characteristics}{specimenVolume}[0]{unit}
-          },
+        },
         specimenSize => {       #no example in the current FAANG collection for pool of specimens, pure guess, expect to change later when data becomes available
           text => $$specimen{characteristics}{specimenSize}[0]{text},
           unit => $$specimen{characteristics}{specimenSize}[0]{unit}
-          },
+        },
         specimenWeight => {     #no example in the current FAANG collection for pool of specimens, pure guess, expect to change later when data becomes available
           text => $$specimen{characteristics}{specimenWeight}[0]{text},
           unit => $$specimen{characteristics}{specimenWeight}[0]{unit}
-          }
+        }
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
@@ -289,11 +308,17 @@ sub process_cell_specimens{
     my $specimen = $cell_specimen{$key};
     my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},2)};
     
+    my $url = $$specimen{characteristics}{purificationProtocol}[0]{text};
+    my $filename = &getFilenameFromURL($url);
+
     my %es_doc = (
       derivedFrom => $relationships{derivedFrom}[0],
       cellSpecimen => {
         markers => $$specimen{characteristics}{markers}[0]{text},
-        purificationProtocol => $$specimen{characteristics}{purificationProtocol}[0]{text},
+        purificationProtocol => {
+          url => $url,
+          filename => $filename
+        }        
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
@@ -317,6 +342,9 @@ sub process_cell_cultures{
     my $specimen = $cell_culture{$key};
     my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},2)};
 
+    my $url = $$specimen{characteristics}{cellCultureProtocol}[0]{text};
+    my $filename = &getFilenameFromURL($url);
+
     my %es_doc = (
       derivedFrom => $relationships{derivedFrom}[0],
       cellCulture => {
@@ -328,9 +356,12 @@ sub process_cell_cultures{
           text => $$specimen{characteristics}{cellType}[0]{text},
           ontologyTerms => $$specimen{characteristics}{cellType}[0]{ontologyTerms}[0],
         },
-        cellCultureProtocol => $$specimen{characteristics}{cellCultureProtocol}[0]{text},
+        cellCultureProtocol => {
+          url => $url,
+          filename => $filename
+        },
         cultureConditions => $$specimen{characteristics}{cultureConditions}[0]{text},
-        numberOfPassages => $$specimen{characteristics}{numberOfPassages}[0]{text},
+        numberOfPassages => $$specimen{characteristics}{numberOfPassages}[0]{text}
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
@@ -350,6 +381,12 @@ sub process_cell_lines{
     my $specimen = $cell_line{$key};
     my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},3)};
 
+    my $url;
+    my $filename ;
+    if (exists $$specimen{characteristics}{cultureProtocol}[0]{text}){
+      $url = $$specimen{characteristics}{cultureProtocol}[0]{text};
+      $filename = &getFilenameFromURL($url);
+    }
     my %es_doc = (
       cellLine => {
         organism => {
@@ -378,7 +415,10 @@ sub process_cell_lines{
           ontologyTerms => $$specimen{characteristics}{cellType}[0]{ontologyTerms}[0]
         },
         cultureConditions => $$specimen{characteristics}{cultureConditions}[0]{text},
-        cultureProtocol => $$specimen{characteristics}{cultureProtocol}[0]{text},
+        cultureProtocol => {
+          url => $url,
+          filename => $filename
+        },
         disease => {
           text => $$specimen{characteristics}{disease}[0]{text},
           ontologyTerms => $$specimen{characteristics}{disease}[0]{ontologyTerms}[0]
@@ -675,4 +715,15 @@ sub convertSeconds(){
   $minute = $remaining % 60;
   $hour = ($remaining - $minute)/60;
   print "Elapse: $hour hour $minute minute $second second\n";
+}
+
+#return the filename extracted from the given URL. If it is not a pdf file, return null
+sub getFilenameFromURL(){
+    my $url = $_[0];
+    my $idx = rindex ($url,".");
+    my $suffix = lc(substr($url,$idx+1));
+    return unless ($suffix eq "pdf");
+    $idx = rindex ($url,"/");
+    my $filename = substr($url,$idx+1);
+    return $filename;
 }

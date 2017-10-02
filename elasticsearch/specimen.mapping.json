@@ -296,8 +296,16 @@
                         }
                     },
                     "specimenCollectionProtocol": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "properties": {
+                            "url": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            },
+                            "filename": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
                     },
                     "fastedStatus": {
                         "type": "string",
@@ -384,8 +392,16 @@
                         }
                     },
                     "poolCreationProtocol": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "properties": {
+                            "url": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            },
+                            "filename": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
                     },
                     "specimenVolume": {
                         "properties": {
@@ -448,8 +464,16 @@
                         }
                     },
                     "purificationProtocol": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "properties": {
+                            "url": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            },
+                            "filename": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
                     }
                 }
             },
@@ -480,8 +504,16 @@
                         }
                     },
                     "cellCultureProtocol": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "properties": {
+                            "url": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            },
+                            "filename": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
                     },
                     "cultureConditions": {
                         "type": "string",
@@ -604,8 +636,16 @@
                         "index": "not_analyzed"
                     },
                     "cultureProtocol": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "properties": {
+                            "url": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            },
+                            "filename": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
                     },
                     "disease": {
                         "properties": {
