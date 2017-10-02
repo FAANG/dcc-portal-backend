@@ -268,7 +268,7 @@ sub investigateENAfields(){
 }
 
 sub convertReadable(){
-  my @units = qw/B K M G T P/;
+  my @units = qw/B kB MB GB TB PB/;
   my $size = $_[0];
   my $i;
   for ($i=0;$i<6;$i++){
