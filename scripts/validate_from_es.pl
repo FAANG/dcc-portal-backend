@@ -18,42 +18,29 @@ GetOptions(
   'es_index_name=s' =>\$es_index_name,
 );
 
-#croak "Need -es_host" unless ($es_host);
-#print "Working on $es_index_name at $es_host\n";
+croak "Need -es_host" unless ($es_host);
+print "Working on $es_index_name at $es_host\n";
 
+#get the latest release version
+#this requires the immediate deployment of latest release on the production server
+my $ruleset_version = &getRulesetVersion();
+print "Rule set release: $ruleset_version\n";
 
-#the line below enable to investigate the fields used in ENA
-#&investigateENAfields($json_text);
-
+#initial ES object
 my $es = Search::Elasticsearch->new(nodes => $es_host, client => '1_0::Direct'); #client option to make it compatiable with elasticsearch 1.x APIs
 
-#get specimen information from current elasticsearch server
-#which means that this script must be executed after import_from_biosample.pl
+#define what type of data to validate
 my @types = qw/organism specimen/;
 foreach my $type(@types){
-#  $type = "specimen";
   &validateAllRecords($type);
-#  exit;
 }
 
-
-#read the content from the file handle and concatenate into a string
-#for development purpose of reading several records from a file
-sub readHandleIntoString(){
-        my $fh = $_[0]; 
-        my $str = "";
-        while (my $line = <$fh>) {
-                chomp($line);
-                $str .= $line;
-        }
-        return $str;
-}
-
-#read in BioSample specimen list
+#validate all records in one type
 sub validateAllRecords(){
   my $type = $_[0];
+  my $tmpOutFile = "${type}_records.json";#the temp middle file
   print "Validating $type data\n";
-#  my %biosample_ids;
+  #retrieve all records from elastic search server in the chunk of 500
   my $scroll = $es->scroll_helper(
     index => $es_index_name,
     type => $type,
@@ -61,33 +48,35 @@ sub validateAllRecords(){
     size => 500,
   );
   my $count = 0;
-  open OUT,">tmp2.json";
+  #the temporary middle output file contains all record from one type
+  open OUT,">$tmpOutFile";
+  #the top level expected by the validate API is an array. each element is a BioSample record
   print OUT "[\n";
-#  my @convertedData;
   while (my $loaded_doc = $scroll->next) {
     my $biosampleId = $$loaded_doc{_id};
-#    print "$biosampleId\n";
     $count++;
     my %data = %{$$loaded_doc{_source}};
     my $convertedData = &convert(\%data,$type);
+    #convert the middle data structure to json for outputting into the temp file
     my $jsonStr = to_json($convertedData);
     print OUT ",\n" unless ($count==1);
     print OUT "$jsonStr\n";
-#    last if ($count == 5);
   }
   print OUT "]\n";
   close OUT;
-#  exit;
-#    my $host = "https://www.ebi.ac.uk/vg/faang/validate";
-    #using curl to fill the form, reference page https://curl.haxx.se/docs/manual.html
-  my $cmd = 'curl -F "format=json" -F "rule_set_name=FAANG Samples" -F "file_format=JSON" -F "metadata_file=@tmp2.json" "https://www.ebi.ac.uk/vg/faang/validate"';
+  #using curl to fill the form, reference page https://curl.haxx.se/docs/manual.html
+  my $cmd = 'curl -F "format=json" -F "rule_set_name=FAANG Samples" -F "file_format=JSON" -F "metadata_file=@'.$tmpOutFile.'" "https://www.ebi.ac.uk/vg/faang/validate"';
   my $pipe;
-  open $pipe, "$cmd|";
+  open $pipe, "$cmd|"; #send the file to the server and receive the response
   my $response = &readHandleIntoString($pipe);
   my $json = &decode_json($response);
   &printValidatationResult($$json{entities},$type);
 }
 
+#convert ES record to the data structure expected by the API
+#a hash which has id, entity_type and attributes as its keys (validate-metadata repo Bio/Metadata/Entity)
+#most fields should be saved as one element in the attributes array
+#every element expects name, value, units, uri and id (Bio/Metadata/Attribute.pm) 
 sub convert(){
   my %data = %{$_[0]};
   my $type = $_[1];
@@ -110,6 +99,7 @@ sub convert(){
     @attr = &parse(\@attr,\%data,$type);
   }else{
     #delete the data sections which were created for sorting purpose in the frontend or similar purpose and are NOT in the rule set
+    #the following two are specimen only
     delete $data{cellType};
     delete $data{organism};
     my $typeSpecific = &toLowerCamelCase($material);
@@ -133,18 +123,19 @@ sub parse(){
   my %data = %{$_[1]};
   my $type = $_[2];
   foreach my $key(keys %data){
-    next if ($key eq "organization");
+#    next if ($key eq "organization");
     my $refType = ref($data{$key});
     #according to ruleset https://www.ebi.ac.uk/vg/faang/rule_sets/FAANG%20Samples
     #only organism.healthStatus, organism.childOf, specimenFromOrganism.healthStatusAtCollection, poolOfSpecimen.derivedFrom,
-    #cellSpecimen.cellType
+    #cellSpecimen.cellType are of array type (i.e. having multiple values)
+    #for array, each element has a corresponding entry directly under attributes array, not forming an array of the same field
     if ($refType eq "ARRAY"){
       my %hash;
       my $matched = &fromLowerCamelCase($key);
       $matched = "Child of" if ($key eq "childOf");
       foreach my $elmt(@{$data{$key}}){
         if (ref($elmt) eq "HASH"){
-          my %hash = &parseHash($elmt,$matched,$type);
+          my %hash = &parseHash($elmt,$matched,$type);#the hash itself, value used as name, organism or specimen
           push(@attr,\%hash);
         }else{
           my %hash = (
@@ -157,9 +148,11 @@ sub parse(){
     }elsif($refType eq "HASH"){
       my %hash = &parseHash($data{$key},$key,$type);
       push(@attr,\%hash);
-    }else{
+    }else{#scalar
       my %tmp;
       $tmp{name}=&fromLowerCamelCase($key); 
+      #these hard-coding are for the fields with special capitalization case or conserved field name in the rule set (check the name field)
+      #https://github.com/FAANG/faang-metadata/blob/master/rulesets/faang_samples.metadata_rules.json
       $tmp{name} = "Sample Description" if ($key eq "description");
       $tmp{name} = "Derived from" if ($key eq "derivedFrom");
       $tmp{value} = $data{$key};
@@ -175,7 +168,8 @@ sub parseOntologyTerm(){
   my $id = substr($uri,$idx+1);
   $id =~s/:/_/; #some ontology id use : as the separator
   $id = "OBI_0100026" if ($id eq "UBERON_0000468");#some biosample records wrongly assigned the ontology id to organism by the submitter
-  my ($source) = split ("_",$id);
+  my ($source) = split ("_",$id);#ontology library, e.g. PATO, EFO, normally could be extract from ontology id
+  #this is only part of the hash which will be populated after being returned (name, value, units)
   my %result = (
     id => $id,
     source_ref => $source
@@ -219,7 +213,7 @@ sub parseHash(){
   $tmp{name} = $key;
   return %tmp;
 }
-
+#convert phrase in lower camel case to words separated by space
 sub fromLowerCamelCase(){
   my $str = $_[0];
   my @arr = split(/(?=[A-Z])/,$str);
@@ -244,6 +238,7 @@ sub printValidatationResult(){
     my %hash= %{$entity};
     my $status = $hash{_outcome}{status};
     $summary{$status}++;
+    next unless ($status eq "error");#only print error messages.
     print "$hash{id}\t$type\t$status\t";
     if ($status eq "pass"){
       print "\n";
@@ -274,4 +269,25 @@ sub printValidatationResult(){
     }
   }
   print "\n";
+}
+#retrieve release number from GitHub via API
+sub getRulesetVersion(){
+  my $cmd = 'curl https://api.github.com/repos/FAANG/faang-metadata/releases';
+  my $pipe;
+  open $pipe, "$cmd|";
+  my $response = &readHandleIntoString($pipe);
+  my $json = &decode_json($response);
+  my $current = $$json[0];
+  return $$current{tag_name};
+}
+#read the content from the file handle and concatenate into a string
+#for development purpose of reading several records from a file
+sub readHandleIntoString(){
+  my $fh = $_[0]; 
+  my $str = "";
+  while (my $line = <$fh>) {
+    chomp($line);
+    $str .= $line;
+  }
+  return $str;
 }
