@@ -22,3 +22,5 @@ nytprof.out
 /local/
 .DS_Store
 
+ena_not_in_biosample.txt
+scripts/ena_not_in_biosample.txt

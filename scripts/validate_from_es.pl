@@ -16,11 +16,11 @@ my $es_index;
 
 GetOptions(
   'es_host=s' =>\$es_host,
-  'es_index=s' =>\$es_index
+  'es_index_name=s' =>\$es_index
 );
 
 croak "Need -es_host" unless ($es_host);
-croak "Need -es_index" unless ($es_index);
+croak "Need -es_index_name" unless ($es_index);
 print "Working on $es_index at $es_host\n";
 
 #get the latest release version
@@ -89,8 +89,24 @@ sub validateOneType(){
   print "Details:\n";
   my %details = %{$totalResults{detail}};
   foreach my $biosampleId(sort {$a cmp $b} keys %details){
-    next unless ($details{$biosampleId}{status} eq "error");
-    print "$biosampleId\t$details{$biosampleId}{type}\terror\t$details{$biosampleId}{message}\n";
+    if ($details{$biosampleId}{status} eq "error"){
+      print "$biosampleId\t$details{$biosampleId}{type}\terror\t$details{$biosampleId}{message}\n";
+    }else{
+      my %es_doc = %{$data{$biosampleId}};
+      $es_doc{standardMet} = "FAANG";
+      $es_doc{versionLastStandardMet} = $ruleset_version;
+      eval{
+        $es->index(
+          index => $es_index,
+          type => $details{$biosampleId}{type},
+          id => $biosampleId,
+          body => \%es_doc
+        );
+      };
+      if (my $error = $@) {
+        die "error indexing sample in $es_index index:".$error->{text};
+      }
+    }
   }
 }
 

@@ -628,7 +628,7 @@ sub update_elasticsearch{
       index => $es_index_name,
       type => $type,
       id => $$es_doc_ref{biosampleId},
-      body => $es_doc_ref,
+      body => $es_doc_ref
     );
   };
   if (my $error = $@) {
