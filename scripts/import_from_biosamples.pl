@@ -33,17 +33,22 @@ require "validate_sample_record.pl";
 #exit;
 
 #the parameters expected to be retrieved from the command line
-my ($project, $es_host, $es_index_name);
+my ($project, $es_host, $es_index_name, $error_log);
+$error_log = "import_biosample_error.log";
 #Parse the command line options
 #Example: perl import_from_biosamples.pl -project faang -es_host <elasticsearch server> -es_index_name faang
 GetOptions(
   'project=s' => \$project,
   'es_host=s' =>\$es_host,
   'es_index_name=s' =>\$es_index_name,
+  'error_log' =>\$error_log
 );
 croak "Need -project e.g. faang" unless ( $project);
 croak "Need -es_host e.g. ves-hx-e4:9200" unless ( $es_host);
 croak "Need -es_index_name e.g. faang, faang_build_1" unless ( $es_index_name);
+
+print "The information of invalid records will be stored in $error_log\n\n";
+open ERR,">$error_log";
 
 my $ruleset_version = &getRulesetVersion();
 print "Rule set release: $ruleset_version\n";
@@ -738,11 +743,13 @@ sub insert_into_es(){
   my %validationResult = &validateTotalSampleRecords(\%converted,$type);
   my %details = %{$validationResult{detail}};
 
-  foreach my $biosampleId (keys %converted){
+  foreach my $biosampleId (sort {$a cmp $b} keys %converted){
     $indexed_samples{$biosampleId} = 1;
-    unless ($details{$biosampleId}{status} eq "error"){
+    if ($details{$biosampleId}{status} eq "error"){
+      print ERR "$biosampleId\t$details{$biosampleId}{type}\terror\t$details{$biosampleId}{message}\n";
+    }else{
       my %es_doc = %{$converted{$biosampleId}};
-      $es_doc{standardMet} = "FAANG-with-specimen";
+      $es_doc{standardMet} = "FAANG";
       $es_doc{versionLastStandardMet} = $ruleset_version;
       #trapping error: the code can continue to run even after the die or errors, and it also captures the errors or dieing words.
       eval{
