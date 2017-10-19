@@ -13,6 +13,8 @@ use JSON -support_by_pp;
 use Search::Elasticsearch;
 use List::Compare;
 use Data::Dumper;
+#the library file for validation of sample records
+require "validate_sample_record.pl";
 
 #the code to test getFilenameFromURL
 #my $url = "http://www.ncbi.nlm.nih.gov/pubmed/16215741";
@@ -42,6 +44,9 @@ GetOptions(
 croak "Need -project e.g. faang" unless ( $project);
 croak "Need -es_host e.g. ves-hx-e4:9200" unless ( $es_host);
 croak "Need -es_index_name e.g. faang, faang_build_1" unless ( $es_index_name);
+
+my $ruleset_version = &getRulesetVersion();
+print "Rule set release: $ruleset_version\n";
 
 my $es = Search::Elasticsearch->new(nodes => $es_host, client => '1_0::Direct');#client option to make it compatiable with elasticsearch 1.x APIs
 
@@ -108,7 +113,6 @@ croak "Did not obtain any specimens from BioSamples" unless ( $number_specimens_
 $current = time;
 #&convertSeconds($current - $pastTime);
 $pastTime = $current;
-
 #parse all types of specimen, at the moment the order does not matter
 #print "Indexing specimen from organism starts at ".localtime."\n";
 &process_specimens(\%specimen_from_organism);
@@ -162,8 +166,10 @@ $current = time;
 #&convertSeconds($current - $savedTime);
 #print "The program ends at ".localtime."\n";
 
+#process specimen from organism
 sub process_specimens{
   my %specimen_from_organism = %{$_[0]};
+  my %converted;
   foreach my $key (keys %specimen_from_organism){
     my $specimen = $specimen_from_organism{$key};
 
@@ -229,16 +235,21 @@ sub process_specimens{
       push(@{$es_doc{specimenFromOrganism}{healthStatusAtCollection}}, {text => $$healthStatusAtCollection{text}, ontologyTerms => $$healthStatusAtCollection{ontologyTerms}[0]});
     }
     @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
-    # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET  }
     my $organismAccession = $relationships{organism}[0];
     $es_doc{organism}=$organismInfoForSpecimen{$organismAccession};
     $organismReferredBySpecimen{$organismAccession}++;
-    update_elasticsearch(\%es_doc, 'specimen');
+    #the validation service can only be applied on FAANG data, not BioSample data
+    #therefore it needs to be converted first using the codes above, and save into %converted
+    #it should be more efficient to validate multiple records than one record at a time
+    %{$converted{$key}} = %es_doc;
   }
+  #only insert validated entries
+  &insert_into_es(\%converted,"specimen");
 }
 
 sub process_pool_specimen{
   my %pool_specimen = %{$_[0]};
+  my %converted;
   foreach my $accession(keys %pool_specimen){
     my $specimen = $pool_specimen{$accession};#e.g. accession = SAMEA3540911
     my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},2)};
@@ -288,6 +299,7 @@ sub process_pool_specimen{
       $tmp{sex}{$organismInfoForSpecimen{$organismAccession}{sex}{text}} = $organismInfoForSpecimen{$organismAccession}{sex}{ontologyTerms};
       $tmp{breed}{$organismInfoForSpecimen{$organismAccession}{breed}{text}} = $organismInfoForSpecimen{$organismAccession}{breed}{ontologyTerms};
     }
+    #assign the collective value of organism, sex and breed for all related specimen
     my @arr = ("organism","sex","breed");
     foreach my $type(@arr){
       my @values = keys %{$tmp{$type}};
@@ -298,12 +310,14 @@ sub process_pool_specimen{
         $es_doc{organism}{$type}{text} = join (";", @values);
       }
     }
-    update_elasticsearch(\%es_doc, 'specimen');
+    %{$converted{$accession}} = %es_doc;
   }
+  &insert_into_es(\%converted,"specimen");
 }
 
 sub process_cell_specimens{
   my %cell_specimen = %{$_[0]};
+  my %converted;
   foreach my $key (keys %cell_specimen){
     my $specimen = $cell_specimen{$key};
     my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},2)};
@@ -328,16 +342,17 @@ sub process_cell_specimens{
       push(@{$es_doc{cellSpecimen}{cellType}}, $cellType);
     }
     @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
-    # standardMet => , #TODO Need to validate sample to know if standard is met, will store FAANG, LEGACY or NOTMET
     my $organismAccession = $relationships{organism}[0];
     $es_doc{organism}=$organismInfoForSpecimen{$organismAccession};
     $organismReferredBySpecimen{$organismAccession}++;
-    update_elasticsearch(\%es_doc, 'specimen');
+    %{$converted{$key}} = %es_doc;
   }
+  &insert_into_es(\%converted,"specimen");
 }
 
 sub process_cell_cultures{
   my %cell_culture = %{$_[0]};
+  my %converted;
   foreach my $key (keys %cell_culture){
     my $specimen = $cell_culture{$key};
     my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},2)};
@@ -371,12 +386,14 @@ sub process_cell_cultures{
     my $organismAccession = $relationships{organism}[0];
     $es_doc{organism}=$organismInfoForSpecimen{$organismAccession};
     $organismReferredBySpecimen{$organismAccession}++;
-    update_elasticsearch(\%es_doc, 'specimen');
+    %{$converted{$key}} = %es_doc;
   }
+  &insert_into_es(\%converted,"specimen");
 }
 
 sub process_cell_lines{
   my %cell_line = %{$_[0]};
+  my %converted;
   foreach my $key (keys %cell_line){
     my $specimen = $cell_line{$key};
     my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},3)};
@@ -441,12 +458,14 @@ sub process_cell_lines{
         $es_doc{organism}{$type} = $es_doc{cellLine}{$type};
       }
     }
-    update_elasticsearch(\%es_doc, 'specimen');
+    %{$converted{$key}} = %es_doc;
   }
+  &insert_into_es(\%converted,"specimen");
 }
 
 sub process_organisms(){
   my %organisms = %{$_[0]};
+  my %converted;
   foreach my $accession (keys %organisms){
     my $organism = $organisms{$accession};
     my $relations = fetch_json_by_url($$organism{_links}{relations}{href});
@@ -518,9 +537,9 @@ sub process_organisms(){
       $es_doc{breed} = {text => $$organism{characteristics}{strain}[0]{text}, ontologyTerms => $$organism{characteristics}{strain}[0]{ontologyTerms}[0]};
       $organismInfoForSpecimen{$accession}{breed} = {text => $$organism{characteristics}{strain}[0]{text}, ontologyTerms => $$organism{characteristics}{strain}[0]{ontologyTerms}[0]};
     }
-    #insert into elasticsearch server
-    update_elasticsearch(\%es_doc, 'organism');
+    %{$converted{$accession}} = %es_doc;
   }
+  &insert_into_es(\%converted,"organism");
 }
 #add basic information of BioSample record which is expected to exist for every single record into given hash
 #the basic set is compiled from cell line
@@ -618,24 +637,7 @@ sub fetch_single_record{
   $hash{$json_text->{accession}} = $json_text;
   return %hash;
 }
-#insert (es term index) biosample entries into elasticsearch
-sub update_elasticsearch{
-  my ($es_doc_ref, $type) = @_;
-#  my %es_doc = %$es_doc_ref;
-  #trapping error: the code can continue to run even after the die or errors, and it also captures the errors or dieing words.
-  eval{
-    $es->index(
-      index => $es_index_name,
-      type => $type,
-      id => $$es_doc_ref{biosampleId},
-      body => $es_doc_ref
-    );
-  };
-  if (my $error = $@) {
-    die "error indexing sample in $es_index_name index:".$error->{text};
-  }
-  $indexed_samples{$$es_doc_ref{biosampleId}} = 1;
-}
+
 #delete records in ES which no longer exists in BioSample
 #BE careful, this no-more-existances could be caused by lost of server
 sub clean_elasticsearch{
@@ -726,4 +728,34 @@ sub getFilenameFromURL(){
     $idx = rindex ($url,"/");
     my $filename = substr($url,$idx+1);
     return $filename;
+}
+#validate multiple FAANG sample records
+#if it is valid, then set field standardMet and versionLastStandardMet and
+#insert (es term index) biosample entries into elasticsearch
+sub insert_into_es(){
+  my ($hashref,$type)=@_;
+  my %converted=%{$hashref};
+  my %validationResult = &validateTotalSampleRecords(\%converted,$type);
+  my %details = %{$validationResult{detail}};
+
+  foreach my $biosampleId (keys %converted){
+    $indexed_samples{$biosampleId} = 1;
+    unless ($details{$biosampleId}{status} eq "error"){
+      my %es_doc = %{$converted{$biosampleId}};
+      $es_doc{standardMet} = "FAANG-with-specimen";
+      $es_doc{versionLastStandardMet} = $ruleset_version;
+      #trapping error: the code can continue to run even after the die or errors, and it also captures the errors or dieing words.
+      eval{
+        $es->index(
+          index => $es_index_name,
+          type => $type,
+          id => $biosampleId,
+          body => \%es_doc
+        );
+      };
+      if (my $error = $@) {
+        die "error indexing sample in $es_index_name index:".$error->{text};
+      }
+    }
+  }
 }

@@ -34,6 +34,8 @@ GetOptions(
 
 croak "Need -es_host" unless ($es_host);
 #print "Working on $es_index_name at $es_host\n";
+my $ruleset_version = &getRulesetVersion();
+print "Rule set release: $ruleset_version\n";
 
 #Import FAANG data from FAANG endpoint of ENA API
 #ENA API documentation available at: http://www.ebi.ac.uk/ena/portal/api/doc?format=pdf
