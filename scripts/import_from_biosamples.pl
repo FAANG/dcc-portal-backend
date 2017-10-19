@@ -41,7 +41,7 @@ GetOptions(
   'project=s' => \$project,
   'es_host=s' =>\$es_host,
   'es_index_name=s' =>\$es_index_name,
-  'error_log' =>\$error_log
+  'error_log=s' =>\$error_log
 );
 croak "Need -project e.g. faang" unless ( $project);
 croak "Need -es_host e.g. ves-hx-e4:9200" unless ( $es_host);
