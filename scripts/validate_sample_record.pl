@@ -54,6 +54,8 @@ sub convert(){
   delete $data{organization};
   delete $data{biosampleId};
   delete $data{name};
+  delete $data{standardMet};
+  delete $data{versionLastStandardMet};
 
   my %typeSpecific;
   if($type eq "organism"){
@@ -174,8 +176,9 @@ sub parseValidatationResult(){
     my %hash= %{$entity};
     my $status = $hash{_outcome}{status};
     $summary{$status}++;
-    $result{detail}{$hash{id}}{status} = $status;
-    $result{detail}{$hash{id}}{type} = $type;
+    my $id = $hash{id};
+    $result{detail}{$id}{status} = $status;
+    $result{detail}{$id}{type} = $type;
     #if the warning/error related to columns not existing in the data, the following attribute iteration will not go through that column
     my $backupMsg = "";
     my $tag = $status."s";
@@ -205,6 +208,66 @@ sub getRulesetVersion(){
   my $json = &decode_json($response);
   my $current = $$json[0];
   return $$current{tag_name};
+}
+
+sub mergeResult(){
+  my %totalResults = %{$_[0]};
+  my %partResults = %{$_[1]};
+  if (exists $totalResults{summary}){
+    my @status = qw/pass warning error/;
+    foreach (@status){
+      if (exists $totalResults{summary}{$_} && exists $partResults{summary}{$_}){
+        $totalResults{summary}{$_} += $partResults{summary}{$_};
+      }elsif (exists $totalResults{summary}{$_}){
+      }elsif (exists $partResults{summary}{$_}){
+        $totalResults{summary}{$_} = $partResults{summary}{$_};
+      }else{
+        $totalResults{summary}{$_} = 0;
+      }
+    }
+  }else{ #no summary section, means totalResults is empty (i.e. first portion of result)
+    %totalResults = %partResults;
+    return \%totalResults;
+  }
+  foreach my $tmp (keys %{$partResults{detail}}){
+    $totalResults{detail}{$tmp} = $partResults{detail}{$tmp};
+  }
+  return \%totalResults;
+}
+
+#split the total records into batches of 1000 records (avoid the timeout error)
+#validate each batch of records
+#and merged the validation results
+#input: 
+# 1) a hash with id as its keys and corresponding data in hash/JSON as its values
+# 2) the type of the sample: either organism or specimen
+#return a hash having two keys: summary and detail
+#for the "summary" key, the value is a hash with fixed keys: pass, warning and error with the count as their values
+#for the "detail" key, the value is the hash with id (as input) as its keys and error/warning messages as the values
+sub validateTotalSampleRecords(){
+  my %data = %{$_[0]};
+  my $type = $_[1];
+  my %totalResults;
+  my $portionSize = 1000;
+  my @data = keys %data;
+  my $totalSize = scalar @data;
+  my $numPortions = ($totalSize - $totalSize%$portionSize)/$portionSize;
+  for (my $i=0;$i<$numPortions;$i++){
+    my @part;
+    for (my $j=0;$j<$portionSize;$j++){
+      my $biosampleId = pop @data;
+      push (@part,$data{$biosampleId});
+    }
+    my %validationResults = &validateSampleRecord(\@part,$type);
+    %totalResults = %{&mergeResult(\%totalResults,\%validationResults)};
+  }
+  my @part;
+  while(my $biosampleId = pop @data){
+    push (@part,$data{$biosampleId});
+  }
+  my %validationResults = &validateSampleRecord(\@part,$type);
+  %totalResults = %{&mergeResult(\%totalResults,\%validationResults)};
+  return %totalResults;
 }
 
 1;

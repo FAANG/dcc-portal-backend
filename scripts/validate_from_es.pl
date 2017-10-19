@@ -56,26 +56,9 @@ sub validateOneType(){
     $data{$biosampleId} = $$loaded_doc{_source};
   }
 
-  my %totalResults;
-  my $portionSize = 1000;
-  my @data = keys %data;
-  my $totalSize = scalar @data;
-  my $numPortions = ($totalSize - $totalSize%$portionSize)/$portionSize;
-  for (my $i=0;$i<$numPortions;$i++){
-    my @part;
-    for (my $j=0;$j<$portionSize;$j++){
-      my $biosampleId = pop @data;
-      push (@part,$data{$biosampleId});
-    }
-    my %validationResults = &validateSampleRecord(\@part,$type);
-    %totalResults = %{&mergeResult(\%totalResults,\%validationResults)};
-  }
-  my @part;
-  while(my $biosampleId = pop @data){
-    push (@part,$data{$biosampleId});
-  }
-  my %validationResults = &validateSampleRecord(\@part,$type);
-  %totalResults = %{&mergeResult(\%totalResults,\%validationResults)};
+  my %totalResults = &validateTotalSampleRecords(\%data,$type);
+
+
   #display the validationResults
   my @status = qw/pass warning error/;
   print "$type Summary:\n";
@@ -110,27 +93,3 @@ sub validateOneType(){
   }
 }
 
-sub mergeResult(){
-  my %totalResults = %{$_[0]};
-  my %partResults = %{$_[1]};
-  if (exists $totalResults{summary}){
-    my @status = qw/pass warning error/;
-    foreach (@status){
-      if (exists $totalResults{summary}{$_} && exists $partResults{summary}{$_}){
-        $totalResults{summary}{$_} += $partResults{summary}{$_};
-      }elsif (exists $totalResults{summary}{$_}){
-      }elsif (exists $partResults{summary}{$_}){
-        $totalResults{summary}{$_} = $partResults{summary}{$_};
-      }else{
-        $totalResults{summary}{$_} = 0;
-      }
-    }
-  }else{ #no summary section, means totalResults is empty (i.e. first portion of result)
-    %totalResults = %partResults;
-    return \%totalResults;
-  }
-  foreach my $tmp (keys %{$partResults{detail}}){
-    $totalResults{detail}{$tmp} = $partResults{detail}{$tmp};
-  }
-  return \%totalResults;
-}
