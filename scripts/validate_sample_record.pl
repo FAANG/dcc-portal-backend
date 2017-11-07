@@ -6,9 +6,10 @@ use JSON -support_by_pp;
 
 require "misc.pl";
 
-sub validateSampleRecord(){
+sub validateRecord(){
   my @data = @{$_[0]};
   my $type = $_[1];
+  my $ruleset = $_[2];
   my $tmpOutFile = "${type}_records.json";#the temp middle file
   my $count = 0;
   #the temporary middle output file contains all record from one type
@@ -26,7 +27,8 @@ sub validateSampleRecord(){
   print OUT "]\n";
   close OUT;
   #using curl to fill the form, reference page https://curl.haxx.se/docs/manual.html
-  my $cmd = 'curl -F "format=json" -F "rule_set_name=FAANG Samples" -F "file_format=JSON" -F "metadata_file=@'.$tmpOutFile.'" "https://www.ebi.ac.uk/vg/faang/validate"';
+  my $cmd = 'curl -F "format=json" -F "rule_set_name='.$ruleset.'" -F "file_format=JSON" -F "metadata_file=@'.$tmpOutFile.'" "https://wwwdev.ebi.ac.uk/vg/faang/validate"';
+#  print "\n\n$cmd\n\n";
   my $pipe;
   open $pipe, "$cmd|"; #send the file to the server and receive the response
   my $response = &readHandleIntoString($pipe);
@@ -171,6 +173,7 @@ sub parseValidatationResult(){
   my @entities = @{$_[0]};
   my $type = $_[1];
   my %summary;
+  my %errors;
   my %result;
   foreach my $entity(@entities){
     my %hash= %{$entity};
@@ -179,23 +182,33 @@ sub parseValidatationResult(){
     my $id = $hash{id};
     $result{detail}{$id}{status} = $status;
     $result{detail}{$id}{type} = $type;
-    #if the warning/error related to columns not existing in the data, the following attribute iteration will not go through that column
+    #if the warning/error related to columns is "not existing in the data" (e.g. no project column found), the following attribute iteration will not go through that column
     my $backupMsg = "";
     my $tag = $status."s";
     $backupMsg = join (";",@{$hash{_outcome}{$tag}}) if (exists $hash{_outcome}{$tag});
+#    print "$backupMsg\n";
     my @msgs;
     my @attributes = @{$hash{attributes}};
     foreach my $attr (@attributes){
-      next if ($$attr{_outcome}{status} eq "pass");
-      $tag = $$attr{_outcome}{status}."s";
+      my $fieldStatus = uc($$attr{_outcome}{status});
+      next if ($fieldStatus eq "PASS");
+      $tag = lc($fieldStatus)."s";
       my $msg = "$$attr{name}:".$$attr{_outcome}{$tag}[0];
+      $errors{$msg}++ if($fieldStatus eq "ERROR");#only want error message not the warning
+      $msg = "($fieldStatus)".$msg;
       push (@msgs,$msg);
     }
+    @msgs = sort @msgs;
     my $totalMsg = join (";",@msgs);
-    $totalMsg = $backupMsg if (scalar @msgs == 0);
+    if (scalar @msgs == 0){
+      $totalMsg = $backupMsg;
+#      $errors{$backupMsg}++;
+      $errors{$backupMsg}++ if($status eq "error");#only want error message
+    }
     $result{detail}{$hash{id}}{message} = $totalMsg;
   }
   %{$result{summary}}=%summary;
+  %{$result{errors}}=%errors;
   return %result;
 }
 
@@ -209,29 +222,46 @@ sub getRulesetVersion(){
   my $current = $$json[0];
   return $$current{tag_name};
 }
-
+#merge the validation result of one portion into the total result
 sub mergeResult(){
   my %totalResults = %{$_[0]};
   my %partResults = %{$_[1]};
-  if (exists $totalResults{summary}){
+  my $ruleset = $_[2];
+  my %subResults;
+  %subResults = %{$totalResults{$ruleset}} if (exists $totalResults{$ruleset});
+
+  if (exists $subResults{summary}){
+    #deal with three parts one by one
+    #merge the summary section
     my @status = qw/pass warning error/;
     foreach (@status){
-      if (exists $totalResults{summary}{$_} && exists $partResults{summary}{$_}){
-        $totalResults{summary}{$_} += $partResults{summary}{$_};
-      }elsif (exists $totalResults{summary}{$_}){
+      if (exists $subResults{summary}{$_} && exists $partResults{summary}{$_}){
+        $subResults{summary}{$_} += $partResults{summary}{$_};
+      }elsif (exists $subResults{summary}{$_}){
       }elsif (exists $partResults{summary}{$_}){
-        $totalResults{summary}{$_} = $partResults{summary}{$_};
+        $subResults{summary}{$_} = $partResults{summary}{$_};
       }else{
-        $totalResults{summary}{$_} = 0;
+        $subResults{summary}{$_} = 0;
       }
     }
-  }else{ #no summary section, means totalResults is empty (i.e. first portion of result)
-    %totalResults = %partResults;
-    return \%totalResults;
+    #merge the detail section
+    #no need to do existance check, as the input ids are stored in the hash, which guarantees that one record only gets validated once
+    foreach my $tmp (keys %{$partResults{detail}}){
+      $subResults{detail}{$tmp} = $partResults{detail}{$tmp};
+    }
+    #merge the error summary
+    my %newErrorMessages = %{$partResults{errors}};
+    foreach my $msg(keys %newErrorMessages){
+      if (exists $subResults{errors}{$msg}){
+        $subResults{errors}{$msg} += $newErrorMessages{$msg};
+      }else{
+        $subResults{errors}{$msg} = $newErrorMessages{$msg};
+      }
+    }
+  }else{ #no summary section, means subResults is empty (i.e. first portion of result for the given ruleset)
+    %subResults = %partResults;
   }
-  foreach my $tmp (keys %{$partResults{detail}}){
-    $totalResults{detail}{$tmp} = $partResults{detail}{$tmp};
-  }
+  %{$totalResults{$ruleset}} = %subResults;
   return \%totalResults;
 }
 
@@ -241,32 +271,68 @@ sub mergeResult(){
 #input: 
 # 1) a hash with id as its keys and corresponding data in hash/JSON as its values
 # 2) the type of the sample: either organism or specimen
-#return a hash having two keys: summary and detail
+#return a hash having three keys: summary, detail and errors
 #for the "summary" key, the value is a hash with fixed keys: pass, warning and error with the count as their values
 #for the "detail" key, the value is the hash with id (as input) as its keys and error/warning messages as the values
+#for the 'errors' key, the value is the hash of error message and its occurrence
 sub validateTotalSampleRecords(){
   my %data = %{$_[0]};
   my $type = $_[1];
+  my @rulesets = @{$_[2]};
   my %totalResults;
   my $portionSize = 1000;
-  my @data = keys %data;
+  my @data = sort keys %data;
   my $totalSize = scalar @data;
   my $numPortions = ($totalSize - $totalSize%$portionSize)/$portionSize;
+  
+########################
+# The code below is for debugging purpose to cherry pick one or several records to do the validation combining with setting the type in validate_from_es.pl
+#  my @tmp;
+#  push (@tmp,$data{"SAMEA3540916"});
+#  foreach my $ruleset(@rulesets){
+#    my %validationResults = &validateRecord(\@tmp,$type,$ruleset);
+#    %totalResults = %{&mergeResult(\%totalResults,\%validationResults,$ruleset)};
+#  }
+#  print Dumper(\%totalResults);
+#  exit;
+
+###########################
+#the commented codes in the next section is to debug a portion of records containing a particular accession
+#  my $flag = 0;
   for (my $i=0;$i<$numPortions;$i++){
     my @part;
     for (my $j=0;$j<$portionSize;$j++){
       my $biosampleId = pop @data;
       push (@part,$data{$biosampleId});
+#      $flag = 1 if ($biosampleId eq "SAMEA103887540");
     }
-    my %validationResults = &validateSampleRecord(\@part,$type);
-    %totalResults = %{&mergeResult(\%totalResults,\%validationResults)};
+#    print Dumper(\%totalResults) if ($flag==1);
+#    if ($flag==1){
+    foreach my $ruleset(@rulesets){
+      my %validationResults = &validateRecord(\@part,$type,$ruleset);
+      %totalResults = %{&mergeResult(\%totalResults,\%validationResults,$ruleset)};
+#      if ($flag == 1){
+#        print "$ruleset\nindividual results\n";
+#        print Dumper(\%validationResults);
+#        print "\nAfter merge\n";
+#        print Dumper(\%totalResults);
+#     }
+    }
+#    exit if($flag == 1);
+#    last;
+#    }
   }
+
+  #deal with the remaining records
   my @part;
   while(my $biosampleId = pop @data){
     push (@part,$data{$biosampleId});
   }
-  my %validationResults = &validateSampleRecord(\@part,$type);
-  %totalResults = %{&mergeResult(\%totalResults,\%validationResults)};
+  foreach my $ruleset(@rulesets){
+    my %validationResults = &validateRecord(\@part,$type,$ruleset);
+    %totalResults = %{&mergeResult(\%totalResults,\%validationResults,$ruleset)};
+  }
+
   return %totalResults;
 }
 

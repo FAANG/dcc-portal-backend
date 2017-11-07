@@ -10,8 +10,11 @@ use Data::Dumper;
 
 #the library file for validation of sample records
 require "validate_sample_record.pl";
-
-
+#define the rulesets each record needs to be validated against, in the order of 
+my @rulesets = ("FAANG Samples","FAANG Legacy Samples");
+#the value for standardMet according to the ruleset, keys are expected to include all values in the @rulesets
+my %standards = ("FAANG Samples"=>"FAANG","FAANG Legacy Samples"=>"FAANG Legacy");
+#the elasticsearch server address
 my $es_host = "ves-hx-e4:9200";
 my $es_index;
 
@@ -49,46 +52,61 @@ sub validateOneType(){
     search_type => 'scan',
     size => 500,
   );
-
+  #save the elasticsearch records into a hash which has keys as biosampleIDs
   my %data;
   while (my $loaded_doc = $scroll->next) {
     my $biosampleId = $$loaded_doc{_id};
 #    my %data = %{$$loaded_doc{_source}};
     $data{$biosampleId} = $$loaded_doc{_source};
   }
-
-  my %totalResults = &validateTotalSampleRecords(\%data,$type);
-
-
-  #display the validationResults
+  #validate the records against ALL specified rulesets (defined in @rulesets) by calling the method in validate_sample_record.pl
+  #the returned hash has keys as rulesets, the value is another hash having three fixed key values: 
+  #1. summary (how many pass, warning, or error), 
+  #2. detail (validation result for every biosample record), and 
+  #3. errors (all error messages and how many times that error message appeared)
+  my %totalResults = &validateTotalSampleRecords(\%data,$type,\@rulesets);
   my @status = qw/pass warning error/;
-  print "$type Summary:\n";
-  foreach (@status){
-    if (exists $totalResults{summary}{$_}){
-      print "$_\t$totalResults{summary}{$_}\n";
-    }else{
-      print "$_\t0\n";
+
+  #display the validation results
+  foreach my $ruleset(@rulesets){
+    print "$type $ruleset Summary:\n";
+    foreach (@status){
+      if (exists $totalResults{$ruleset}{summary}{$_}){
+        print "$_\t$totalResults{$ruleset}{summary}{$_}\n";
+      }else{
+        print "$_\t0\n";
+      }
+    }
+    print "Error summary:\n";
+    my %errorSummary = %{$totalResults{$ruleset}{errors}};
+    foreach my $error(sort keys %errorSummary){
+      print "$error\t$errorSummary{$error}\n";
     }
   }
-  print "Details:\n";
-  my %details = %{$totalResults{detail}};
-  foreach my $biosampleId(sort {$a cmp $b} keys %details){
-    if ($details{$biosampleId}{status} eq "error"){
-      print "$biosampleId\t$details{$biosampleId}{type}\terror\t$details{$biosampleId}{message}\n";
-    }else{
-      my %es_doc = %{$data{$biosampleId}};
-      $es_doc{standardMet} = "FAANG";
-      $es_doc{versionLastStandardMet} = $ruleset_version;
-      eval{
-        $es->index(
-          index => $es_index,
-          type => $details{$biosampleId}{type},
-          id => $biosampleId,
-          body => \%es_doc
-        );
-      };
-      if (my $error = $@) {
-        die "error indexing sample in $es_index index:".$error->{text};
+  #Parse the details to print the error message and update the elasticsearch record
+  print "$type Details:\n";
+  OUTER:
+  foreach my $biosampleId(sort {$a cmp $b} keys %data){
+    foreach my $ruleset(@rulesets){
+      next unless (exists $totalResults{$ruleset}{detail}{$biosampleId});
+      if ($totalResults{$ruleset}{detail}{$biosampleId}{status} eq "error"){
+        print "$biosampleId\t$totalResults{$ruleset}{detail}{$biosampleId}{type}\terror\t$ruleset\t$totalResults{$ruleset}{detail}{$biosampleId}{message}\n";
+      }else{
+        my %es_doc = %{$data{$biosampleId}};
+        $es_doc{standardMet} = $standards{$ruleset};
+        $es_doc{versionLastStandardMet} = $ruleset_version if ($es_doc{standardMet} eq "FAANG");
+        eval{
+          $es->index(
+            index => $es_index,
+            type => $type,
+            id => $biosampleId,
+            body => \%es_doc
+          );
+        };
+        if (my $error = $@) {
+          die "error indexing sample in $es_index index:".$error->{text};
+        }
+        next OUTER;
       }
     }
   }

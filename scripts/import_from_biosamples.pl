@@ -50,6 +50,7 @@ croak "Need -es_index_name e.g. faang, faang_build_1" unless ( $es_index_name);
 print "The information of invalid records will be stored in $error_log\n\n";
 open ERR,">$error_log";
 
+my @ruleset = ("FAANG Samples");
 my $ruleset_version = &getRulesetVersion();
 print "Rule set release: $ruleset_version\n";
 
@@ -76,15 +77,14 @@ my $savedTime = time;
 ## the section below is for development purpose by checking individual BioSample instead of reading all entries from BioSample
 #my %tmp = &fetch_single_record("SAMEA3540911"); #pool specimen
 #&process_pool_specimen(%tmp);
-#%tmp = &fetch_single_record("SAMEA4447551"); #cell culture
+#my %tmp = &fetch_single_record("SAMEA4447551"); #cell culture
 #&process_cell_cultures(%tmp);
-#%tmp = &fetch_single_record("SAMEA5421418"); #cell specimen
+#my %tmp = &fetch_single_record("SAMEA5421418"); #cell specimen
 #&process_cell_specimens(%tmp);
-#%tmp = &fetch_single_record("SAMEA5584168"); #specimen from organism
+#my %tmp = &fetch_single_record("SAMEA5584168"); #specimen from organism
 #&process_specimens(%tmp);
 #my %tmp = &fetch_single_record("SAMEA3540916"); #cell line
-#&process_cell_lines(%tmp);
-#print Dumper(\%tmp);
+#&process_cell_lines(\%tmp);
 #exit;
 ##################################################################
 
@@ -740,17 +740,19 @@ sub getFilenameFromURL(){
 sub insert_into_es(){
   my ($hashref,$type)=@_;
   my %converted=%{$hashref};
-  my %validationResult = &validateTotalSampleRecords(\%converted,$type);
-  my %details = %{$validationResult{detail}};
+  my %validationResult = &validateTotalSampleRecords(\%converted,$type,\@ruleset);
+  my %details = %{$validationResult{$ruleset[0]}{detail}};
 
   foreach my $biosampleId (sort {$a cmp $b} keys %converted){
     $indexed_samples{$biosampleId} = 1;
+    my %es_doc = %{$converted{$biosampleId}};
+    #even not passed, still insert into ES, just leave standardMet field empty
     if ($details{$biosampleId}{status} eq "error"){
       print ERR "$biosampleId\t$details{$biosampleId}{type}\terror\t$details{$biosampleId}{message}\n";
     }else{
-      my %es_doc = %{$converted{$biosampleId}};
       $es_doc{standardMet} = "FAANG";
       $es_doc{versionLastStandardMet} = $ruleset_version;
+    }
       #trapping error: the code can continue to run even after the die or errors, and it also captures the errors or dieing words.
       eval{
         $es->index(
@@ -763,6 +765,5 @@ sub insert_into_es(){
       if (my $error = $@) {
         die "error indexing sample in $es_index_name index:".$error->{text};
       }
-    }
   }
 }
