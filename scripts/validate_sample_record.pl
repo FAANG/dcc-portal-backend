@@ -27,7 +27,7 @@ sub validateRecord(){
   print OUT "]\n";
   close OUT;
   #using curl to fill the form, reference page https://curl.haxx.se/docs/manual.html
-  my $cmd = 'curl -F "format=json" -F "rule_set_name='.$ruleset.'" -F "file_format=JSON" -F "metadata_file=@'.$tmpOutFile.'" "https://wwwdev.ebi.ac.uk/vg/faang/validate"';
+  my $cmd = 'curl -F "format=json" -F "rule_set_name='.$ruleset.'" -F "file_format=JSON" -F "metadata_file=@'.$tmpOutFile.'" "https://www.ebi.ac.uk/vg/faang/validate"';
 #  print "\n\n$cmd\n\n";
   my $pipe;
   open $pipe, "$cmd|"; #send the file to the server and receive the response

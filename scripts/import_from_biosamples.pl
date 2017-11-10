@@ -50,7 +50,10 @@ croak "Need -es_index_name e.g. faang, faang_build_1" unless ( $es_index_name);
 print "The information of invalid records will be stored in $error_log\n\n";
 open ERR,">$error_log";
 
-my @ruleset = ("FAANG Samples");
+#define the rulesets each record needs to be validated against, in the order of 
+my @rulesets = ("FAANG Samples","FAANG Legacy Samples");
+#the value for standardMet according to the ruleset, keys are expected to include all values in the @rulesets
+my %standards = ("FAANG Samples"=>"FAANG","FAANG Legacy Samples"=>"FAANG Legacy");
 my $ruleset_version = &getRulesetVersion();
 print "Rule set release: $ruleset_version\n";
 
@@ -740,30 +743,35 @@ sub getFilenameFromURL(){
 sub insert_into_es(){
   my ($hashref,$type)=@_;
   my %converted=%{$hashref};
-  my %validationResult = &validateTotalSampleRecords(\%converted,$type,\@ruleset);
-  my %details = %{$validationResult{$ruleset[0]}{detail}};
+  my %validationResult = &validateTotalSampleRecords(\%converted,$type,\@rulesets);
 
+  OUTER:
   foreach my $biosampleId (sort {$a cmp $b} keys %converted){
     $indexed_samples{$biosampleId} = 1;
     my %es_doc = %{$converted{$biosampleId}};
-    #even not passed, still insert into ES, just leave standardMet field empty
-    if ($details{$biosampleId}{status} eq "error"){
-      print ERR "$biosampleId\t$details{$biosampleId}{type}\terror\t$details{$biosampleId}{message}\n";
-    }else{
-      $es_doc{standardMet} = "FAANG";
-      $es_doc{versionLastStandardMet} = $ruleset_version;
-    }
-      #trapping error: the code can continue to run even after the die or errors, and it also captures the errors or dieing words.
-      eval{
-        $es->index(
-          index => $es_index_name,
-          type => $type,
-          id => $biosampleId,
-          body => \%es_doc
-        );
-      };
-      if (my $error = $@) {
-        die "error indexing sample in $es_index_name index:".$error->{text};
+    #assign the standardMet in the order of @rulesets
+    #even validations against all rulesets fail, still need to insert into ES, just leave standardMet field empty
+    foreach my $ruleset(@rulesets){
+      if ($validationResult{$ruleset}{detail}{$biosampleId}{status} eq "error"){
+        print ERR "$biosampleId\t$validationResult{$ruleset}{detail}{$biosampleId}{type}\terror\t$validationResult{$ruleset}{detail}{$biosampleId}{message}\n";
+      }else{
+        $es_doc{standardMet} = $standards{$ruleset};
+        #only assign version value for FAANG standard ruleset
+        $es_doc{versionLastStandardMet} = $ruleset_version if ($es_doc{standardMet} eq "FAANG");
+        last;
       }
+    }
+    #trapping error: the code can continue to run even after the die or errors, and it also captures the errors or dieing words.
+    eval{
+      $es->index(
+        index => $es_index_name,
+        type => $type,
+        id => $biosampleId,
+        body => \%es_doc
+      );
+    };
+    if (my $error = $@) {
+      die "error indexing sample in $es_index_name index:".$error->{text};
+    }
   }
 }
