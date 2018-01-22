@@ -1,0 +1,234 @@
+{
+    "dataset": {
+        "_all": {"enabled": false},
+        "dynamic": "strict",
+        "properties": {
+            "accession": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "title": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "alias": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "type": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "secondaryAccession": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "archive":{
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "specimen": {
+                "properties": {
+                    "biosampleId": {
+                        "type": "string",
+                        "index": "not_analyzed",
+                        "fields": {
+                            "std": {
+                                "type": "string",
+                                "analyzer": "standard"
+                            }
+                        }
+                    },
+                    "material": {
+                        "properties": {
+                            "text": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            },
+                            "ontologyTerms": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
+                    },
+                    "cellType": {
+                        "properties": {
+                            "text": {
+                                "type": "string",
+                                "index": "not_analyzed",
+                                "fields": {
+                                    "autocomp": {
+                                        "type": "string",
+                                        "analyzer": "autocomp"
+                                    }
+                                }
+                            },
+                            "ontologyTerms": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
+                    },
+                    "organism": {
+                        "properties": {
+                            "text": {
+                                "type": "string",
+                                "index": "not_analyzed",
+                                "fields": {
+                                    "autocomp": {
+                                        "type": "string",
+                                        "analyzer": "autocomp"
+                                    }
+                                }
+                            },
+                            "ontologyTerms": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
+                    },
+                    "sex": {
+                        "properties": {
+                            "text": {
+                                "type": "string",
+                                "index": "not_analyzed",
+                                "fields": {
+                                    "autocomp": {
+                                        "type": "string",
+                                        "analyzer": "autocomp"
+                                    }
+                                }
+                            },
+                            "ontologyTerms": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
+                    },
+                    "breed": {
+                        "properties": {
+                            "text": {
+                                "type": "string",
+                                "index": "not_analyzed",
+                                "fields": {
+                                    "autocomp": {
+                                        "type": "string",
+                                        "analyzer": "autocomp"
+                                    },
+                                    "lower_case_sort": { 
+                                        "type": "string",
+                                        "analyzer": "case_insensitive_sort"
+                                    }
+                                }
+                            },
+                            "ontologyTerms": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
+                    }
+                }
+            },
+            "species": {
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "index": "not_analyzed",
+                        "fields": {
+                            "autocomp": {
+                                "type": "string",
+                                "analyzer": "autocomp"
+                            }
+                        }
+                    },
+                    "ontologyTerms": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
+            },
+            "releaseDate": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "updateDate": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "file":{
+                "properties":{
+                    "url": {
+                        "type": "string",
+                        "index": "not_analyzed",
+                        "fields": {
+                            "keywords": {
+                                "type": "string",
+                                "analyzer": "ftp_url"
+                            }
+                        }
+                    },
+                    "name": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "fileId":{
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "experiment": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "type": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "size": {
+                        "type": "long",
+                        "index": "not_analyzed"
+                    },
+                    "readableSize": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "archive": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "readCount": {
+                        "type": "long",
+                        "index": "not_analyzed"
+                    },
+                    "baseCount": {
+                        "type": "long",
+                        "index": "not_analyzed"
+                    }
+                }
+            },
+            "experiment": {
+                "properties": {
+                    "accession": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "target": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "assayType": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
+            },
+            "instrument": {
+                "type": "string",
+                "index": "not_analyzed"
+            },
+            "centerName": {
+                "type": "string",
+                "index": "not_analyzed"
+            }
+        }
+    }
+}

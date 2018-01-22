@@ -70,6 +70,11 @@ my %indexed_files;
 
 my @data_sources = qw/fastq sra cram_index/;
 my @data_types = qw/ftp galaxy aspera/;
+#store the cumulative dataset data
+#each file has a dataset (study)
+#key is either the study accession or fixed value of "tmp". When study accession value is the corresponding es entity
+#the tmp key corresponds to another hash with study accession as the keys and temp data structures for files, experiments, species etc.
+my %datasets; 
 
 foreach my $record (@$json_text){
   #dynamically determine which archive DNA file to use, in the order of fastq, sra and cram_index
@@ -121,8 +126,8 @@ foreach my $record (@$json_text){
 #    next;
     my %es_doc = (
       specimen => $specimen_biosample_id,
-      organism => $biosample_ids{$$record{sample_accession}}{organism},
-      species => $biosample_ids{$$record{sample_accession}}{species},
+      organism => $biosample_ids{$$record{sample_accession}}{organism}{biosampleId},
+      species => $biosample_ids{$$record{sample_accession}}{organism}{organism},
       url => $file,
       name => $fullname,
       type => $types[$i],
@@ -163,6 +168,7 @@ foreach my $record (@$json_text){
     #insert into elasticsearch
     #trapping error: the code can continue to run even after the die or errors, and it also captures the errors or dieing words.
 #    my $id = "$$record{sample_accession}-$files[$i]";
+
     eval{
       $es->index(
         index => $es_index_name,
@@ -172,14 +178,105 @@ foreach my $record (@$json_text){
       );
     };
     if (my $error = $@) {
-      die "error indexing sample in $es_index_name index:".$error->{text};
+      die "error indexing file in $es_index_name index:".$error->{text};
     }
-    $indexed_files{$filename} = 1;
 
 #    print Dumper(\%es_doc);
 #    print "\n";
+    $indexed_files{$filename} = 1;
+
+    my $dataset_id = $$record{study_accession};
+    my %es_doc_dataset;
+    if (exists $datasets{$dataset_id}){
+      %es_doc_dataset = %{$datasets{$dataset_id}};
+    }else{
+      #the basic information of dataset which should be same across all files linking to the same dataset
+      $es_doc_dataset{accession}=$dataset_id;
+      $es_doc_dataset{alias}=$$record{study_alias};
+      $es_doc_dataset{title}=$$record{study_title};
+      $es_doc_dataset{type}=$$record{study_type};
+      $es_doc_dataset{secondaryAccession}=$$record{secondary_study_accession};
+    }
+    #specimen
+    $datasets{tmp}{$dataset_id}{specimen}{$specimen_biosample_id}=1;
+    $datasets{tmp}{$dataset_id}{instrument}{$$record{instrument_model}} = 1;
+    $datasets{tmp}{$dataset_id}{centerName}{$$record{center_name}} = 1;
+    $datasets{tmp}{$dataset_id}{archive}{$archive} = 1;
+
+    #species can be calculated from specimen information
+    #file
+    my %tmp_file = (
+      url => $file,
+      name => $fullname,
+      fileId => $filename,
+      experiment => $$record{experiment_accession},
+      type => $types[$i],
+      size => $sizes[$i],
+      readableSize => &convertReadable($sizes[$i]),
+#      checksumMethod => "md5",
+#      checksum => $checksums[$i],
+      archive => $archive,
+      baseCount => $$record{base_count},
+      readCount => $$record{read_count}
+    );
+    %{$datasets{tmp}{$dataset_id}{file}{$fullname}} = %tmp_file;
+    #experiment
+    my %tmp_exp = (
+        accession => $$record{experiment_accession},
+        assayType => $$record{assay_type},
+        target => $$record{experiment_target}
+    );
+    %{$datasets{tmp}{$dataset_id}{experiment}{$$record{experiment_accession}}} = %tmp_exp;
+
+    %{$datasets{$dataset_id}} = %es_doc_dataset;
+  }#end of for (@files)
+}
+
+#deal with datasets
+foreach my $dataset_id (keys %datasets){
+  next if ($dataset_id eq "tmp");
+  my %es_doc_dataset = %{$datasets{$dataset_id}};
+  #convert some sub-element from hash to array (hash to guarantee uniqueness)
+  my %specimens = %{$datasets{tmp}{$dataset_id}{specimen}};
+  my %species;
+  my @specimens;
+  foreach my $specimen(keys %specimens){
+    my $specimen_detail = $biosample_ids{$specimen};
+    my %es_doc_specimen = (
+      biosampleId => $$specimen_detail{biosampleId},
+      material => $$specimen_detail{material},
+      cellType => $$specimen_detail{cellType},
+      organism => $$specimen_detail{organism}{organism},
+      sex => $$specimen_detail{organism}{sex},
+      breed => $$specimen_detail{organism}{breed}
+    );
+    push(@specimens,\%es_doc_specimen);
+    $species{$$specimen_detail{organism}{organism}{text}} = $$specimen_detail{organism}{organism};
+  }
+  @{$es_doc_dataset{specimen}} = sort {$$a{biosampleId} cmp $$b{biosampleId}} @specimens;
+  @{$es_doc_dataset{species}} = values %species;
+#  my @fileArr = values %{$datasets{tmp}{$dataset_id}{file}};
+  @{$es_doc_dataset{file}} = sort {$$a{name} cmp $$b{name}} values %{$datasets{tmp}{$dataset_id}{file}};
+  @{$es_doc_dataset{experiment}} = values %{$datasets{tmp}{$dataset_id}{experiment}};
+  @{$es_doc_dataset{instrument}} = keys %{$datasets{tmp}{$dataset_id}{instrument}};
+  @{$es_doc_dataset{centerName}} = keys %{$datasets{tmp}{$dataset_id}{centerName}};
+  @{$es_doc_dataset{archive}} = sort {$a cmp $b} keys %{$datasets{tmp}{$dataset_id}{archive}};
+
+  #insert into ES
+  eval{
+    $es->index(
+      index => $es_index_name,
+      type => 'dataset',
+      id => $dataset_id,
+      body => \%es_doc_dataset
+    );
+  };
+  if (my $error = $@) {
+    die "error indexing dataset in $es_index_name index:".$error->{text};
   }
 }
+
+
 
 open OUT,">>$error_record_file";
 foreach my $study(keys %new_errors){
@@ -228,7 +325,7 @@ sub readHandleIntoString(){
         return $str;
 }
 
-#read in BioSample specimen list
+#read in BioSample specimen list, keep all information as it will be needed to populate specimen section in dataset
 sub getAllSpecimenIDs(){
   my %biosample_ids;
   my $scroll = $es->scroll_helper(
@@ -238,10 +335,7 @@ sub getAllSpecimenIDs(){
     size => 500,
   );
   while (my $loaded_doc = $scroll->next) {
-    my %tmp;
-    $tmp{species} = $$loaded_doc{_source}{organism}{organism};
-    $tmp{organism} = $$loaded_doc{_source}{organism}{biosampleId};
-    $biosample_ids{$loaded_doc->{_id}}=\%tmp;
+    $biosample_ids{$loaded_doc->{_id}}=$$loaded_doc{_source};
   }
   return %biosample_ids;
 }
