@@ -11,10 +11,11 @@ use Carp;
 use WWW::Mechanize;
 use JSON -support_by_pp;
 use Search::Elasticsearch;
-use List::Compare;
+#use List::Compare;
 use Data::Dumper;
 #the library file for validation of sample records
 require "validate_sample_record.pl";
+require "misc.pl";
 
 #the code to test getFilenameFromURL
 #my $url = "http://www.ncbi.nlm.nih.gov/pubmed/16215741";
@@ -22,33 +23,67 @@ require "validate_sample_record.pl";
 #my $filename = &getFilenameFromURL($url);
 #print "$filename\n";
 
-#the code to test the judgement for type of derived from for cell line
-#as currently no data in cell line, use specimen from organism to do a fake test
-#my $accession = "SAMEA3540916"; #only cell line
-#my $accession = "SAMEA5584168"; #specimen from organism
+##################################################################
+## the section below is for development purpose by checking individual BioSample instead of reading all entries from BioSample
+#my $accession = "SAMEA3540916"; #only cell line, no relationship expected
+#my $accession = "SAMEA5584168"; #specimen from organism, the cell line derive from
+#my $accession = "SAMEA6688918"; # the organism of 5584168
+#my $accession = "SAMEA5178418"; #organism with childOf
+#my $accession = "SAMEA4447317"; #organism with sameAs  
+
+#my %tmp = &fetch_single_record("SAMEA3540911"); #pool specimen
+#my $accession = "SAMEA3540915"; #pool of specimen
+#my $accession = "SAMEA6641668"; #cell specimen
+#my $accession = "SAMEA4447551"; #cell culture
+#my $accession = "SAMEA3540916"; #cell line
+#my $accession = "SAMEA104626885";
+#my $accession = "SAMEA104381420";
+
+#my $accession = "SAMEA4448136"; #organism without relationship   
 #my %tmp = &fetch_single_record($accession);
 #my $spec = $tmp{$accession};
-#my %relationships = %{&parseRelationships($$spec{_links}{relations}{href},3)};
-#print Dumper(\%relationships);
+#print Dumper(\%tmp);
+#&process_pool_specimen(\%tmp);
 #exit;
+#&process_organisms(\%tmp);
+#exit;
+#&process_cell_lines(\%tmp);
+#&process_cell_cultures(\%tmp);
+#&process_cell_specimens(\%tmp);
+#&process_specimens(\%tmp);
+##################################################################
 
 #the parameters expected to be retrieved from the command line
-my ($project, $es_host, $es_index_name, $error_log);
+#my ($project, $es_host, $es_index_name, $error_log);
+my ($es_host, $es_index_name, $error_log);
 $error_log = "import_biosample_error.log";
 #Parse the command line options
 #Example: perl import_from_biosamples.pl -project faang -es_host <elasticsearch server> -es_index_name faang
 GetOptions(
-  'project=s' => \$project,
+#  'project=s' => \$project,
   'es_host=s' =>\$es_host,
   'es_index_name=s' =>\$es_index_name,
   'error_log=s' =>\$error_log
 );
-croak "Need -project e.g. faang" unless ( $project);
+#croak "Need -project e.g. faang" unless ( $project);
 croak "Need -es_host e.g. ves-hx-e4:9200" unless ( $es_host);
 croak "Need -es_index_name e.g. faang, faang_build_1" unless ( $es_index_name);
 
+
+#legacy API
+#my $url = "https://www.ebi.ac.uk/biosamples/samples/search/findByText?text=".$project_keyword;
+#test server
+#my $url = "https://wwwdev.ebi.ac.uk/biosamples/samples?filter=attr%3Aproject%3AFAANG";
+#production server
+#my $url = "https://www.ebi.ac.uk/biosamples/samples?filter=attr%3Aproject%3AFAANG";
+my $url = "https://www.ebi.ac.uk/biosamples/samples?size=1000&sort=id,asc&filter=attr%3Aproject%3AFAANG";
+
 print "The information of invalid records will be stored in $error_log\n\n";
 open ERR,">$error_log";
+
+#the curl commands are mainly called in two places
+#one is here to get ruleset version
+#the other is to validate all samples against rulesets in the insert_into_es()
 
 #define the rulesets each record needs to be validated against, in the order of 
 my @rulesets = ("FAANG Samples","FAANG Legacy Samples");
@@ -68,6 +103,11 @@ my %cell_specimen;
 my %cell_culture;
 my %cell_line;
 my %pool_specimen;
+#keys are specimen biosample id and values are organism biosample ids
+#the purpose is to quickly determine organism id for specimen other than specimen from organism (more than one step needed)
+#this only works when the order is strictly obeyed: 1) organism 2) specimen from organism 3) cell specimen 4) cell culture
+#other types of specimen: cell line and pool of specimen （must be after specimen from organism as derivedFrom) should be free to place, but safe to place at the last
+my %specimen_organism_relationship;
 #the data structure stores information which needs to be added to specimen as organism section
 my %organismInfoForSpecimen;
 #keys are organism accession and values are how many specimens related to that organism
@@ -76,23 +116,9 @@ my %organismReferredBySpecimen;
 #print "The program starts at ".localtime."\n";
 my $pastTime = time;
 my $savedTime = time;
-##################################################################
-## the section below is for development purpose by checking individual BioSample instead of reading all entries from BioSample
-#my %tmp = &fetch_single_record("SAMEA3540911"); #pool specimen
-#&process_pool_specimen(%tmp);
-#my %tmp = &fetch_single_record("SAMEA4447551"); #cell culture
-#&process_cell_cultures(%tmp);
-#my %tmp = &fetch_single_record("SAMEA5421418"); #cell specimen
-#&process_cell_specimens(%tmp);
-#my %tmp = &fetch_single_record("SAMEA5584168"); #specimen from organism
-#&process_specimens(%tmp);
-#my %tmp = &fetch_single_record("SAMEA3540916"); #cell line
-#&process_cell_lines(\%tmp);
-#exit;
-##################################################################
 
 #retrieve all FAANG BioSamples from BioSample database
-my @samples = fetch_specimens_by_project($project);
+my @samples = &fetch_specimens_by_project();
 #print "Finish retrieving data from BioSample at ".localtime."\n";
 ################################################################
 ## this section is to dump all current BioSample records into files 
@@ -108,6 +134,11 @@ my @samples = fetch_specimens_by_project($project);
 #print Dumper (\%organism);
 #exit;
 
+#my @accs = sort {substr($a,5) <=> substr($b,5)} keys %cell_specimen;
+#$"="\n";
+#print "@accs\n";
+#exit;
+
 my $current = time;
 #&convertSeconds($current - $pastTime);
 $pastTime = $current;
@@ -119,16 +150,18 @@ croak "Did not obtain any specimens from BioSamples" unless ( $number_specimens_
 #print "Indexing organism starts at ".localtime."\n";
 &process_organisms(\%organism);
 $current = time;
-#&convertSeconds($current - $pastTime);
+&convertSeconds($current - $pastTime);
+
 $pastTime = $current;
 #parse all types of specimen, at the moment the order does not matter
-#print "Indexing specimen from organism starts at ".localtime."\n";
+print "Indexing specimen from organism starts at ".localtime."\n";
 &process_specimens(\%specimen_from_organism);
 $current = time;
-#&convertSeconds($current - $pastTime);
+&convertSeconds($current - $pastTime);
 $pastTime = $current;
+#print Dumper(\%specimen_organism_relationship);
 
-#print "Indexing cell specimens starts at ".localtime."\n";
+print "Indexing cell specimens starts at ".localtime."\n";
 &process_cell_specimens(\%cell_specimen);
 $current = time;
 #&convertSeconds($current - $pastTime);
@@ -145,7 +178,6 @@ $pastTime = $current;
 $current = time;
 #&convertSeconds($current - $pastTime);
 $pastTime = $current;
-
 #print "Indexing cell line starts at ".localtime."\n";
 &process_cell_lines(\%cell_line);
 $current = time;
@@ -157,14 +189,30 @@ $pastTime = $current;
 #compare the list of all organisms and organisms with specimen
 #if they differ, could be 1) organism without specimen 2) organism with specimen is not marked as organism or not saved in BioSample
 my @allOrganismList = keys(%organism);
+#my $numFromOrganisms = scalar @allOrganismList;
 my @organismReferredList = keys %organismReferredBySpecimen;
-#List::Compare - Compare elements of two or more lists
-my $lc = List::Compare->new(\@allOrganismList, \@organismReferredList);
-my @organismsNotImported = $lc->get_unique;
-unless ( scalar(@organismsNotImported) < 1){
-  print Dumper(@organismsNotImported);
-  croak "Have Organisms that have not been imported \@organismsNotImported";
+#my $numFromSpecimenReferal = scalar @organismReferredList;
+#print "Direct count: $numFromOrganisms\nRefer count:$numFromSpecimenReferal\n";
+my %union;
+foreach my $acc(@allOrganismList){
+  $union{$acc}{count}++;
+  push(@{$union{$acc}{source}},"organism");
 }
+foreach my $acc(@organismReferredList){
+  $union{$acc}{count}++;
+  push(@{$union{$acc}{source}},"specimen");
+}
+foreach my $acc(keys %union){
+  print "$acc only in source @{$union{$acc}{source}}\n" if ($union{$acc}{count}==1);
+}
+
+#List::Compare - Compare elements of two or more lists
+#my $lc = List::Compare->new(\@allOrganismList, \@organismReferredList);
+#my @organismsNotImported = $lc->get_unique;
+#unless ( scalar(@organismsNotImported) < 1){
+#  print Dumper(@organismsNotImported);
+#  croak "Have Organisms that have not been imported \@organismsNotImported";
+#}
 
 #Delete removed samples
 clean_elasticsearch('specimen');
@@ -174,6 +222,7 @@ $current = time;
 #&convertSeconds($current - $savedTime);
 #print "The program ends at ".localtime."\n";
 
+
 #process specimen from organism
 sub process_specimens{
   my %specimen_from_organism = %{$_[0]};
@@ -181,71 +230,80 @@ sub process_specimens{
   foreach my $key (keys %specimen_from_organism){
     my $specimen = $specimen_from_organism{$key};
 
-    my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},1)};
+#    my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},1)};
+    my %relationships = &parse_relationship($specimen);
 
-    my $url = $$specimen{characteristics}{specimenCollectionProtocol}[0]{text};
+    my $url = $$specimen{characteristics}{"specimen collection protocol"}[0]{text};
     my $filename = &getFilenameFromURL($url);
-
+#    print "$filename\n";
+    my @organisms = keys %{$relationships{derivedFrom}};
+    my $organismAccession = $organisms[0];
+    $specimen_organism_relationship{$key} = $organismAccession;
     my %es_doc = (
-      derivedFrom => $relationships{derivedFrom}[0],
+      derivedFrom => $organismAccession,
       specimenFromOrganism => {
         specimenCollectionDate => {
-          text => $$specimen{characteristics}{specimenCollectionDate}[0]{text},
-          unit => $$specimen{characteristics}{specimenCollectionDate}[0]{unit}
+          text => $$specimen{characteristics}{"specimen collection date"}[0]{text},
+          unit => $$specimen{characteristics}{"specimen collection date"}[0]{unit}
         },
         animalAgeAtCollection => {
-          text => $$specimen{characteristics}{animalAgeAtCollection}[0]{text},
-          unit => $$specimen{characteristics}{animalAgeAtCollection}[0]{unit}
+          text => $$specimen{characteristics}{"animal age at collection"}[0]{text},
+          unit => $$specimen{characteristics}{"animal age at collection"}[0]{unit}
         },
         developmentalStage => {
-          text => $$specimen{characteristics}{developmentalStage}[0]{text},
-          ontologyTerms => $$specimen{characteristics}{developmentalStage}[0]{ontologyTerms}[0]
+          text => $$specimen{characteristics}{"developmental stage"}[0]{text},
+          ontologyTerms => $$specimen{characteristics}{"developmental stage"}[0]{ontologyTerms}[0]
         },
         organismPart => {
-          text => $$specimen{characteristics}{organismPart}[0]{text},
-          ontologyTerms => $$specimen{characteristics}{organismPart}[0]{ontologyTerms}[0]
+          text => $$specimen{characteristics}{"organism part"}[0]{text},
+          ontologyTerms => $$specimen{characteristics}{"organism part"}[0]{ontologyTerms}[0]
         },
 #        specimenCollectionProtocol => $$specimen{characteristics}{specimenCollectionProtocol}[0]{text},
         specimenCollectionProtocol => {
           url => $url,
           filename => $filename
         },
-        fastedStatus => $$specimen{characteristics}{fastedStatus}[0]{text},
+        fastedStatus => $$specimen{characteristics}{"fasted status"}[0]{text},
         numberOfPieces => {
-          text => $$specimen{characteristics}{numberOfPieces}[0]{text},
-          unit => $$specimen{characteristics}{numberOfPieces}[0]{unit}
+          text => $$specimen{characteristics}{"number of pieces"}[0]{text},
+          unit => $$specimen{characteristics}{"number of pieces"}[0]{unit}
         },
         specimenVolume => {
-          text => $$specimen{characteristics}{specimenVolume}[0]{text},
-          unit => $$specimen{characteristics}{specimenVolume}[0]{unit}
+          text => $$specimen{characteristics}{"specimen volume"}[0]{text},
+          unit => $$specimen{characteristics}{"specimen volume"}[0]{unit}
         },
         specimenSize => {
-          text => $$specimen{characteristics}{specimenSize}[0]{text},
-          unit => $$specimen{characteristics}{specimenSize}[0]{unit}
+          text => $$specimen{characteristics}{"specimen size"}[0]{text},
+          unit => $$specimen{characteristics}{"specimen size"}[0]{unit}
         },
         specimenWeight => {
-          text => $$specimen{characteristics}{specimenWeight}[0]{text},
-          unit => $$specimen{characteristics}{specimenWeight}[0]{unit}
+          text => $$specimen{characteristics}{"specimen weight"}[0]{text},
+          unit => $$specimen{characteristics}{"specimen weight"}[0]{unit}
         },
         gestationalAgeAtSampleCollection => {
-          text => $$specimen{characteristics}{gestationalAgeAtSampleCollection}[0]{text},
-          unit => $$specimen{characteristics}{gestationalAgeAtSampleCollection}[0]{unit}
+          text => $$specimen{characteristics}{"gestational age at sample collection"}[0]{text},
+          unit => $$specimen{characteristics}{"gestational age at sample collection"}[0]{unit}
         }
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
-    $es_doc{cellType} = {text => $$specimen{characteristics}{organismPart}[0]{text}, ontologyTerms => $$specimen{characteristics}{organismPart}[0]{ontologyTerms}[0]};
+    $es_doc{cellType} = {
+      text => $$specimen{characteristics}{"organism part"}[0]{text}, 
+      ontologyTerms => $$specimen{characteristics}{"organism part"}[0]{ontologyTerms}[0]
+    };
 
-    foreach my $specimenPictureUrl (@{$$specimen{characteristics}{specimenPictureUrl}}){
+    foreach my $specimenPictureUrl (@{$$specimen{characteristics}{"specimen picture url"}}){
       push(@{$es_doc{specimenFromOrganism}{specimenPictureUrl}}, $$specimenPictureUrl{text});
     }
-    foreach my $healthStatusAtCollection (@{$$specimen{characteristics}{healthStatusAtCollection}}){
+    foreach my $healthStatusAtCollection (@{$$specimen{characteristics}{"health status at collection"}}){
       push(@{$es_doc{specimenFromOrganism}{healthStatusAtCollection}}, {text => $$healthStatusAtCollection{text}, ontologyTerms => $$healthStatusAtCollection{ontologyTerms}[0]});
     }
-    @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
-    my $organismAccession = $relationships{organism}[0];
+    @{$es_doc{sameAs}} = keys %{$relationships{sameAs}} if (exists $relationships{sameAs});
+#    my @organisms = keys %{$relationships{organism}} 
+
     $es_doc{organism}=$organismInfoForSpecimen{$organismAccession};
     $organismReferredBySpecimen{$organismAccession}++;
+
     #the validation service can only be applied on FAANG data, not BioSample data
     #therefore it needs to be converted first using the codes above, and save into %converted
     #it should be more efficient to validate multiple records than one record at a time
@@ -260,53 +318,69 @@ sub process_pool_specimen{
   my %converted;
   foreach my $accession(keys %pool_specimen){
     my $specimen = $pool_specimen{$accession};#e.g. accession = SAMEA3540911
-    my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},2)};
+    my %relationships = &parse_relationship($specimen);
 
-    my $url = $$specimen{characteristics}{poolCreationProtocol}[0]{text};
+    my $url = $$specimen{characteristics}{"pool creation protocol"}[0]{text};
     my $filename = &getFilenameFromURL($url);
 
     my %es_doc = (
 #      sameAs => ,     #according to ruleset, it should be single value entry, i.e. use a hash. However for all other types, an array is used, to make it consistent, use array here as well
       poolOfSpecimens => {
         poolCreationDate => {
-          text => $$specimen{characteristics}{poolCreationDate}[0]{text},
-          unit => $$specimen{characteristics}{poolCreationDate}[0]{unit}
+          text => $$specimen{characteristics}{"pool creation date"}[0]{text},
+          unit => $$specimen{characteristics}{"pool creation date"}[0]{unit}
         },
         poolCreationProtocol => {
           url => $url,
           filename => $filename
         },
         specimenVolume => {     #no example in the current FAANG collection for pool of specimens, pure guess, expect to change later when data becomes available
-          text => $$specimen{characteristics}{specimenVolume}[0]{text},
-          unit => $$specimen{characteristics}{specimenVolume}[0]{unit}
+          text => $$specimen{characteristics}{"specimen volume"}[0]{text},
+          unit => $$specimen{characteristics}{"specimen volume"}[0]{unit}
         },
         specimenSize => {       #no example in the current FAANG collection for pool of specimens, pure guess, expect to change later when data becomes available
-          text => $$specimen{characteristics}{specimenSize}[0]{text},
-          unit => $$specimen{characteristics}{specimenSize}[0]{unit}
+          text => $$specimen{characteristics}{"specimen size"}[0]{text},
+          unit => $$specimen{characteristics}{"specimen size"}[0]{unit}
         },
         specimenWeight => {     #no example in the current FAANG collection for pool of specimens, pure guess, expect to change later when data becomes available
-          text => $$specimen{characteristics}{specimenWeight}[0]{text},
-          unit => $$specimen{characteristics}{specimenWeight}[0]{unit}
+          text => $$specimen{characteristics}{"specimen weight"}[0]{text},
+          unit => $$specimen{characteristics}{"specimen weight"}[0]{unit}
         }
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
     $es_doc{cellType} = {text => "Not Applicable"};
-
-    foreach my $spu (@{$$specimen{characteristics}{specimenPictureUrl}}){ #no example in the current FAANG collection for pool of specimens, pure guess, expect to change later when data becomes available
+    foreach my $spu (@{$$specimen{characteristics}{"specimen picture url"}}){ #no example in the current FAANG collection for pool of specimens, pure guess, expect to change later when data becomes available
       push (@{$es_doc{poolOfSpecimens}{specimenPictureUrl}},$$spu{text});
     }
-    @{$es_doc{derivedFrom}} = @{$relationships{derivedFrom}} if (exists $relationships{derivedFrom});
-    @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
+
     #at the moment, organism information is not stored as it can be retrieved from each individual derivedFrom specimen
     #if in future it is needed, e.g. to reduce calculation time for frontend, the logic should be placed in the foreach loop below
     my %tmp;
-    foreach my $organismAccession(@{$relationships{organism}}){
-      $organismReferredBySpecimen{$organismAccession}++;
-      $tmp{organism}{$organismInfoForSpecimen{$organismAccession}{organism}{text}} = $organismInfoForSpecimen{$organismAccession}{organism}{ontologyTerms};
-      $tmp{sex}{$organismInfoForSpecimen{$organismAccession}{sex}{text}} = $organismInfoForSpecimen{$organismAccession}{sex}{ontologyTerms};
-      $tmp{breed}{$organismInfoForSpecimen{$organismAccession}{breed}{text}} = $organismInfoForSpecimen{$organismAccession}{breed}{ontologyTerms};
+    if (exists $relationships{derivedFrom}){
+      my @derivedFrom = keys %{$relationships{derivedFrom}};#must be specimen from organism
+#      print "pool specimen $accession derive from <@derivedFrom>\n";
+      @{$es_doc{derivedFrom}} = @derivedFrom;
+      foreach my $derivedFrom (@derivedFrom){
+        my $organismAccession = "";
+        if (exists $specimen_organism_relationship{$derivedFrom}){
+          $organismAccession = $specimen_organism_relationship{$derivedFrom};
+          $organismReferredBySpecimen{$organismAccession}++;
+          unless (exists $organismInfoForSpecimen{$organismAccession}){
+            print "No organism information found for organism <$organismAccession> which is for $accession\n";
+            next;
+          }
+#          print "$organismAccession\n";
+#          print Dumper($organismInfoForSpecimen{$organismAccession});
+          $tmp{organism}{$organismInfoForSpecimen{$organismAccession}{organism}{text}} = $organismInfoForSpecimen{$organismAccession}{organism}{ontologyTerms};
+          $tmp{sex}{$organismInfoForSpecimen{$organismAccession}{sex}{text}} = $organismInfoForSpecimen{$organismAccession}{sex}{ontologyTerms};
+          $tmp{breed}{$organismInfoForSpecimen{$organismAccession}{breed}{text}} = $organismInfoForSpecimen{$organismAccession}{breed}{ontologyTerms};
+        }else{
+          print "No organism found for specimen $derivedFrom\n";
+        }
+      } 
     }
+    @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
     #assign the collective value of organism, sex and breed for all related specimen
     my @arr = ("organism","sex","breed");
     foreach my $type(@arr){
@@ -328,13 +402,32 @@ sub process_cell_specimens{
   my %converted;
   foreach my $key (keys %cell_specimen){
     my $specimen = $cell_specimen{$key};
-    my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},2)};
+#    my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},2)};
+    my %relationships = &parse_relationship($specimen);
     
-    my $url = $$specimen{characteristics}{purificationProtocol}[0]{text};
+    my $url = $$specimen{characteristics}{"purification protocol"}[0]{text};
     my $filename = &getFilenameFromURL($url);
 
+    #cell specimen derive from specimen from organism
+    #therefore two steps needed to get organism: specimen from organism(sfo) first, then organism
+    my @derivedFrom = keys %{$relationships{derivedFrom}};
+    my $specimenFromOrganismAccession = $derivedFrom[0];
+#    my %sfo_data;
+#    if (exists $specimen_from_organism{$specimenFromOrganismAccession}){
+#      %sfo_data = %{$specimen_from_organism{$specimenFromOrganismAccession}};
+#    }else{
+#      my %tmp = &fetch_single_record($specimenFromOrganismAccession);
+#      %sfo_data = %{$tmp{$specimenFromOrganismAccession}};
+#    }
+#    my %relOrganism = &parse_relationship(\%sfo_data);
+#    my @organisms = keys %{$relOrganism{derivedFrom}};
+    my $organismAccession = "";
+    if (exists $specimen_organism_relationship{$specimenFromOrganismAccession}){
+      $organismAccession = $specimen_organism_relationship{$specimenFromOrganismAccession};
+    }
+    $specimen_organism_relationship{$key} = $organismAccession;
     my %es_doc = (
-      derivedFrom => $relationships{derivedFrom}[0],
+      derivedFrom => $specimenFromOrganismAccession,
       cellSpecimen => {
         markers => $$specimen{characteristics}{markers}[0]{text},
         purificationProtocol => {
@@ -344,13 +437,16 @@ sub process_cell_specimens{
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
-    $es_doc{cellType} = {text => $$specimen{characteristics}{cellType}[0]{text}, ontologyTerms => $$specimen{characteristics}{cellType}[0]{ontologyTerms}[0]};
+    $es_doc{cellType} = {
+      text => $$specimen{characteristics}{"cell type"}[0]{text}, 
+      ontologyTerms => $$specimen{characteristics}{"cell type"}[0]{ontologyTerms}[0]
+    };
 
-    foreach my $cellType (@{$$specimen{characteristics}{cellType}}){
+    foreach my $cellType (@{$$specimen{characteristics}{"cell type"}}){
       push(@{$es_doc{cellSpecimen}{cellType}}, $cellType);
     }
     @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
-    my $organismAccession = $relationships{organism}[0];
+
     $es_doc{organism}=$organismInfoForSpecimen{$organismAccession};
     $organismReferredBySpecimen{$organismAccession}++;
     %{$converted{$key}} = %es_doc;
@@ -363,35 +459,48 @@ sub process_cell_cultures{
   my %converted;
   foreach my $key (keys %cell_culture){
     my $specimen = $cell_culture{$key};
-    my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},2)};
+    my %relationships = &parse_relationship($specimen);
 
-    my $url = $$specimen{characteristics}{cellCultureProtocol}[0]{text};
+    my $url = $$specimen{characteristics}{"cell culture protocol"}[0]{text};
     my $filename = &getFilenameFromURL($url);
 
+    #cell culture derive from specimen from organism
+    #therefore two steps needed to get organism: specimen from organism(sfo) first, then organism
+    my @derivedFrom = keys %{$relationships{derivedFrom}};
+    my $derivedFromAccession = $derivedFrom[0];
+    my $organismAccession = "";
+    if (exists $specimen_organism_relationship{$derivedFromAccession}){
+      $organismAccession = $specimen_organism_relationship{$derivedFromAccession};
+    }
+    $specimen_organism_relationship{$key} = $organismAccession;
+
     my %es_doc = (
-      derivedFrom => $relationships{derivedFrom}[0],
+      derivedFrom => $derivedFromAccession,
       cellCulture => {
         cultureType => {
-          text => $$specimen{characteristics}{cultureType}[0]{text},
-          ontologyTerms => $$specimen{characteristics}{cultureType}[0]{ontologyTerms}[0],
+          text => $$specimen{characteristics}{"culture type"}[0]{text},
+          ontologyTerms => $$specimen{characteristics}{"culture type"}[0]{ontologyTerms}[0],
         },
         cellType => {
-          text => $$specimen{characteristics}{cellType}[0]{text},
-          ontologyTerms => $$specimen{characteristics}{cellType}[0]{ontologyTerms}[0],
+          text => $$specimen{characteristics}{"cell type"}[0]{text},
+          ontologyTerms => $$specimen{characteristics}{"cell type"}[0]{ontologyTerms}[0],
         },
         cellCultureProtocol => {
           url => $url,
           filename => $filename
         },
-        cultureConditions => $$specimen{characteristics}{cultureConditions}[0]{text},
-        numberOfPassages => $$specimen{characteristics}{numberOfPassages}[0]{text}
+        cultureConditions => $$specimen{characteristics}{"culture conditions"}[0]{text},
+        numberOfPassages => $$specimen{characteristics}{"number of passages"}[0]{text}
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
-    $es_doc{cellType} = {text => $$specimen{characteristics}{cellType}[0]{text}, ontologyTerms => $$specimen{characteristics}{cellType}[0]{ontologyTerms}[0]};
+    $es_doc{cellType} = {
+      text => $$specimen{characteristics}{"cell type"}[0]{text}, 
+      ontologyTerms => $$specimen{characteristics}{"cell type"}[0]{ontologyTerms}[0]
+    };
 
     @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
-    my $organismAccession = $relationships{organism}[0];
+
     $es_doc{organism}=$organismInfoForSpecimen{$organismAccession};
     $organismReferredBySpecimen{$organismAccession}++;
     %{$converted{$key}} = %es_doc;
@@ -404,31 +513,32 @@ sub process_cell_lines{
   my %converted;
   foreach my $key (keys %cell_line){
     my $specimen = $cell_line{$key};
-    my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},3)};
+    my %relationships = &parse_relationship($specimen);
+#    my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},3)};
 
     my $url;
     my $filename ;
-    if (exists $$specimen{characteristics}{cultureProtocol}[0]{text}){
-      $url = $$specimen{characteristics}{cultureProtocol}[0]{text};
+    if (exists $$specimen{characteristics}{"culture protocol"}[0]{text}){
+      $url = $$specimen{characteristics}{"culture protocol"}[0]{text};
       $filename = &getFilenameFromURL($url);
     }
     my %es_doc = (
       cellLine => {
         organism => {
-          text => $$specimen{characteristics}{organism}[0]{text},
-          ontologyTerms => $$specimen{characteristics}{organism}[0]{ontologyTerms}[0]
+          text => $$specimen{characteristics}{Organism}[0]{text},
+          ontologyTerms => $$specimen{characteristics}{Organism}[0]{ontologyTerms}[0]
         },
         sex => {
-          text => $$specimen{characteristics}{sex}[0]{text},
-          ontologyTerms => $$specimen{characteristics}{sex}[0]{ontologyTerms}[0]
+          text => $$specimen{characteristics}{Sex}[0]{text},
+          ontologyTerms => $$specimen{characteristics}{Sex}[0]{ontologyTerms}[0]
         },
-        cellLine => $$specimen{characteristics}{cellLine}[0]{text},
-        biomaterialProvider => $$specimen{characteristics}{biomaterialProvider}[0]{text},
-        catalogueNumber => $$specimen{characteristics}{catalogueNumber}[0]{text},
-        numberOfPassages => $$specimen{characteristics}{numberOfPassages}[0]{text},
+        cellLine => $$specimen{characteristics}{"cell line"}[0]{text},
+        biomaterialProvider => $$specimen{characteristics}{"biomaterial provider"}[0]{text},
+        catalogueNumber => $$specimen{characteristics}{"catalogue number"}[0]{text},
+        numberOfPassages => $$specimen{characteristics}{"number of passages"}[0]{text},
         dateEstablished => { 
-          text => $$specimen{characteristics}{dateEstablished}[0]{text},
-          unit => $$specimen{characteristics}{dateEstablished}[0]{unit}
+          text => $$specimen{characteristics}{"date established"}[0]{text},
+          unit => $$specimen{characteristics}{"date established"}[0]{unit}
         },
         publication => $$specimen{characteristics}{publication}[0]{text},
         breed => {
@@ -436,10 +546,10 @@ sub process_cell_lines{
           ontologyTerms => $$specimen{characteristics}{breed}[0]{ontologyTerms}[0]
         },
         cellType => {
-          text => $$specimen{characteristics}{cellType}[0]{text},
-          ontologyTerms => $$specimen{characteristics}{cellType}[0]{ontologyTerms}[0]
+          text => $$specimen{characteristics}{"cell type"}[0]{text},
+          ontologyTerms => $$specimen{characteristics}{"cell type"}[0]{ontologyTerms}[0]
         },
-        cultureConditions => $$specimen{characteristics}{cultureConditions}[0]{text},
+        cultureConditions => $$specimen{characteristics}{"culture conditions"}[0]{text},
         cultureProtocol => {
           url => $url,
           filename => $filename
@@ -452,100 +562,120 @@ sub process_cell_lines{
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
-    $es_doc{cellType} = {text => $$specimen{characteristics}{cellType}[0]{text}, ontologyTerms => $$specimen{characteristics}{cellType}[0]{ontologyTerms}[0]};
+    $es_doc{cellType} = {
+      text => $$specimen{characteristics}{"cell type"}[0]{text}, 
+      ontologyTerms => $$specimen{characteristics}{"cell type"}[0]{ontologyTerms}[0]
+    };
 
     $es_doc{derivedFrom} = $relationships{derivedFrom}[0] if (exists $relationships{derivedFrom});
     @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
-    if (exists $relationships{organism} && (scalar @{$relationships{organism}})>0){ #derive from an animal, use animal as its organism
-      my $organismAccession = $relationships{organism}[0];
-      $es_doc{organism}=$organismInfoForSpecimen{$organismAccession};
-      $organismReferredBySpecimen{$organismAccession}++;
-    }else{ #derive from specimen, use the cellLine organism info
+
+     #print Dumper(\%relationships);exit;
+    #at the time of development there is no data in BioSample to have derived from value so this part is commented out
+    #need to get some attention when the data becomes available
+#    if (exists $relationships{organism} && (scalar @{$relationships{organism}})>0){ #derive from an animal, use animal as its organism
+#      my $organismAccession = $relationships{organism}[0];
+#      $es_doc{organism}=$organismInfoForSpecimen{$organismAccession};
+#      $organismReferredBySpecimen{$organismAccession}++;
+#    }else{ #derive from specimen, use the cellLine organism info
       my @arr = ("organism","sex","breed");
       foreach my $type(@arr){
         $es_doc{organism}{$type} = $es_doc{cellLine}{$type};
       }
-    }
+#    }
     %{$converted{$key}} = %es_doc;
   }
   &insert_into_es(\%converted,"specimen");
 }
 
 sub process_organisms(){
+#  print Dumper($_[0]);
   my %organisms = %{$_[0]};
+#  my $count = scalar keys %organisms;
+#  print "There are $count organisms\n";
   my %converted;
   foreach my $accession (keys %organisms){
     my $organism = $organisms{$accession};
-    my $relations = fetch_json_by_url($$organism{_links}{relations}{href});
-    my $childOf = fetch_json_by_url($$relations{_links}{childOf}{href});
-    my $sameAs = fetch_json_by_url($$relations{_links}{sameAs}{href});
-
+#    print "$accession\n";
+#    print Dumper($organism);
     my %es_doc = (
       #animal section of ruleset
       organism => {
-        text => $$organism{characteristics}{organism}[0]{text},
-        ontologyTerms => $$organism{characteristics}{organism}[0]{ontologyTerms}[0]
+        text => $$organism{characteristics}{Organism}[0]{text},
+        ontologyTerms => $$organism{characteristics}{Organism}[0]{ontologyTerms}[0]
       },
       sex => {
-        text => $$organism{characteristics}{sex}[0]{text},
-        ontologyTerms => $$organism{characteristics}{sex}[0]{ontologyTerms}[0]
+        text => $$organism{characteristics}{Sex}[0]{text},
+        ontologyTerms => $$organism{characteristics}{Sex}[0]{ontologyTerms}[0]
       },
       birthDate => {
-          text => $$organism{characteristics}{birthDate}[0]{text},
-          unit => $$organism{characteristics}{birthDate}[0]{unit}
+          text => $$organism{characteristics}{"birth date"}[0]{text},
+          unit => $$organism{characteristics}{"birth date"}[0]{unit}
       },
       breed => {
         text => $$organism{characteristics}{breed}[0]{text},
         ontologyTerms => $$organism{characteristics}{breed}[0]{ontologyTerms}[0]
       },
-      birthLocation => $$organism{characteristics}{birthLocation}[0]{text},
+      birthLocation => $$organism{characteristics}{"birth location"}[0]{text},
       birthLocationLongitude => {
-          text => $$organism{characteristics}{birthLocationLongitude}[0]{text},
-          unit => $$organism{characteristics}{birthLocationLongitude}[0]{unit}
+          text => $$organism{characteristics}{"birth location longitude"}[0]{text},
+          unit => $$organism{characteristics}{"birth location longitude"}[0]{unit}
       },
       birthLocationLatitude => {
-          text => $$organism{characteristics}{birthLocationLatitude}[0]{text},
-          unit => $$organism{characteristics}{birthLocationLatitude}[0]{unit}
+          text => $$organism{characteristics}{"birth location latitude"}[0]{text},
+          unit => $$organism{characteristics}{"birth location latitude"}[0]{unit}
       },
       birthWeight => {
-          text => $$organism{characteristics}{birthWeight}[0]{text},
-          unit => $$organism{characteristics}{birthWeight}[0]{unit}
+          text => $$organism{characteristics}{"birth weight"}[0]{text},
+          unit => $$organism{characteristics}{"birth weight"}[0]{unit}
       },
       placentalWeight => {
-          text => $$organism{characteristics}{placentalWeight}[0]{text},
-          unit => $$organism{characteristics}{placentalWeight}[0]{unit}
+          text => $$organism{characteristics}{"placental weight"}[0]{text},
+          unit => $$organism{characteristics}{"placental weight"}[0]{unit}
       },
       pregnancyLength => {
-          text => $$organism{characteristics}{pregnancyLength}[0]{text},
-          unit => $$organism{characteristics}{pregnancyLength}[0]{unit}
+          text => $$organism{characteristics}{"pregnancy length"}[0]{text},
+          unit => $$organism{characteristics}{"pregnancy length"}[0]{unit}
       },
-      deliveryTiming => $$organism{characteristics}{deliveryTiming}[0]{text},
-      deliveryEase => $$organism{characteristics}{deliveryEase}[0]{text},
+      deliveryTiming => $$organism{characteristics}{"delivery timing"}[0]{text},
+      deliveryEase => $$organism{characteristics}{"delivery ease"}[0]{text},
       pedigree => $$organism{characteristics}{pedigree}[0]{text}
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$organism)};
 
     my @healthStatus;
-    foreach my $healthStatus (@{$$organism{characteristics}{healthStatus}}){
-      push(@healthStatus, {text => $$healthStatus{text}, ontologyTerms => $$healthStatus{ontologyTerms}[0]});
+    foreach my $healthStatus (@{$$organism{characteristics}{"health status"}}){
+      push(@healthStatus, {
+                            text => $$healthStatus{text}, ontologyTerms => $$healthStatus{ontologyTerms}[0]
+                          });
     }
     @{$es_doc{healthStatus}} = @healthStatus;
-    foreach my $samplesrelations (@{$$childOf{_embedded}{samplesrelations}}){
-      push(@{$es_doc{childOf}}, $$samplesrelations{accession});
-    }
-    foreach my $sameasrelations (@{$$sameAs{_embedded}{samplesrelations}}){
-      push(@{$es_doc{sameAs}}, $$sameasrelations{accession});
-    }
+
+    my %relationships = &parse_relationship($organism);
+    @{$es_doc{childOf}} = keys %{$relationships{childOf}} if (exists $relationships{childOf});
+    @{$es_doc{sameAs}} = keys %{$relationships{sameAs}} if (exists $relationships{sameAs});
+
     $organismInfoForSpecimen{$accession}{biosampleId} = $$organism{accession};
-    $organismInfoForSpecimen{$accession}{organism} = {text => $$organism{characteristics}{organism}[0]{text}, ontologyTerms => $$organism{characteristics}{organism}[0]{ontologyTerms}[0]};
-    $organismInfoForSpecimen{$accession}{sex} = {text => $$organism{characteristics}{sex}[0]{text}, ontologyTerms => $$organism{characteristics}{sex}[0]{ontologyTerms}[0]};
-    $organismInfoForSpecimen{$accession}{breed} = {text => $$organism{characteristics}{breed}[0]{text}, ontologyTerms => $$organism{characteristics}{breed}[0]{ontologyTerms}[0]};
+    $organismInfoForSpecimen{$accession}{organism} = {
+      text => $$organism{characteristics}{Organism}[0]{text}, 
+      ontologyTerms => $$organism{characteristics}{Organism}[0]{ontologyTerms}[0]
+    };
+    $organismInfoForSpecimen{$accession}{sex} = {
+      text => $$organism{characteristics}{Sex}[0]{text}, 
+      ontologyTerms => $$organism{characteristics}{Sex}[0]{ontologyTerms}[0]
+    };
+    $organismInfoForSpecimen{$accession}{breed} = {
+      text => $$organism{characteristics}{breed}[0]{text}, 
+      ontologyTerms => $$organism{characteristics}{breed}[0]{ontologyTerms}[0]
+    };
     @{$organismInfoForSpecimen{$accession}{healthStatus}} = @healthStatus;
     if (exists $$organism{characteristics}{strain}){
       $es_doc{breed} = {text => $$organism{characteristics}{strain}[0]{text}, ontologyTerms => $$organism{characteristics}{strain}[0]{ontologyTerms}[0]};
       $organismInfoForSpecimen{$accession}{breed} = {text => $$organism{characteristics}{strain}[0]{text}, ontologyTerms => $$organism{characteristics}{strain}[0]{ontologyTerms}[0]};
     }
     %{$converted{$accession}} = %es_doc;
+#    print Dumper(\%es_doc);
+#    exit;
   }
   &insert_into_es(\%converted,"organism");
 }
@@ -556,28 +686,49 @@ sub populateBasicBiosampleInfo(){
   my $biosample = $_[1];
   $result{name} = $$biosample{name};
   $result{biosampleId} = $$biosample{accession};
-  $result{description} = $$biosample{description};
-  $result{releaseDate} = $$biosample{releaseDate};
-  $result{updateDate} = $$biosample{updateDate};
+  $result{description} = $$biosample{characteristics}{description}[0]{text};#V4.0 change
+#  $result{releaseDate} = $$biosample{releaseDate};
+#  $result{updateDate} = $$biosample{updateDate};
+#  print "no release date for $$biosample{accession}\n" unless (defined $$biosample{release});
+#  print "no update date for $$biosample{accession}\n" unless (defined $$biosample{update});
+
+  $result{releaseDate} = &parseDate($$biosample{release},$$biosample{accession});
+  $result{updateDate} = &parseDate($$biosample{update},$$biosample{accession});
   $result{material} = {
-    text => $$biosample{characteristics}{material}[0]{text},
-    ontologyTerms => $$biosample{characteristics}{material}[0]{ontologyTerms}[0]
+    text => $$biosample{characteristics}{Material}[0]{text},
+    ontologyTerms => $$biosample{characteristics}{Material}[0]{ontologyTerms}[0]
   };
   $result{project} = $$biosample{characteristics}{project}[0]{text};
   $result{availability} = $$biosample{characteristics}{availability}[0]{text};
   foreach my $organization (@{$$biosample{organization}}){
-    push(@{$result{organization}}, {name => $$organization{Name}, role => $$organization{Role}, URL => $$organization{URL}});
+    unless (exists $$organization{Name} || exists $$organization{Role} || exists $$organization{URL}){
+      print "no organization at all: $$biosample{accession}\n"; 
+      print Dumper($organization);
+    }
+    my %tmp;
+    $tmp{name} = $$organization{Name};
+    $tmp{role} = &trim($$organization{Role});
+    $tmp{URL} = $$organization{URL};
+    push(@{$result{organization}}, \%tmp);
+#      push(@{$result{organization}}, {
+#                                    name => $$organization{Name}, 
+#                                    role => &trim($$organization{Role}), 
+#                                    URL => $$organization{URL}
+#                                    });
   }
   return \%result;
 }
 #fetch specimen data from BioSample and populate six hashes according to their material type
 sub fetch_specimens_by_project {
-  my ( $project_keyword ) = @_;
   my %hash;
-  my $url = "https://www.ebi.ac.uk/biosamples/api/samples/search/findByText?text=project_crt:".$project_keyword;
-  my @samples = fetch_biosamples_json($url);
+  my @samples = &fetch_biosamples_json($url);
+#  my @samples = &fetch_biosamples_json_by_page($url);
+
   foreach my $sample (@samples){
-    my $material = $$sample{characteristics}{material}[0]{text};
+    my $isFaangLabelled = &check_is_faang($sample);
+    next if ($isFaangLabelled == 0);
+    my $material = $$sample{characteristics}{Material}[0]{text};
+
     if($material eq "organism"){
       $organism{$$sample{accession}} = $sample;
     }
@@ -598,48 +749,77 @@ sub fetch_specimens_by_project {
     }
     $hash{$material}++;
   }
-#  foreach my $type(keys %hash){
-#    print "There are $hash{$type} $type records\n";
-#  }
+#  my $total = 0;
+  foreach my $type(keys %hash){
+#    $total += $hash{$type};
+    print "There are $hash{$type} $type records\n";
+  }
+#  print "The sum is $total\n";
 }
 #use BioSample API to retrieve BioSample records
-sub fetch_biosamples_json{
+sub fetch_biosamples_json_by_page{
   my ($json_url) = @_;
 
   my $json_text = &fetch_json_by_url($json_url);
-  
   my @biosamples;
+  my $pageNum = $json_text->{page}{totalPages};
   # Store the first page 
-  foreach my $item (@{$json_text->{_embedded}{samples}}){ 
+  foreach my $item (@{$json_text->{_embedded}{samples}}){
     push(@biosamples, $item);
   }
   # Store each additional page
-  while ($$json_text{_links}{next}{href}){  # Iterate until no more pages using HAL links
-    $json_text = fetch_json_by_url($$json_text{_links}{next}{href});# Get next page
+  for (my $i = 1;$i<$pageNum;$i++){
+    my $pageUrl = $url."&page=$i";
+    print "$pageUrl\n" if (($i%10)==0);
+    $json_text = &fetch_json_by_url($pageUrl);# Get next page
     foreach my $item (@{$json_text->{_embedded}{samples}}){
       push(@biosamples, $item);  
     }
   }
   return @biosamples;
 }
-
-sub fetch_json_by_url{
+#use BioSample API to retrieve BioSample records
+sub fetch_biosamples_json{
   my ($json_url) = @_;
 
-  my $browser = WWW::Mechanize->new();
-  #$browser->show_progress(1);  # Enable for WWW::Mechanize GET logging
-  $browser->get( $json_url );
-  my $content = $browser->content();
-  my $json = new JSON;
-  my $json_text = $json->decode($content);
-  return $json_text;
+  my $json_text = &fetch_json_by_url($json_url);
+  my @biosamples;
+#  print Dumper($$json_text{page}); #contains total number, page size and page count
+
+  # Store the first page 
+  foreach my $item (@{$json_text->{_embedded}{samples}}){
+    push(@biosamples, $item);
+  }
+  # Store each additional page
+  while ($$json_text{_links}{next}{href}){  # Iterate until no more pages using HAL links
+    $json_text = &fetch_json_by_url($$json_text{_links}{next}{href});# Get next page
+#    print Dumper($json_text);
+#    exit;
+    foreach my $item (@{$json_text->{_embedded}{samples}}){
+      push(@biosamples, $item);  
+    }
+  }
+  return @biosamples;
 }
+#move to misc.pl
+#sub fetch_json_by_url{
+#  my ($json_url) = @_;
+
+#  my $browser = WWW::Mechanize->new();
+  #$browser->show_progress(1);  # Enable for WWW::Mechanize GET logging
+#  $browser->get( $json_url );
+#  my $content = $browser->content();
+#  my $json = new JSON;
+#  my $json_text = $json->decode($content);
+#  return $json_text;
+#}
 #get one BioSample record with the given accession
 #the returned value has the same data structure as %derivedFromOrganism 
 #for development purpose: much quicker to get one record than get all records
 sub fetch_single_record{
   my ($accession) = @_;
-  my $url = "http://www.ebi.ac.uk/biosamples/api/samples/$accession";
+#  my $url = "http://www.ebi.ac.uk/biosamples/api/samples/$accession"; #old API
+  my $url = "http://wwwdev.ebi.ac.uk/biosamples/samples/$accession";
   my $json_text = &fetch_json_by_url($url);
   my %hash;
   $hash{$json_text->{accession}} = $json_text;
@@ -774,4 +954,44 @@ sub insert_into_es(){
       die "error indexing sample in $es_index_name index:".$error->{text};
     }
   }
+}
+
+sub check_is_faang(){
+  my $sample = $_[0];
+  if (exists $$sample{characteristics} && exists $$sample{characteristics}{project}){
+    my @tmp = @{$$sample{characteristics}{project}};
+    foreach my $tmp(@tmp){
+      if (exists $$tmp{text} && lc($$tmp{text}) eq "faang"){
+        return 1;
+      }
+    }
+  }
+  return 0;
+}
+
+sub parse_relationship(){
+  my %result;
+#  print Dumper($_[0]);
+  unless (exists $_[0]{relationships}){
+    print "No relationships for $_[0]{accession}\n";
+#    return %result;
+  }
+  my @relations = @{$_[0]{relationships}};
+  my $accession = $_[0]{accession};
+  foreach my $ref(@relations){
+#      push(@{$result{$$ref{type}}},$$ref{target}) unless ($$ref{target} eq $accession);
+#      push(@{$result{toLowerCamelCase($$ref{type})}},$$ref{target}) unless ($$ref{target} eq $accession);
+      $result{$$ref{type}}{$$ref{target}}++ unless ($$ref{target} eq $accession);
+      $result{toLowerCamelCase($$ref{type})}{$$ref{target}}++ unless ($$ref{target} eq $accession);
+  }
+  return %result;
+}
+
+sub parseDate(){
+  my $isoDate = $_[0];
+  print "no date value for $_[1]\n" unless (defined $isoDate);
+  if ($isoDate=~/(\d+-\d+-\d+)T/){
+    return $1;
+  }
+  return $isoDate;
 }

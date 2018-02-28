@@ -54,7 +54,7 @@ my $es = Search::Elasticsearch->new(nodes => $es_host, client => '1_0::Direct');
 #which means that this script must be executed after import_from_biosample.pl
 my %biosample_ids = &getAllSpecimenIDs();
 croak "BioSample IDs were not imported" unless (%biosample_ids);
-
+#print "Number of specimen in ES: ".(scalar keys %biosample_ids)."\n";
 my $error_record_file = "ena_not_in_biosample.txt";
 my %known_errors;
 my %new_errors;
@@ -185,6 +185,7 @@ foreach my $record (@$json_text){
 #    print "\n";
     $indexed_files{$filename} = 1;
 
+    #ollect information for datasets
     my $dataset_id = $$record{study_accession};
     my %es_doc_dataset;
     if (exists $datasets{$dataset_id}){
@@ -197,14 +198,15 @@ foreach my $record (@$json_text){
       $es_doc_dataset{type}=$$record{study_type};
       $es_doc_dataset{secondaryAccession}=$$record{secondary_study_accession};
     }
-    #specimen
+
+    #specimen for dataset
     $datasets{tmp}{$dataset_id}{specimen}{$specimen_biosample_id}=1;
     $datasets{tmp}{$dataset_id}{instrument}{$$record{instrument_model}} = 1;
     $datasets{tmp}{$dataset_id}{centerName}{$$record{center_name}} = 1;
     $datasets{tmp}{$dataset_id}{archive}{$archive} = 1;
 
     #species can be calculated from specimen information
-    #file
+    #file for dataset
     my %tmp_file = (
       url => $file,
       name => $fullname,
@@ -232,6 +234,9 @@ foreach my $record (@$json_text){
   }#end of for (@files)
 }
 
+#now %datasets contain the following data:
+#under each dataset id key, the value is the corresponding dataset basic information
+#under the conserved tmp key, the value is another hash with dataset id as keys, and another hash having specimen, file, experiment information
 #deal with datasets
 foreach my $dataset_id (keys %datasets){
   next if ($dataset_id eq "tmp");
