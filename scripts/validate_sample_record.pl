@@ -30,7 +30,7 @@ sub validateRecord(){
   my $cmd = 'curl -F "format=json" -F "rule_set_name='.$ruleset.'" -F "file_format=JSON" -F "metadata_file=@'.$tmpOutFile.'" "https://www.ebi.ac.uk/vg/faang/validate"';
 #  print "\n\n$cmd\n\n";
   my $pipe;
-  open $pipe, "$cmd|"; #send the file to the server and receive the response
+  open $pipe, "$cmd 2> /dev/null|"; #send the file to the server and receive the response
   my $response = &readHandleIntoString($pipe);
   my $json = &decode_json($response);
   return &parseValidatationResult($$json{entities},$type);
@@ -216,7 +216,7 @@ sub parseValidatationResult(){
 sub getRulesetVersion(){
   my $cmd = 'curl https://api.github.com/repos/FAANG/faang-metadata/releases';
   my $pipe;
-  open $pipe, "$cmd|";
+  open $pipe, "$cmd 2> /dev/null|";
   my $response = &readHandleIntoString($pipe);
   my $json = &decode_json($response);
   my $current = $$json[0];
