@@ -17,6 +17,22 @@ use Data::Dumper;
 require "validate_sample_record.pl";
 require "misc.pl";
 
+my %knownColumns;
+#the known column names according to the rule set https://www.ebi.ac.uk/vg/faang/rule_sets/FAANG%20Samples
+#after removing these known columns, the left ones are the custom fields which need to be dealt with
+my @commonColumns = ("description","Material","project","availability","same as");
+my @knownOrganismColumns = ("Organism","Sex","birth date","breed","health status","birth location","birth location longitude","birth location latitude","birth weight","placental weight","pregnancy length","delivery timing","delivery ease","Child Of","pedigree","strain");#some submitter use strain instead of breed
+@{$knownColumns{"organism"}} = @knownOrganismColumns;
+my @knownSpecimenFromColumns = ("specimen collection date","animal age at collection","developmental stage","health status at collection","organism part","specimen collection protocol","fasted status","number of pieces","specimen volume","specimen size","specimen weight","specimen picture url","gestational age at sample collection");
+@{$knownColumns{"specimen from organism"}} = @knownSpecimenFromColumns;
+my @knownPoolSpecimenColumns = ("pool creation date","pool creation protocol","specimen volume","specimen size","specimen weight","specimen picture url");
+@{$knownColumns{"pool of specimens"}} = @knownPoolSpecimenColumns;
+my @knownCellSpecimenColumns = ("markers","cell type","purification protocol");
+@{$knownColumns{"cell specimen"}} = @knownCellSpecimenColumns;
+my @knownCellCultureColumns = ("culture type","cell type","cell culture protocol","culture conditions","number of passages");
+@{$knownColumns{"cell culture"}} = @knownCellCultureColumns;
+my @knownCellLineColumns = ("cell line","biomaterial provider","catalogue number","number of passages","date established","publication","cell type","culture conditions","culture protocol","disease","karyotype");
+@{$knownColumns{"cell line"}} = @knownCellLineColumns;
 #the code to test getFilenameFromURL
 #my $url = "http://www.ncbi.nlm.nih.gov/pubmed/16215741";
 #$url = "ftp://ftp.faang.ebi.ac.uk/ftp/protocols/samples/KU_Pool_creation_protocol_20170523.pdf";
@@ -37,7 +53,12 @@ require "misc.pl";
 #my $accession = "SAMEA4447551"; #cell culture
 #my $accession = "SAMEA3540916"; #cell line
 #my $accession = "SAMEA104626885";
-#my $accession = "SAMEA104381420";
+#my $accession = "SAMEA104618854";
+#test case for custom column
+#my $accession = "SAMEA4447799"; #orgamisn, parturition trait and lactation duration
+#my $accession = "SAMEA4451615"; #organism, environmental conditions and physiological conditions
+#my $accession = "SAMEA103988626"; #specimen from organism, physiological conditions
+#my $accession = "SAMEA4451620"; #specimen from organism, physiological conditions which contains lactation duration information
 
 #my $accession = "SAMEA4448136"; #organism without relationship   
 #my %tmp = &fetch_single_record($accession);
@@ -46,11 +67,11 @@ require "misc.pl";
 #&process_pool_specimen(\%tmp);
 #exit;
 #&process_organisms(\%tmp);
+#&process_specimens(\%tmp);
 #exit;
 #&process_cell_lines(\%tmp);
 #&process_cell_cultures(\%tmp);
 #&process_cell_specimens(\%tmp);
-#&process_specimens(\%tmp);
 ##################################################################
 
 #the parameters expected to be retrieved from the command line
@@ -76,10 +97,12 @@ croak "Need -es_index_name e.g. faang, faang_build_1" unless ( $es_index_name);
 #my $url = "https://wwwdev.ebi.ac.uk/biosamples/samples?filter=attr%3Aproject%3AFAANG";
 #production server
 #my $url = "https://www.ebi.ac.uk/biosamples/samples?filter=attr%3Aproject%3AFAANG";
-my $url = "https://www.ebi.ac.uk/biosamples/samples?size=1000&sort=id,asc&filter=attr%3Aproject%3AFAANG";
+#my $url = "https://www.ebi.ac.uk/biosamples/samples?size=1000&sort=id,asc&filter=attr%3Aproject%3AFAANG";
+my $url = "https://www.ebi.ac.uk/biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG";
 
 print "The information of invalid records will be stored in $error_log\n\n";
 open ERR,">$error_log";
+
 
 #the curl commands are mainly called in two places
 #one is here to get ruleset version
@@ -203,7 +226,7 @@ foreach my $acc(@organismReferredList){
   push(@{$union{$acc}{source}},"specimen");
 }
 foreach my $acc(keys %union){
-  print "$acc only in source @{$union{$acc}{source}}\n" if ($union{$acc}{count}==1);
+  print ERR "$acc only in source @{$union{$acc}{source}}\n" if ($union{$acc}{count}==1);
 }
 
 #List::Compare - Compare elements of two or more lists
@@ -287,6 +310,8 @@ sub process_specimens{
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
+    %es_doc = %{&extractCustomField(\%es_doc,$specimen,"specimen from organism")};
+
     $es_doc{cellType} = {
       text => $$specimen{characteristics}{"organism part"}[0]{text}, 
       ontologyTerms => $$specimen{characteristics}{"organism part"}[0]{ontologyTerms}[0]
@@ -308,6 +333,8 @@ sub process_specimens{
     #therefore it needs to be converted first using the codes above, and save into %converted
     #it should be more efficient to validate multiple records than one record at a time
     %{$converted{$key}} = %es_doc;
+#    print Dumper(\%es_doc);
+#    exit;
   }
   #only insert validated entries
   &insert_into_es(\%converted,"specimen");
@@ -349,6 +376,8 @@ sub process_pool_specimen{
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
+    %es_doc = %{&extractCustomField(\%es_doc,$specimen,"pool of specimens")};
+
     $es_doc{cellType} = {text => "Not Applicable"};
     foreach my $spu (@{$$specimen{characteristics}{"specimen picture url"}}){ #no example in the current FAANG collection for pool of specimens, pure guess, expect to change later when data becomes available
       push (@{$es_doc{poolOfSpecimens}{specimenPictureUrl}},$$spu{text});
@@ -367,7 +396,7 @@ sub process_pool_specimen{
           $organismAccession = $specimen_organism_relationship{$derivedFrom};
           $organismReferredBySpecimen{$organismAccession}++;
           unless (exists $organismInfoForSpecimen{$organismAccession}){
-            print "No organism information found for organism <$organismAccession> which is for $accession\n";
+            print ERR "No organism information found for organism <$organismAccession> which is for $accession\n";
             next;
           }
 #          print "$organismAccession\n";
@@ -376,7 +405,7 @@ sub process_pool_specimen{
           $tmp{sex}{$organismInfoForSpecimen{$organismAccession}{sex}{text}} = $organismInfoForSpecimen{$organismAccession}{sex}{ontologyTerms};
           $tmp{breed}{$organismInfoForSpecimen{$organismAccession}{breed}{text}} = $organismInfoForSpecimen{$organismAccession}{breed}{ontologyTerms};
         }else{
-          print "No organism found for specimen $derivedFrom\n";
+          print ERR "No organism found for specimen $derivedFrom\n";
         }
       } 
     }
@@ -437,6 +466,8 @@ sub process_cell_specimens{
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
+    %es_doc = %{&extractCustomField(\%es_doc,$specimen,"cell specimen")};
+
     $es_doc{cellType} = {
       text => $$specimen{characteristics}{"cell type"}[0]{text}, 
       ontologyTerms => $$specimen{characteristics}{"cell type"}[0]{ontologyTerms}[0]
@@ -494,6 +525,8 @@ sub process_cell_cultures{
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
+    %es_doc = %{&extractCustomField(\%es_doc,$specimen,"cell culture")};
+
     $es_doc{cellType} = {
       text => $$specimen{characteristics}{"cell type"}[0]{text}, 
       ontologyTerms => $$specimen{characteristics}{"cell type"}[0]{ontologyTerms}[0]
@@ -562,6 +595,8 @@ sub process_cell_lines{
       }
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
+    %es_doc = %{&extractCustomField(\%es_doc,$specimen,"cell line")};
+
     $es_doc{cellType} = {
       text => $$specimen{characteristics}{"cell type"}[0]{text}, 
       ontologyTerms => $$specimen{characteristics}{"cell type"}[0]{ontologyTerms}[0]
@@ -643,6 +678,8 @@ sub process_organisms(){
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$organism)};
 
+    %es_doc = %{&extractCustomField(\%es_doc,$organism,"organism")};
+
     my @healthStatus;
     foreach my $healthStatus (@{$$organism{characteristics}{"health status"}}){
       push(@healthStatus, {
@@ -702,8 +739,8 @@ sub populateBasicBiosampleInfo(){
   $result{availability} = $$biosample{characteristics}{availability}[0]{text};
   foreach my $organization (@{$$biosample{organization}}){
     unless (exists $$organization{Name} || exists $$organization{Role} || exists $$organization{URL}){
-      print "no organization at all: $$biosample{accession}\n"; 
-      print Dumper($organization);
+      print ERR "no organization at all: $$biosample{accession}\n"; 
+#      print Dumper($organization);
     }
     my %tmp;
     $tmp{name} = $$organization{Name};
@@ -716,6 +753,49 @@ sub populateBasicBiosampleInfo(){
 #                                    URL => $$organization{URL}
 #                                    });
   }
+  return \%result;
+}
+#add basic information of BioSample record which is expected to exist for every single record into given hash
+#the basic set is compiled from cell line
+sub extractCustomField(){
+  my %result = %{$_[0]};
+  my $biosample = $_[1];
+  my $materialType = $_[2];
+  my %characteristics = %{$$biosample{characteristics}};
+  croak "Unrecognized material type" unless (exists $knownColumns{$materialType});
+  my @knownColumns = @{$knownColumns{$materialType}};
+
+  foreach my $knownColumn (@commonColumns, @knownColumns){
+    delete $characteristics{$knownColumn} if (exists $characteristics{$knownColumn});
+  }
+
+  my @customs;
+  foreach my $name (keys %characteristics){
+    my $type = ref($characteristics{$name});
+    my $toParse;
+    if ($type eq "ARRAY"){
+      $toParse = $characteristics{$name}[0];
+    }else{
+      $toParse = $characteristics{$name};
+    }
+    $type = ref($toParse);
+    my %tmp;
+    $tmp{name} = $name;
+    if ($type eq "HASH"){
+      if (exists $$toParse{text}){
+        $tmp{value} = $$toParse{text};
+      }elsif (exists $$toParse{value}){
+        $tmp{value} = $$toParse{value};
+      }
+      $tmp{unit} = $$toParse{unit} if (exists $$toParse{unit});
+      $tmp{ontologyTerms} = $$toParse{ontologyTerms}[0] if (exists $$toParse{ontologyTerms});
+    }elsif($type eq "SCALAR"){
+      $tmp{value} = $toParse;
+    }
+    push (@customs,\%tmp);
+  }
+  @{$result{customField}}=@customs;
+#  print Dumper(\%result);exit;
   return \%result;
 }
 #fetch specimen data from BioSample and populate six hashes according to their material type
@@ -819,7 +899,7 @@ sub fetch_biosamples_json{
 sub fetch_single_record{
   my ($accession) = @_;
 #  my $url = "http://www.ebi.ac.uk/biosamples/api/samples/$accession"; #old API
-  my $url = "http://wwwdev.ebi.ac.uk/biosamples/samples/$accession";
+  my $url = "http://www.ebi.ac.uk/biosamples/samples/$accession";
   my $json_text = &fetch_json_by_url($url);
   my %hash;
   $hash{$json_text->{accession}} = $json_text;
@@ -973,7 +1053,7 @@ sub parse_relationship(){
   my %result;
 #  print Dumper($_[0]);
   unless (exists $_[0]{relationships}){
-    print "No relationships for $_[0]{accession}\n";
+    print ERR "No relationships for $_[0]{accession}\n";
 #    return %result;
   }
   my @relations = @{$_[0]{relationships}};
@@ -989,7 +1069,7 @@ sub parse_relationship(){
 
 sub parseDate(){
   my $isoDate = $_[0];
-  print "no date value for $_[1]\n" unless (defined $isoDate);
+  print ERR "no date value for $_[1]\n" unless (defined $isoDate);
   if ($isoDate=~/(\d+-\d+-\d+)T/){
     return $1;
   }

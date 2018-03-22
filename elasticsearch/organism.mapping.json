@@ -75,6 +75,32 @@
                     }
                 }
             },
+            "customField": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "index": "not_analyzed",
+                        "fields": {
+                          "std": {
+                            "type": "string",
+                            "analyzer": "standard"
+                          }
+                        }
+                    },
+                    "value": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "unit": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    },
+                    "ontologyTerms": {
+                        "type": "string",
+                        "index": "not_analyzed"
+                    }
+                }
+            },
             "sameAs": {
                 "type": "string",
                 "index": "not_analyzed",
