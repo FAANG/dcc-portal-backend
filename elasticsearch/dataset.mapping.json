@@ -5,7 +5,13 @@
         "properties": {
             "accession": {
                 "type": "string",
-                "index": "not_analyzed"
+                "index": "not_analyzed",
+                "fields": {
+                    "std": {
+                        "type": "string",
+                        "analyzer": "standard"
+                    }
+                }
             },
             "title": {
                 "type": "string",
@@ -21,7 +27,13 @@
             },
             "secondaryAccession": {
                 "type": "string",
-                "index": "not_analyzed"
+                "index": "not_analyzed",
+                "fields": {
+                    "std": {
+                        "type": "string",
+                        "analyzer": "standard"
+                    }
+                }
             },
             "archive":{
                 "type": "string",
@@ -73,13 +85,7 @@
                         "properties": {
                             "text": {
                                 "type": "string",
-                                "index": "not_analyzed",
-                                "fields": {
-                                    "autocomp": {
-                                        "type": "string",
-                                        "analyzer": "autocomp"
-                                    }
-                                }
+                                "index": "not_analyzed"
                             },
                             "ontologyTerms": {
                                 "type": "string",
@@ -223,7 +229,13 @@
             },
             "instrument": {
                 "type": "string",
-                "index": "not_analyzed"
+                "index": "not_analyzed",
+                "fields": {
+                    "autocomp": {
+                        "type": "string",
+                        "analyzer": "autocomp"
+                    }
+                }
             },
             "centerName": {
                 "type": "string",
