@@ -4,6 +4,7 @@
 #e.g. whether use array or hash depends on cardinality
 #e.g. the description of deriveFrom and sameAs could determine how to deal with relationship
 
+#the normal print channel is free to use as it is redirected to /dev/null in the cron jobs, only error will be reported via email
 use strict;
 use warnings;
 use Getopt::Long;
@@ -136,7 +137,7 @@ my %organismInfoForSpecimen;
 #keys are organism accession and values are how many specimens related to that organism
 my %organismReferredBySpecimen;
 
-#print "The program starts at ".localtime."\n";
+print "The program starts at ".localtime."\n";
 my $pastTime = time;
 my $savedTime = time;
 
@@ -174,7 +175,6 @@ croak "Did not obtain any specimens from BioSamples" unless ( $number_specimens_
 &process_organisms(\%organism);
 $current = time;
 &convertSeconds($current - $pastTime);
-
 $pastTime = $current;
 #parse all types of specimen, at the moment the order does not matter
 print "Indexing specimen from organism starts at ".localtime."\n";
@@ -243,7 +243,7 @@ clean_elasticsearch('organism');
 $current = time;
 #print "Total ";
 #&convertSeconds($current - $savedTime);
-#print "The program ends at ".localtime."\n";
+print "The program ends at ".localtime."\n";
 
 
 #process specimen from organism
@@ -722,7 +722,11 @@ sub populateBasicBiosampleInfo(){
   my %result = %{$_[0]};
   my $biosample = $_[1];
   $result{name} = $$biosample{name};
-  $result{biosampleId} = $$biosample{accession};
+  my $acc = $$biosample{accession};
+  $result{biosampleId} = $acc;
+  $result{"id_number"} = substr($acc,5);
+#  print "$acc\n$result{id_number}\n";
+#  exit;
   $result{description} = $$biosample{characteristics}{description}[0]{text};#V4.0 change
 #  $result{releaseDate} = $$biosample{releaseDate};
 #  $result{updateDate} = $$biosample{updateDate};
