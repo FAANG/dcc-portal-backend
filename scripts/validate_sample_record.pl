@@ -280,7 +280,7 @@ sub validateTotalSampleRecords(){
   my $type = $_[1];
   my @rulesets = @{$_[2]};
   my %totalResults;
-  my $portionSize = 1000;
+  my $portionSize = 600;
   my @data = sort keys %data;
   my $totalSize = scalar @data;
   my $numPortions = ($totalSize - $totalSize%$portionSize)/$portionSize;
