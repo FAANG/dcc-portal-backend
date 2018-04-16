@@ -991,16 +991,7 @@ sub convertSeconds(){
   print "Elapse: $hour hour $minute minute $second second\n";
 }
 
-#return the filename extracted from the given URL. If it is not a pdf file, return null
-sub getFilenameFromURL(){
-    my $url = $_[0];
-    my $idx = rindex ($url,".");
-    my $suffix = lc(substr($url,$idx+1));
-    return unless ($suffix eq "pdf");
-    $idx = rindex ($url,"/");
-    my $filename = substr($url,$idx+1);
-    return $filename;
-}
+
 #validate multiple FAANG sample records
 #if it is valid, then set field standardMet and versionLastStandardMet and
 #insert (es term index) biosample entries into elasticsearch

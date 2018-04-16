@@ -1,8 +1,10 @@
 #!/usr/bin/env perl
-#version: 1.1.1
-#last update: 23/11/2017
+#version: 1.1.2
+#last update: 10/04/2018
 #1.1.0 add parseCSVline
 #1.1.1 improve trim function
+#1.1.2 add getFilenameFromURL
+
 use strict;
 use warnings;
 use JSON;
@@ -113,7 +115,16 @@ sub fetch_json_by_url{
   my $json_text = $json->decode($content);
   return $json_text;
 }
-
+#return the filename extracted from the given URL. If it is not a pdf file, return null
+sub getFilenameFromURL(){
+    my $url = $_[0];
+    my $idx = rindex ($url,".");
+    my $suffix = lc(substr($url,$idx+1));
+    return unless ($suffix eq "pdf");
+    $idx = rindex ($url,"/");
+    my $filename = substr($url,$idx+1);
+    return $filename;
+}
 #convert filesize into human readable value
 sub convertReadable(){
   my @units = qw/B kB MB GB TB PB/;
