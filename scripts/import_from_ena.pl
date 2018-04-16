@@ -10,6 +10,9 @@ use JSON -support_by_pp;
 use List::Compare;
 use Data::Dumper;
 
+require "validate_experiment_record.pl";
+require "misc.pl";
+
 #my @sizes = qw/822938429 204 3475424256 107868/;
 #foreach my $size(@sizes){
 #  print "$size\t";
@@ -34,6 +37,19 @@ GetOptions(
 
 croak "Need -es_host" unless ($es_host);
 #print "Working on $es_index_name at $es_host\n";
+
+#my @acc = qw/ERR1017174_1 ERR1017174_2 ERR1017177_1 ERR1017177_2 ERR789177/;
+#my %hash;
+#foreach my $acc(@acc){
+#  my $cmd = "curl $es_host/$es_index_name/file/$acc|";
+#  my $fh;
+#  open $fh, $cmd;
+#  my $result = &readHandleIntoJson($fh);
+#  $hash{$acc} = $$result{_source};
+#}
+#print Dumper(\%hash);
+#&convertFilesIntoExperiments(\%hash);
+#exit;
 
 #Import FAANG data from FAANG endpoint of ENA API
 #ENA API documentation available at: http://www.ebi.ac.uk/ena/portal/api/doc?format=pdf
@@ -75,8 +91,28 @@ my @data_types = qw/ftp galaxy aspera/;
 #key is either the study accession or fixed value of "tmp". When study accession value is the corresponding es entity
 #the tmp key corresponds to another hash with study accession as the keys and temp data structures for files, experiments, species etc.
 my %datasets; 
+my %experiments;
 
+my %strategy;
 foreach my $record (@$json_text){
+  #it seems that all records share the same set of fields, i.e. no need to check existance
+  my $library_strategy = $$record{library_strategy};
+  my $assay_type = $$record{assay_type};
+  my $experiment_target = $$record{experiment_target};
+  if ($assay_type eq ""){
+    if ($library_strategy eq "Bisulfite-Seq"){
+      $assay_type = "methylation profiling by high throughput sequencing";
+      $experiment_target = "DNA methylation";
+    }elsif ($library_strategy eq "DNase-Hypersensitivity"){
+      $assay_type = "DNase-Hypersensitivity seq";
+      $experiment_target = "open_chromatin_region"
+    }else{
+#      print "Cannot predict assay_type for $$record{run_accession}\n";
+      next;
+    }
+  }
+#  $strategy{"$library_strategy\t<$assay_type>\t$experiment_target $$record{library_source}"}++;
+#  next;
   #dynamically determine which archive DNA file to use, in the order of fastq, sra and cram_index
   #within same archive, ftp is preferred over galaxy and aspera
   my $file_type = "";
@@ -143,8 +179,8 @@ foreach my $record (@$json_text){
       submission => $$record{submission_accession},
       experiment => {
         accession => $$record{experiment_accession},
-        assayType => $$record{assay_type},
-        target => $$record{experiment_target}
+        assayType => $assay_type,
+        target => $experiment_target
       },
       run => {
         accession => $$record{run_accession},
@@ -184,8 +220,206 @@ foreach my $record (@$json_text){
 #    print Dumper(\%es_doc);
 #    print "\n";
     $indexed_files{$filename} = 1;
+    #collect information for experiments
+    #assume experiment information would be the same across ENA based on the experiment accession
+    my $exp_id = $$record{experiment_accession};
+    unless (exists $experiments{$exp_id}){
+      my $experiment_protocol = $$record{experimental_protocol};
+      my $experiment_protocol_filename = &getFilenameFromURL($experiment_protocol);
+      my $extraction_protocol = $$record{extraction_protocol};
+      my $extraction_protocol_filename = &getFilenameFromURL($extraction_protocol);
+      my %exp_es = (
+        accession => $exp_id,
+        assayType => $assay_type,
+        sampleStorage => $$record{sample_storage},
+        sampleStorageProcessing => $$record{sample_storage_processing},
+        samplingToPreparationInterval => {
+          text => $$record{sample_prep_interval},
+          unit => $$record{sample_prep_interval_units}
+        },
+        experimentalProtocol => {
+          url => $experiment_protocol,
+          filename => $experiment_protocol_filename
+        },
+        extractionProtocol => {
+          url => $extraction_protocol,
+          filename => $extraction_protocol_filename
+        },
+        libraryPreparationLocation => $$record{library_prep_location},
+        libraryPreparationDate => {
+          text => $$record{library_prep_date},
+          unit => $$record{library_prep_date_format}
+        },
+        sequencingLocation => $$record{sequencing_location},
+        sequencingDate => {
+          text => $$record{sequencing_date},
+          unit => $$record{sequencing_date_format}
+        }
+      );
+      if (exists $$record{library_prep_longitude} && length($$record{library_prep_longitude})>0){
+        $exp_es{libraryPreparationLocationLongitude}{text} = $$record{library_prep_longitude};
+        $exp_es{libraryPreparationLocationLongitude}{unit} = "decimal degrees";
+      }
+      if (exists $$record{library_prep_latitude} && length($$record{library_prep_latitude})>0){
+        $exp_es{libraryPreparationLocationLatitude}{text} = $$record{library_prep_latitude};
+        $exp_es{libraryPreparationLocationLatitude}{unit} = "decimal degrees";
+      }
+      if (exists $$record{sequencing_longitude} && length($$record{sequencing_longitude})>0){
+        $exp_es{sequencingLocationLongitude}{text} = $$record{sequencing_longitude};
+        $exp_es{sequencingLocationLongitude}{unit} = "decimal degrees";
+      }
+      if (exists $$record{sequencing_latitude} && length($$record{sequencing_latitude})>0){
+        $exp_es{sequencingLocationLatitude}{text} = $$record{sequencing_latitude};
+        $exp_es{sequencingLocationLatitude}{unit} = "decimal degrees";
+      }
+      #reference: https://wwwdev.ebi.ac.uk/vg/faang/rule_sets/FAANG%20Experiments
+      my %section_info;
+      if ($assay_type eq "ATAC-seq"){
+        my $transposase_protocol = $$record{transposase_protocol};
+        my $transposase_protocol_filename = &getFilenameFromURL($transposase_protocol);
+        %section_info = (
+          transposaseProtocol => {
+            url => $transposase_protocol,
+            filename => $transposase_protocol_filename
+          }
+        );
+        %{$exp_es{"ATAC-seq"}} = %section_info;
+      }elsif ($assay_type eq "methylation profiling by high throughput sequencing"){
+        my $conversion_protocol = $$record{bisulfite_protocol};
+        my $conversion_protocol_filename = &getFilenameFromURL($conversion_protocol);
+        my $pcr_isolation_protocol = $$record{pcr_isolation_protocol};
+        my $pcr_isolation_protocol_filename = &getFilenameFromURL($pcr_isolation_protocol);
+        %section_info = (
+          librarySelection => $$record{library_selection},
+          bisulfiteConversionProtocol => {
+            url => $conversion_protocol,
+            filename => $conversion_protocol_filename
+          },
+          pcrProductIsolationProtocol => {
+            url => $pcr_isolation_protocol,
+            filename => $pcr_isolation_protocol_filename
+          },
+          bisulfiteConversionPercent => $$record{bisulfite_percent},
+          restrictionEnzyme => $$record{restriction_enzyme}
+          #maxFragmentSizeSelectionRange => $$record{},
+          #minFragmentSizeSelectionRange => $$record{},
+        );
+        %{$exp_es{"BS-seq"}} = %section_info;
+      }elsif($assay_type eq "ChIP-seq"){
+        my $chip_protocol = $$record{chip_protocol};
+        my $chip_protocol_filename = &getFilenameFromURL($chip_protocol);
+        %section_info = (
+          chipProtocol => {
+            url => $chip_protocol,
+            filename => $chip_protocol_filename
+          },
+          libraryGenerationMaxFragmentSizeRange => $$record{library_max_fragment_size},
+          libraryGenerationMinFragmentSizeRange => $$record{library_min_fragment_size}
+        );
+        if (lc($experiment_target) eq "input dna"){
+          %{$exp_es{"ChiP-seq input DNA"}} = %section_info;
+        }else{
+          $section_info{chipAntibodyProvider} = $$record{chip_ab_provider};
+          $section_info{chipAntibodyCatalog} = $$record{chip_ab_catalog};
+          $section_info{chipAntibodyLot} = $$record{chip_ab_lot};
+          %{$exp_es{"ChiP-seq histone"}} = %section_info;
+        }
+      }elsif($assay_type eq "DNase-Hypersensitivity seq"){
+        my $dnase_protocol = $$record{dnase_protocol};
+        my $dnase_protocol_filename = &getFilenameFromURL($dnase_protocol);
+        %section_info = (
+          dnaseProtocol => {
+            url => $dnase_protocol,
+            filename => $dnase_protocol_filename
+          }
+        );
+        %{$exp_es{"DNase-seq"}} = %section_info;
+      }elsif($assay_type eq "Hi-C"){
+        %section_info = (
+          restrictionEnzyme => $$record{restriction_enzyme},
+          restrictionSite => $$record{restriction_site}
+        );
+        %{$exp_es{"Hi-C"}} = %section_info;
+      }elsif($assay_type eq "whole genome sequencing assay"){
+        my $library_pcr_protocol = $$record{library_pcr_isolation_protocol};
+        my $library_pcr_protocol_filename = &getFilenameFromURL($library_pcr_protocol);
+        my $library_generation_protocol = $$record{library_gen_protocol};
+        my $library_generation_protocol_filename = &getFilenameFromURL($library_generation_protocol);
+        %section_info = (
+          libraryGenerationPcrProductIsolationProtocol => {
+            url => $library_pcr_protocol,
+            filename => $library_pcr_protocol_filename
+          },
+          libraryGenerationProtocol => {
+            url => $library_generation_protocol,
+            filename => $library_generation_protocol_filename
+          },
+          librarySelection => $$record{library_selection}
+          #maxFragmentSizeSelectionRange => $$record{},
+          #minFragmentSizeSelectionRange => $$record{},
+        );
+        %{$exp_es{"WGS"}} = %section_info;
+#'microRNA profiling by high throughput sequencing'
+#'RNA-seq of coding RNA'
+#'RNA-seq of non coding RNA'
+#'transcription profiling by high throughput sequencing'
+#      }elsif($assay_type eq "ChIP-seq"){
+      #in the current ruleset, all unprocessed data should belong to RNA-Seq
+      }else{
+        #no corresponding column found in ENA
+        #my $rna_3_adapter_protocol = $$record{};
+        #my $rna_3_adapter_protocol_filename = &getFilenameFromURL($rna_3_adapter_protocol);
+        my $library_pcr_protocol = $$record{library_pcr_isolation_protocol};
+        my $library_pcr_protocol_filename = &getFilenameFromURL($library_pcr_protocol);
+        my $rt_protocol = $$record{rt_prep_protocol};
+        my $rt_protocol_filename = &getFilenameFromURL($rt_protocol);
+        my $library_generation_protocol = $$record{library_gen_protocol};
+        my $library_generation_protocol_filename = &getFilenameFromURL($library_generation_protocol);
+        %section_info = (
+          #rnaPreparation3AdapterLigationProtocol => {
+          #  url => $rna_3_adapter_protocol,
+          #  filename => $rna_3_adapter_protocol_filename
+          #},
+          #rnaPreparation5AdapterLigationProtocol => {
+          #  url => $rna_5_adapter_protocol,
+          #  filename => $rna_5_adapter_protocol_filename
+          #},
+          libraryGenerationPcrProductIsolationProtocol => {
+            url => $library_pcr_protocol,
+            filename => $library_pcr_protocol_filename
+          },
+          preparationReverseTranscriptionProtocol => {
+            url => $rt_protocol,
+            filename => $rt_protocol_filename
+          },
+          libraryGenerationProtocol => {
+            url => $library_generation_protocol,
+            filename => $library_generation_protocol_filename
+          },
+          readStrand => $$record{read_strand},
+          rnaPurity260280ratio => $$record{rna_purity_280_ratio},
+          rnaPurity260230ratio => $$record{rna_purity_230_ratio},
+          rnaIntegrityNumber => $$record{rna_integrity_num}
+        );
+        %{$exp_es{"RNA-seq"}} = %section_info;
+      }
+      $experiments{$exp_id} = 1;
 
-    #ollect information for datasets
+      eval{
+        $es->index(
+          index => $es_index_name,
+          type => 'experiment',
+          id => $exp_id,
+          body => \%exp_es
+        );
+      };
+      if (my $error = $@) {
+        die "error indexing experiment in $es_index_name index:".$error->{text};
+      }
+
+    }
+
+    #collect information for datasets
     my $dataset_id = $$record{study_accession};
     my %es_doc_dataset;
     if (exists $datasets{$dataset_id}){
@@ -225,8 +459,8 @@ foreach my $record (@$json_text){
     #experiment
     my %tmp_exp = (
         accession => $$record{experiment_accession},
-        assayType => $$record{assay_type},
-        target => $$record{experiment_target}
+        assayType => $assay_type,
+        target => $experiment_target
     );
     %{$datasets{tmp}{$dataset_id}{experiment}{$$record{experiment_accession}}} = %tmp_exp;
 
@@ -280,8 +514,8 @@ foreach my $dataset_id (keys %datasets){
     die "error indexing dataset in $es_index_name index:".$error->{text};
   }
 }
-
-
+#print Dumper(\%strategy);
+#exit;
 
 open OUT,">>$error_record_file";
 foreach my $study(keys %new_errors){
@@ -318,17 +552,6 @@ sub clean_elasticsearch{
   }
 }
 
-#read the content from the file handle and concatenate into a string
-#for development purpose of reading several records from a file
-sub readHandleIntoString(){
-        my $fh = $_[0]; 
-        my $str = "";
-        while (my $line = <$fh>) {
-                chomp($line);
-                $str .= $line;
-        }
-        return $str;
-}
 
 #read in BioSample specimen list, keep all information as it will be needed to populate specimen section in dataset
 sub getAllSpecimenIDs(){
@@ -364,19 +587,4 @@ sub investigateENAfields(){
   }
   print "\n\nAll messages above are printed from investigateENAfields subroutine which prints the fields used in ENA for FAANG and exits the program. To do the real business, comment the call of this subroutine out.\n";
   exit;
-}
-
-sub convertReadable(){
-  my @units = qw/B kB MB GB TB PB/;
-  my $size = $_[0];
-  my $i;
-  for ($i=0;$i<6;$i++){
-    $size /=1024;
-    last if $size<1;
-  }
-  $size *=1024;
-  return "${size}B" if ($i==0);
-  my $out = sprintf('%.2f', $size);
-  $out.=$units[$i];
-  return $out;
 }
