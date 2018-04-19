@@ -29,10 +29,12 @@ require "misc.pl";
 
 my $es_host;
 my $es_index_name = 'faang';
+my $error_log = "import_ena_error.log";
 
 GetOptions(
   'es_host=s' =>\$es_host,
   'es_index_name=s' =>\$es_index_name,
+  'error_log=s' =>\$error_log
 );
 
 croak "Need -es_host" unless ($es_host);
@@ -81,6 +83,15 @@ while (my $line=<IN>){
   $known_errors{$study}{$biosample} = 1;
 }
 
+print "The information of invalid records will be stored in $error_log\n\n";
+open ERR,">$error_log";
+
+#define the rulesets each record needs to be validated against, in the order of 
+my @rulesets = ("FAANG Experiments","FAANG Legacy Experiments");
+#the value for standardMet according to the ruleset, keys are expected to include all values in the @rulesets
+my %standards = ("FAANG Experiments"=>"FAANG","FAANG Legacy Experiments"=>"FAANG Legacy");
+my $ruleset_version = &getRulesetVersion();
+
 #used for deleting no longer existant ES records, e.g. record with old id system
 my %indexed_files;
 
@@ -92,6 +103,7 @@ my @data_types = qw/ftp galaxy aspera/;
 #the tmp key corresponds to another hash with study accession as the keys and temp data structures for files, experiments, species etc.
 my %datasets; 
 my %experiments;
+my %files;
 
 my %strategy;
 foreach my $record (@$json_text){
@@ -102,14 +114,25 @@ foreach my $record (@$json_text){
   if ($assay_type eq ""){
     if ($library_strategy eq "Bisulfite-Seq"){
       $assay_type = "methylation profiling by high throughput sequencing";
-      $experiment_target = "DNA methylation";
     }elsif ($library_strategy eq "DNase-Hypersensitivity"){
       $assay_type = "DNase-Hypersensitivity seq";
-      $experiment_target = "open_chromatin_region"
     }else{
 #      print "Cannot predict assay_type for $$record{run_accession}\n";
       next;
     }
+  }
+  $assay_type = "whole genome sequencing assay" if ($assay_type eq "whole genome sequencing");
+
+  if($assay_type eq "ATAC-seq"){
+    $experiment_target = "open_chromatin_region" unless (length($experiment_target)>0);
+  }elsif ($assay_type eq "methylation profiling by high throughput sequencing"){
+    $experiment_target = "DNA methylation" unless (length($experiment_target)>0);
+  }elsif ($assay_type eq "DNase-Hypersensitivity seq"){
+    $experiment_target = "open_chromatin_region" unless (length($experiment_target)>0);
+  }elsif ($assay_type eq "Hi-C"){
+    $experiment_target = "chromatin" unless (length($experiment_target)>0);
+  }elsif ($assay_type eq "whole genome sequencing assay"){
+    $experiment_target = "input DNA" unless (length($experiment_target)>0);
   }
 #  $strategy{"$library_strategy\t<$assay_type>\t$experiment_target $$record{library_source}"}++;
 #  next;
@@ -201,25 +224,9 @@ foreach my $record (@$json_text){
         secondaryAccession => $$record{secondary_study_accession}
       }
     );
-    #insert into elasticsearch
-    #trapping error: the code can continue to run even after the die or errors, and it also captures the errors or dieing words.
-#    my $id = "$$record{sample_accession}-$files[$i]";
+    %{$files{$filename}} = %es_doc;
+    #insert file entry into ES is delayed after validating experiment
 
-    eval{
-      $es->index(
-        index => $es_index_name,
-        type => 'file',
-        id => $filename,
-        body => \%es_doc
-      );
-    };
-    if (my $error = $@) {
-      die "error indexing file in $es_index_name index:".$error->{text};
-    }
-
-#    print Dumper(\%es_doc);
-#    print "\n";
-    $indexed_files{$filename} = 1;
     #collect information for experiments
     #assume experiment information would be the same across ENA based on the experiment accession
     my $exp_id = $$record{experiment_accession};
@@ -231,6 +238,7 @@ foreach my $record (@$json_text){
       my %exp_es = (
         accession => $exp_id,
         assayType => $assay_type,
+        experimentTarget => $experiment_target,
         sampleStorage => $$record{sample_storage},
         sampleStorageProcessing => $$record{sample_storage_processing},
         samplingToPreparationInterval => {
@@ -304,6 +312,9 @@ foreach my $record (@$json_text){
           #maxFragmentSizeSelectionRange => $$record{},
           #minFragmentSizeSelectionRange => $$record{},
         );
+        $section_info{librarySelection} = "RRBS" if (lc($section_info{librarySelection}) eq "reduced representation");
+        $section_info{librarySelection} = "RRBS" if (lc($section_info{librarySelection}) eq "size fractionation");
+        $section_info{librarySelection} = "WGBS" if (lc($section_info{librarySelection}) eq "whole genome");
         %{$exp_es{"BS-seq"}} = %section_info;
       }elsif($assay_type eq "ChIP-seq"){
         my $chip_protocol = $$record{chip_protocol};
@@ -354,10 +365,11 @@ foreach my $record (@$json_text){
             url => $library_generation_protocol,
             filename => $library_generation_protocol_filename
           },
-          librarySelection => $$record{library_selection}
+          librarySelection => lc($$record{library_selection})#lc function due to the allowed value is in all lower cases
           #maxFragmentSizeSelectionRange => $$record{},
           #minFragmentSizeSelectionRange => $$record{},
         );
+
         %{$exp_es{"WGS"}} = %section_info;
 #'microRNA profiling by high throughput sequencing'
 #'RNA-seq of coding RNA'
@@ -403,21 +415,10 @@ foreach my $record (@$json_text){
         );
         %{$exp_es{"RNA-seq"}} = %section_info;
       }
-      $experiments{$exp_id} = 1;
 
-      eval{
-        $es->index(
-          index => $es_index_name,
-          type => 'experiment',
-          id => $exp_id,
-          body => \%exp_es
-        );
-      };
-      if (my $error = $@) {
-        die "error indexing experiment in $es_index_name index:".$error->{text};
-      }
 
-    }
+      %{$experiments{$exp_id}} = %exp_es;
+    }#end of unless(exists $experiments{$exp_id})
 
     #collect information for datasets
     my $dataset_id = $$record{study_accession};
@@ -467,6 +468,58 @@ foreach my $record (@$json_text){
     %{$datasets{$dataset_id}} = %es_doc_dataset;
   }#end of for (@files)
 }
+
+#finish retrieving the data from ena, now start to validate experiments
+#if not valid, no insertion of experiment and related file(s) into ES
+my %validationResult = &validateTotalExperimentRecords(\%experiments,\@rulesets);
+my %exp_validation;
+foreach my $exp_id (sort {$a cmp $b} keys %experiments){
+  my %exp_es = %{$experiments{$exp_id}};
+  foreach my $ruleset(@rulesets){
+    if($validationResult{$ruleset}{detail}{$exp_id}{status} eq "error"){
+      print ERR "$exp_id\tExperiment error\t$validationResult{$ruleset}{detail}{$exp_id}{message}\n";
+    }else{
+      $exp_validation{$exp_id} = $standards{$ruleset};
+      $exp_es{standardMet} = $standards{$ruleset};
+      $exp_es{versionLastStandardMet} = $ruleset_version if ($exp_es{standardMet} eq "FAANG");
+      eval{
+        $es->index(
+          index => $es_index_name,
+          type => 'experiment',
+          id => $exp_id,
+          body => \%exp_es
+        );
+      };
+      if (my $error = $@) {
+        die "error indexing experiment in $es_index_name index:".$error->{text};
+      }
+      last;
+    }
+  }
+}
+
+#insert file into elasticsearch only when the corresponding experiment is valid
+#trapping error: the code can continue to run even after the die or errors, and it also captures the errors or dieing words.
+foreach my $file_id(keys %files){
+  my %es_doc = %{$files{$file_id}};
+  my $exp_id = $es_doc{experiment}{accession};
+  next unless (exists $exp_validation{$exp_id});
+  $es_doc{experiment}{assayType} = length($es_doc{experiment}{assayType})." letters";
+#  $es_doc{standardMet} = $exp_validation{$exp_id};
+  eval{
+    $es->index(
+      index => $es_index_name,
+      type => 'file',
+      id => $file_id,
+      body => \%es_doc
+    );
+  };
+  if (my $error = $@) {
+    die "error indexing file in $es_index_name index:".$error->{text};
+  }
+  $indexed_files{$file_id} = 1;
+}
+
 
 #now %datasets contain the following data:
 #under each dataset id key, the value is the corresponding dataset basic information
