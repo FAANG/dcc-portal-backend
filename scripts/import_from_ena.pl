@@ -118,7 +118,7 @@ foreach my $record (@$json_text){
       $assay_type = "DNase-Hypersensitivity seq";
     }else{
 #      print "Cannot predict assay_type for $$record{run_accession}\n";
-      next;
+#      next;
     }
   }
   $assay_type = "whole genome sequencing assay" if ($assay_type eq "whole genome sequencing");
@@ -473,6 +473,9 @@ foreach my $record (@$json_text){
 #if not valid, no insertion of experiment and related file(s) into ES
 my %validationResult = &validateTotalExperimentRecords(\%experiments,\@rulesets);
 my %exp_validation;
+print "Total experiment: ".scalar keys %experiments;
+#exit;
+OUTER:
 foreach my $exp_id (sort {$a cmp $b} keys %experiments){
   my %exp_es = %{$experiments{$exp_id}};
   foreach my $ruleset(@rulesets){
@@ -482,20 +485,33 @@ foreach my $exp_id (sort {$a cmp $b} keys %experiments){
       $exp_validation{$exp_id} = $standards{$ruleset};
       $exp_es{standardMet} = $standards{$ruleset};
       $exp_es{versionLastStandardMet} = $ruleset_version if ($exp_es{standardMet} eq "FAANG");
-      eval{
-        $es->index(
-          index => $es_index_name,
-          type => 'experiment',
-          id => $exp_id,
-          body => \%exp_es
-        );
-      };
-      if (my $error = $@) {
-        die "error indexing experiment in $es_index_name index:".$error->{text};
-      }
+      #move the insertion codes out the loop to allow insertion of even invalid experiments
+      #eval{
+      #  $es->index(
+      #    index => $es_index_name,
+      #    type => 'experiment',
+      #    id => $exp_id,
+      #    body => \%exp_es
+      #  );
+      #};
+      #if (my $error = $@) {
+      #  die "error indexing experiment in $es_index_name index:".$error->{text};
+      #}
       last;
     }
   }
+  eval{
+    $es->index(
+      index => $es_index_name,
+      type => 'experiment',
+      id => $exp_id,
+      body => \%exp_es
+    );
+  };
+  if (my $error = $@) {
+    die "error indexing experiment in $es_index_name index:".$error->{text};
+  }
+
 }
 
 #insert file into elasticsearch only when the corresponding experiment is valid
@@ -503,9 +519,8 @@ foreach my $exp_id (sort {$a cmp $b} keys %experiments){
 foreach my $file_id(keys %files){
   my %es_doc = %{$files{$file_id}};
   my $exp_id = $es_doc{experiment}{accession};
-  next unless (exists $exp_validation{$exp_id});
-  $es_doc{experiment}{assayType} = length($es_doc{experiment}{assayType})." letters";
-#  $es_doc{standardMet} = $exp_validation{$exp_id};
+#  next unless (exists $exp_validation{$exp_id}); #for now every file is allowed into the data portal
+  $es_doc{experiment}{standardMet} = $exp_validation{$exp_id} if (exists $exp_validation{$exp_id});
   eval{
     $es->index(
       index => $es_index_name,
@@ -554,6 +569,17 @@ foreach my $dataset_id (keys %datasets){
   @{$es_doc_dataset{centerName}} = keys %{$datasets{tmp}{$dataset_id}{centerName}};
   @{$es_doc_dataset{archive}} = sort {$a cmp $b} keys %{$datasets{tmp}{$dataset_id}{archive}};
 
+  #determine dataset standard using the lowest experiment standard
+  my $dataset_standard = "FAANG";
+  foreach my $exp_id(keys %{$datasets{tmp}{$dataset_id}{experiment}}){
+    if (exists $exp_validation{$exp_id}){
+      $dataset_standard = "FAANG Legacy" if ($exp_validation{$exp_id} eq "FAANG Legacy");
+    }else{ #not exists, that experiment invalid, then the whole dataset has no standard
+      $dataset_standard = "";
+      last;
+    }
+  }
+  $es_doc_dataset{standardMet} = $dataset_standard;
   #insert into ES
   eval{
     $es->index(

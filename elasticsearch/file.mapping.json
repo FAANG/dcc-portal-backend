@@ -112,6 +112,10 @@
                     "assayType": {
                         "type": "string",
                         "index": "not_analyzed"
+                    },
+                    "standardMet": {
+                        "type": "string",
+                        "index": "not_analyzed"
                     }
                 }
             },
