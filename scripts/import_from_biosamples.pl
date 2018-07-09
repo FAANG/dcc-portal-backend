@@ -34,6 +34,7 @@ my @knownCellCultureColumns = ("culture type","cell type","cell culture protocol
 @{$knownColumns{"cell culture"}} = @knownCellCultureColumns;
 my @knownCellLineColumns = ("cell line","biomaterial provider","catalogue number","number of passages","date established","publication","cell type","culture conditions","culture protocol","disease","karyotype");
 @{$knownColumns{"cell line"}} = @knownCellLineColumns;
+
 #the code to test getFilenameFromURL
 #my $url = "http://www.ncbi.nlm.nih.gov/pubmed/16215741";
 #$url = "ftp://ftp.faang.ebi.ac.uk/ftp/protocols/samples/KU_Pool_creation_protocol_20170523.pdf";
@@ -48,36 +49,33 @@ my @knownCellLineColumns = ("cell line","biomaterial provider","catalogue number
 #my $accession = "SAMEA5178418"; #organism with childOf
 #my $accession = "SAMEA4447317"; #organism with sameAs  
 
-#my %tmp = &fetch_single_record("SAMEA3540911"); #pool specimen
+#my $accession = "SAMEA3540911"; #pool specimen
 #my $accession = "SAMEA3540915"; #pool of specimen
 #my $accession = "SAMEA6641668"; #cell specimen
 #my $accession = "SAMEA4447551"; #cell culture
-#my $accession = "SAMEA3540916"; #cell line
 #my $accession = "SAMEA104626885";
 #my $accession = "SAMEA104618854";
 #test case for custom column
-#my $accession = "SAMEA4447799"; #orgamisn, parturition trait and lactation duration
+#my $accession = "SAMEA4447799"; #orgamism, parturition trait and lactation duration
 #my $accession = "SAMEA4451615"; #organism, environmental conditions and physiological conditions
 #my $accession = "SAMEA103988626"; #specimen from organism, physiological conditions
 #my $accession = "SAMEA4451620"; #specimen from organism, physiological conditions which contains lactation duration information
 
 #my $accession = "SAMEA4448136"; #organism without relationship   
 #my %tmp = &fetch_single_record($accession);
-#my $spec = $tmp{$accession};
 #print Dumper(\%tmp);
 #&process_pool_specimen(\%tmp);
-#exit;
 #&process_organisms(\%tmp);
 #&process_specimens(\%tmp);
-#exit;
 #&process_cell_lines(\%tmp);
 #&process_cell_cultures(\%tmp);
 #&process_cell_specimens(\%tmp);
+#exit;
 ##################################################################
 
 #the parameters expected to be retrieved from the command line
 #my ($project, $es_host, $es_index_name, $error_log);
-my ($es_host, $es_index_name, $error_log);
+my ($es_host, $es_index_name, $error_log, $legacy_flag);
 $error_log = "import_biosample_error.log";
 #Parse the command line options
 #Example: perl import_from_biosamples.pl -project faang -es_host <elasticsearch server> -es_index_name faang
@@ -85,7 +83,8 @@ GetOptions(
 #  'project=s' => \$project,
   'es_host=s' =>\$es_host,
   'es_index_name=s' =>\$es_index_name,
-  'error_log=s' =>\$error_log
+  'error_log=s' =>\$error_log,
+  'legacy' =>\$legacy_flag
 );
 #croak "Need -project e.g. faang" unless ( $project);
 croak "Need -es_host e.g. ves-hx-e4:9200" unless ( $es_host);
@@ -99,7 +98,8 @@ croak "Need -es_index_name e.g. faang, faang_build_1" unless ( $es_index_name);
 #production server
 #my $url = "https://www.ebi.ac.uk/biosamples/samples?filter=attr%3Aproject%3AFAANG";
 #my $url = "https://www.ebi.ac.uk/biosamples/samples?size=1000&sort=id,asc&filter=attr%3Aproject%3AFAANG";
-my $url = "https://www.ebi.ac.uk/biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG";
+
+my @legacy_animals = ("Gallus gallus","Ovis aries","Sus scrofa","Bos taurus","Capra hircus","Equus caballus");
 
 print "The information of invalid records will be stored in $error_log\n\n";
 open ERR,">$error_log";
@@ -142,7 +142,25 @@ my $pastTime = time;
 my $savedTime = time;
 
 #retrieve all FAANG BioSamples from BioSample database
-my @samples = &fetch_specimens_by_project();
+print "$legacy_flag\n";
+if($legacy_flag){
+  print "Importing legacy data\n";
+  my $url = "https://www.ebi.ac.uk/biosamples/samples?size=1000&filter=attr%3AOrganism%3A";
+  &fetch_records_by_species($url);
+  print "There are ".(scalar keys %organism)." organisms for Legacy data\n";
+  print "There are ".(scalar keys %specimen_from_organism)." specimens for Legacy data\n";
+  print "There are ".(scalar keys %cell_specimen)." cell specimens for Legacy data\n";
+  print "There are ".(scalar keys %cell_culture)." cell cultures for Legacy data\n";
+  print "There are ".(scalar keys %cell_line)." cell lines for Legacy data\n";
+  print "There are ".(scalar keys %pool_specimen)." pools of specimens for Legacy data\n";
+
+}else{
+  print "Importing FAANG data\n";
+  my $url = "https://www.ebi.ac.uk/biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG";
+  &fetch_records_by_project($url);
+}
+
+exit;
 #print "Finish retrieving data from BioSample at ".localtime."\n";
 ################################################################
 ## this section is to dump all current BioSample records into files 
@@ -803,7 +821,8 @@ sub extractCustomField(){
   return \%result;
 }
 #fetch specimen data from BioSample and populate six hashes according to their material type
-sub fetch_specimens_by_project {
+sub fetch_records_by_project {
+  my $url = $_[0];
   my %hash;
   my @samples = &fetch_biosamples_json($url);
 #  my @samples = &fetch_biosamples_json_by_page($url);
@@ -833,13 +852,57 @@ sub fetch_specimens_by_project {
     }
     $hash{$material}++;
   }
-#  my $total = 0;
+  my $total = 0;
   foreach my $type(keys %hash){
-#    $total += $hash{$type};
+    $total += $hash{$type};
     print "There are $hash{$type} $type records\n";
   }
-#  print "The sum is $total\n";
+  print "The sum is $total\n";
 }
+
+sub fetch_records_by_species {
+  my $url = $_[0];
+  foreach my $species(@legacy_animals){
+    my %hash;
+    my $finishedUrl = $url.$species;
+    $finishedUrl =~s/ /+/;
+    print "$finishedUrl\n";
+    my @samples = &fetch_biosamples_json($finishedUrl);
+    my $numSamples = scalar @samples;
+    print "there are $numSamples records for $species\n";
+    my $countFaang = 0;
+    foreach my $sample (@samples){
+      my $isFaangLabelled = &check_is_faang($sample);
+      if ($isFaangLabelled == 1){#if is FAANG, should be dealt with without -legacy option
+        $countFaang++;
+#        print "$$sample{accession} is a FAANG record\n";
+        next;
+      }
+#      print "Checking material information for non-FAANG record $$sample{accession}\n";
+      next unless (exists $$sample{characteristics});
+      next unless (exists $$sample{characteristics}{Material});
+      my $material = $$sample{characteristics}{Material}[0]{text};
+      next unless (defined($material));
+      if($material eq "organism"){
+        $organism{$$sample{accession}} = $sample;
+      }elsif($material eq "specimen from organism"){
+        $specimen_from_organism{$$sample{accession}} = $sample;
+      }elsif($material eq "cell specimen"){
+        $cell_specimen{$$sample{accession}} = $sample;
+      }elsif($material eq "cell culture"){
+        $cell_culture{$$sample{accession}} = $sample;
+      }elsif($material eq "cell line"){
+        $cell_line{$$sample{accession}} = $sample;
+      }elsif($material eq "pool of specimens"){
+        $pool_specimen{$$sample{accession}} = $sample;
+      }
+      $hash{$material}++;
+    }
+    print "$countFaang FAANG records skipped here\n";
+  }
+}
+#fetch data from BioSample and populate six hashes according to their material type
+
 #use BioSample API to retrieve BioSample records
 sub fetch_biosamples_json_by_page{
   my ($json_url) = @_;
@@ -853,7 +916,7 @@ sub fetch_biosamples_json_by_page{
   }
   # Store each additional page
   for (my $i = 1;$i<$pageNum;$i++){
-    my $pageUrl = $url."&page=$i";
+    my $pageUrl = $json_url."&page=$i";
     print "$pageUrl\n" if (($i%10)==0);
     $json_text = &fetch_json_by_url($pageUrl);# Get next page
     foreach my $item (@{$json_text->{_embedded}{samples}}){
@@ -865,23 +928,14 @@ sub fetch_biosamples_json_by_page{
 #use BioSample API to retrieve BioSample records
 sub fetch_biosamples_json{
   my ($json_url) = @_;
-
-  my $json_text = &fetch_json_by_url($json_url);
   my @biosamples;
-#  print Dumper($$json_text{page}); #contains total number, page size and page count
-
-  # Store the first page 
-  foreach my $item (@{$json_text->{_embedded}{samples}}){
-    push(@biosamples, $item);
-  }
-  # Store each additional page
-  while ($$json_text{_links}{next}{href}){  # Iterate until no more pages using HAL links
-    $json_text = &fetch_json_by_url($$json_text{_links}{next}{href});# Get next page
-#    print Dumper($json_text);
-#    exit;
+  while ($json_url && length($json_url)>0){
+    my $json_text = &fetch_json_by_url($json_url);
+    #print Dumper($$json_text{page}); #contains total number, page size and page count
     foreach my $item (@{$json_text->{_embedded}{samples}}){
-      push(@biosamples, $item);  
+      push(@biosamples, $item);
     }
+    $json_url = $$json_text{_links}{next}{href};
   }
   return @biosamples;
 }
