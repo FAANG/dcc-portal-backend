@@ -108,6 +108,8 @@ my %files;
 my %strategy;
 foreach my $record (@$json_text){
   #it seems that all records share the same set of fields, i.e. no need to check existance
+
+  #hard coded to try to convert to accepted terms/add new fixed fields in FAANG ruleset
   my $library_strategy = $$record{library_strategy};
   my $assay_type = $$record{assay_type};
   my $experiment_target = $$record{experiment_target};
@@ -172,6 +174,8 @@ foreach my $record (@$json_text){
 #    print "$$record{sample_accession}\t$$record{run_accession}\t$archive\t$file_type\t$source_type\n";
 #    print "$file\n";
     my $specimen_biosample_id = $$record{sample_accession};
+    #if the ena records contains biosample records which have not been in FAANG data portal (%biosample_ids) and not been reported before (%known_errors)
+    #then these records need to be reported
     unless (exists $biosample_ids{$specimen_biosample_id}){
       $new_errors{$$record{study_accession}}{$specimen_biosample_id} = 1 unless (exists $known_errors{$$record{study_accession}}{$specimen_biosample_id});
       next;
@@ -468,13 +472,17 @@ foreach my $record (@$json_text){
     %{$datasets{$dataset_id}} = %es_doc_dataset;
   }#end of for (@files)
 }
+print "The processed studies:\n";
+foreach my $dataset_id(keys %datasets){
+  next if ($dataset_id eq "tmp");
+  print "$dataset_id\n";
+}
 
 #finish retrieving the data from ena, now start to validate experiments
 #if not valid, no insertion of experiment and related file(s) into ES
 my %validationResult = &validateTotalExperimentRecords(\%experiments,\@rulesets);
 my %exp_validation;
-print "Total experiment: ".scalar keys %experiments;
-#exit;
+print "Total experiment: ".scalar keys %experiments."\n";
 OUTER:
 foreach my $exp_id (sort {$a cmp $b} keys %experiments){
   my %exp_es = %{$experiments{$exp_id}};

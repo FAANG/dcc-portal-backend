@@ -3,8 +3,17 @@
 use strict;
 use warnings;
 use JSON -support_by_pp;
+use Data::Dumper;
 
 require "misc.pl";
+
+#my $fh;
+#open $fh,"test_experiment_validation_result_small.txt";
+#open $fh,"test_experiment_validation_result.txt";
+#my $response = &readHandleIntoString($fh);
+#my $json = &decode_json($response);
+#my %result = &parseValidatationResult($$json{entities});
+#print Dumper(\%result);
 
 sub validateExperimentRecord(){
   my @data = @{$_[0]};
@@ -175,20 +184,35 @@ sub parseValidatationResult(){
   my %result;
   foreach my $entity(@entities){
     my %hash= %{$entity};
+#    print Dumper($entity);
     my $status = $hash{_outcome}{status};
     $summary{$status}++;
     my $id = $hash{id};
     $result{detail}{$id}{status} = $status;
+    next if ($status eq "pass");
     #if the warning/error related to columns is "not existing in the data" (e.g. no project column found), the following attribute iteration will not go through that column
+    #however the missing mandatory field information is recorded in the overall message
     my $backupMsg = "";
     my $tag = $status."s";
-    $backupMsg = join (";",@{$hash{_outcome}{$tag}}) if (exists $hash{_outcome}{$tag});
-#    print "$backupMsg\n";
+    $status = uc($status);
+    #print ("$id\t<$tag>\n");
+    my @outcomeMsgs = @{$hash{_outcome}{$tag}};
+    if (exists $hash{_outcome}{$tag}){
+      for (my $i=0;$i<scalar @outcomeMsgs;$i++){
+        $outcomeMsgs[$i] = "($status)$outcomeMsgs[$i]";
+      }
+    }
+    $backupMsg = join (";",@outcomeMsgs);
+#    print "$id $tag backup message: $backupMsg\n";
     my @msgs;
     my @attributes = @{$hash{attributes}};
+    my $bothTypeFlag = 0; #turn to 1 if containing both error and warning
+    my $containErrorFlag = 0;
     foreach my $attr (@attributes){
       my $fieldStatus = uc($$attr{_outcome}{status});
       next if ($fieldStatus eq "PASS");
+      $bothTypeFlag = 1 if ($fieldStatus ne $status);
+      $containErrorFlag = 1 if ($fieldStatus eq "ERROR");
       $tag = lc($fieldStatus)."s";
       my $msg = "$$attr{name}:".$$attr{_outcome}{$tag}[0];
       $errors{$msg}++ if($fieldStatus eq "ERROR");#only want error message not the warning
@@ -201,7 +225,10 @@ sub parseValidatationResult(){
       $totalMsg = $backupMsg;
 #      $errors{$backupMsg}++;
       $errors{$backupMsg}++ if($status eq "error");#only want error message
+    }elsif ($bothTypeFlag == 1 && $containErrorFlag == 0){
+      $totalMsg .= ";$backupMsg";
     }
+
     $result{detail}{$hash{id}}{message} = $totalMsg;
   }
   %{$result{summary}}=%summary;

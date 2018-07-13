@@ -142,7 +142,7 @@ my $pastTime = time;
 my $savedTime = time;
 
 #retrieve all FAANG BioSamples from BioSample database
-print "$legacy_flag\n";
+
 if($legacy_flag){
   print "Importing legacy data\n";
   my $url = "https://www.ebi.ac.uk/biosamples/samples?size=1000&filter=attr%3AOrganism%3A";
@@ -160,7 +160,6 @@ if($legacy_flag){
   &fetch_records_by_project($url);
 }
 
-exit;
 #print "Finish retrieving data from BioSample at ".localtime."\n";
 ################################################################
 ## this section is to dump all current BioSample records into files 
