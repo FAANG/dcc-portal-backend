@@ -53,6 +53,14 @@ croak "Need -es_host" unless ($es_host);
 #&convertFilesIntoExperiments(\%hash);
 #exit;
 
+#find related samples for the interested studies
+#my %manual_studies = (
+#  ERP021264 => 1,
+#  ERP108707 => 1,
+#  ERP023413 => 1,
+#  ERP104216 => 1
+#);
+
 #Import FAANG data from FAANG endpoint of ENA API
 #ENA API documentation available at: http://www.ebi.ac.uk/ena/portal/api/doc?format=pdf
 my $url = "https://www.ebi.ac.uk/ena/portal/api/search/?result=read_run&format=JSON&limit=0&dataPortal=faang&fields=all";
@@ -62,6 +70,10 @@ $browser->get( $url );
 my $content = $browser->content();
 my $json = new JSON;
 my $json_text = $json->decode($content);
+
+#foreach my $record (@$json_text){
+#  print "$$record{secondary_study_accession} : $$record{sample_accession}\n" if (exists $manual_studies{$$record{secondary_study_accession}});
+#}
 
 #the line below enable to investigate the fields used in ENA
 #&investigateENAfields($json_text);
@@ -473,22 +485,26 @@ foreach my $record (@$json_text){
   }#end of for (@files)
 }
 print "The processed studies:\n";
-foreach my $dataset_id(keys %datasets){
+my @dataset_ids = sort keys %datasets;
+for (my $i=0;$i<scalar @dataset_ids;$i++){
+  my $dataset_id = $dataset_ids[$i];
   next if ($dataset_id eq "tmp");
-  print "$dataset_id\n";
+  my %dataset_exps = %{$datasets{tmp}{$dataset_id}{experiment}};
+  my $num_exps = scalar keys %dataset_exps;
+  print "$i   $dataset_id has $num_exps experiments\n";
 }
 
 #finish retrieving the data from ena, now start to validate experiments
 #if not valid, no insertion of experiment and related file(s) into ES
 my %validationResult = &validateTotalExperimentRecords(\%experiments,\@rulesets);
 my %exp_validation;
-print "Total experiment: ".scalar keys %experiments."\n";
+#print "Total experiment: ".(scalar keys %experiments)."\n";
 OUTER:
 foreach my $exp_id (sort {$a cmp $b} keys %experiments){
   my %exp_es = %{$experiments{$exp_id}};
   foreach my $ruleset(@rulesets){
     if($validationResult{$ruleset}{detail}{$exp_id}{status} eq "error"){
-      print ERR "$exp_id\tExperiment error\t$validationResult{$ruleset}{detail}{$exp_id}{message}\n";
+      print ERR "$exp_id\tExperiment\terror\t$validationResult{$ruleset}{detail}{$exp_id}{message}\n";
     }else{
       $exp_validation{$exp_id} = $standards{$ruleset};
       $exp_es{standardMet} = $standards{$ruleset};
