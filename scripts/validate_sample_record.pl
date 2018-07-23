@@ -148,7 +148,14 @@ sub parseHash(){
   my $type = $_[2];
   my %tmp;
   if (exists $hash{ontologyTerms}){
-    %tmp = &parseOntologyTerm($hash{ontologyTerms}) if (length $hash{ontologyTerms});#in 5.12, length $var retur undef when $var undefined
+    #in 5.12, length $var retur undef when $var undefined
+    if (length $hash{ontologyTerms}){
+      my $tmp = $hash{ontologyTerms};
+      if (ref($tmp) eq 'ARRAY'){
+        $tmp = $$tmp[0];
+      }
+      %tmp = &parseOntologyTerm($tmp);
+    }
   }
   $tmp{units} = $hash{unit} if (exists $hash{unit});
   if (exists $hash{url}){
