@@ -922,6 +922,23 @@ sub fetch_biosamples_json{
     my $json_text = &fetch_json_by_url($json_url);
     #print Dumper($$json_text{page}); #contains total number, page size and page count
     foreach my $item (@{$json_text->{_embedded}{samples}}){
+      #temporary codes to deal with the decimal degrees curation overwritten by biosample curation
+      if ($$item{characteristics}{Material}[0]{text} eq "organism"){
+        my $flag = 0;
+        if (exists $$item{characteristics}{'birth location latitude'} &&
+            exists $$item{characteristics}{'birth location latitude'}[0]{unit} &&
+            $$item{characteristics}{'birth location latitude'}[0]{unit} eq 'decimal degree'){
+          $flag = 1;
+        }elsif (exists $$item{characteristics}{'birth location longitude'} &&
+            exists $$item{characteristics}{'birth location longitude'}[0]{unit} &&
+            $$item{characteristics}{'birth location longitude'}[0]{unit} eq 'decimal degree'){
+          $flag = 2;          
+        }
+        if ($flag > 0){
+          my $dcc_curated_url = "https://www.ebi.ac.uk/biosamples/samples/".$$item{accession}.".json?curationdomain=self.FAANG_DCC_curation";
+          $item = &fetch_json_by_url($dcc_curated_url);
+        }
+      }
       push(@biosamples, $item);
     }
     $json_url = $$json_text{_links}{next}{href};
