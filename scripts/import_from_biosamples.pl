@@ -270,7 +270,6 @@ sub process_specimens{
   foreach my $key (keys %specimen_from_organism){
     my $specimen = $specimen_from_organism{$key};
 
-#    my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},1)};
     my %relationships = &parse_relationship($specimen);
 
     my $url = $$specimen{characteristics}{"specimen collection protocol"}[0]{text};
@@ -448,7 +447,6 @@ sub process_cell_specimens{
   my %converted;
   foreach my $key (keys %cell_specimen){
     my $specimen = $cell_specimen{$key};
-#    my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},2)};
     my %relationships = &parse_relationship($specimen);
     
     my $url = $$specimen{characteristics}{"purification protocol"}[0]{text};
@@ -564,7 +562,6 @@ sub process_cell_lines{
   foreach my $key (keys %cell_line){
     my $specimen = $cell_line{$key};
     my %relationships = &parse_relationship($specimen);
-#    my %relationships = %{&parseRelationships($$specimen{_links}{relations}{href},3)};
 
     my $url;
     my $filename ;
@@ -741,9 +738,8 @@ sub populateBasicBiosampleInfo(){
   $result{name} = $$biosample{name};
   my $acc = $$biosample{accession};
   $result{biosampleId} = $acc;
+  #introduce an extra field called id_number which is used to sort biosample accessions in numeric order
   $result{"id_number"} = substr($acc,5);
-#  print "$acc\n$result{id_number}\n";
-#  exit;
   $result{description} = $$biosample{characteristics}{description}[0]{text};#V4.0 change
 #  $result{releaseDate} = $$biosample{releaseDate};
 #  $result{updateDate} = $$biosample{updateDate};
@@ -761,18 +757,12 @@ sub populateBasicBiosampleInfo(){
   foreach my $organization (@{$$biosample{organization}}){
     unless (exists $$organization{Name} || exists $$organization{Role} || exists $$organization{URL}){
       print ERR "no organization at all: $$biosample{accession}\n"; 
-#      print Dumper($organization);
     }
     my %tmp;
     $tmp{name} = $$organization{Name};
     $tmp{role} = &trim($$organization{Role});
     $tmp{URL} = $$organization{URL};
     push(@{$result{organization}}, \%tmp);
-#      push(@{$result{organization}}, {
-#                                    name => $$organization{Name}, 
-#                                    role => &trim($$organization{Role}), 
-#                                    URL => $$organization{URL}
-#                                    });
   }
   return \%result;
 }
@@ -902,7 +892,7 @@ sub fetch_records_by_species {
 }
 #fetch data from BioSample and populate six hashes according to their material type
 
-#use BioSample API to retrieve BioSample records
+#use BioSample API to retrieve BioSample records using pagination when the search function does not work properly
 sub fetch_biosamples_json_by_page{
   my ($json_url) = @_;
 
@@ -938,18 +928,7 @@ sub fetch_biosamples_json{
   }
   return @biosamples;
 }
-#move to misc.pl
-#sub fetch_json_by_url{
-#  my ($json_url) = @_;
 
-#  my $browser = WWW::Mechanize->new();
-  #$browser->show_progress(1);  # Enable for WWW::Mechanize GET logging
-#  $browser->get( $json_url );
-#  my $content = $browser->content();
-#  my $json = new JSON;
-#  my $json_text = $json->decode($content);
-#  return $json_text;
-#}
 #get one BioSample record with the given accession
 #the returned value has the same data structure as %derivedFromOrganism 
 #for development purpose: much quicker to get one record than get all records
@@ -986,50 +965,6 @@ sub clean_elasticsearch{
       id => $loaded_doc->{_id},
     );
   }
-}
-#get information for derivedFrom, sameAs and organism from the relations url and save in a hash 
-#which has key as one of derivedFrom, sameAs and organism and value as an array of BioSample accessions
-#two parameters: relationship url and level (1 for specimen from organism or 2 for all other specimen types)
-sub parseRelationships(){
-  my %relationships;
-  my ($url,$level) = @_;
-  #Pull in derived from accession from BioSamples.  #TODO This is slow, better way to do this?
-  #relations have links for derivedFrom, childOf, parentOf, sameAs etc. 
- 
-  my $relations = fetch_json_by_url($url);#e.g. url http://www.ebi.ac.uk/biosamples/api/samplesrelations/SAMEA3540911
-
-  my @derivedFromAccession;
-  my %organismAccession;
-  if($level >= 2){
-    my $derivedFrom = fetch_json_by_url($$relations{_links}{derivedFrom}{href}); #Specimen from Organism e.g. url http://www.ebi.ac.uk/biosamples/api/samplesrelations/SAMEA3540911/derivedFrom
-    foreach my $specimenFromOrganism(@{$$derivedFrom{_embedded}{samplesrelations}}){
-      push (@derivedFromAccession,$$specimenFromOrganism{accession});
-      next unless (exists $$specimenFromOrganism{_links}{derivedFrom}{href});#cell line may not have organism info
-      my $organismJson = fetch_json_by_url($$specimenFromOrganism{_links}{derivedFrom}{href});
-      foreach my $organism (@{$$organismJson{_embedded}{samplesrelations}}){
-        $organismAccession{$$organism{accession}} = 1;
-      }
-    }
-  }else{
-    my $derivedFrom = fetch_json_by_url($$relations{_links}{derivedFrom}{href});
-    push(@derivedFromAccession,$$derivedFrom{_embedded}{samplesrelations}[0]{accession});
-    $organismAccession{$$derivedFrom{_embedded}{samplesrelations}[0]{accession}}=1;
-  }
-  if($level == 3){
-    foreach my $acc(@derivedFromAccession){
-      my %tmp = &fetch_single_record($acc);
-      my $material = $tmp{$acc}{characteristics}{material}[0]{text};
-      $organismAccession{$acc} = 1 if ($material eq "organism");
-    }
-  }
-  @{$relationships{derivedFrom}} = @derivedFromAccession;
-  @{$relationships{organism}} = keys %organismAccession;
-  #Pull in sameas accession from BioSamples.  #TODO This is slow, better way to do this?
-  my $sameAs = fetch_json_by_url($$relations{_links}{sameAs}{href});
-  foreach my $sameasrelations (@{$$sameAs{_embedded}{samplesrelations}}){
-    push(@{$relationships{sameAs}}, $$sameasrelations{accession});
-  }
-  return \%relationships;
 }
 
 #convert seconds into hours, minutes and seconds, for profiling purpose
