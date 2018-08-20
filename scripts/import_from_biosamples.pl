@@ -275,8 +275,11 @@ sub process_specimens{
     my $url = $$specimen{characteristics}{"specimen collection protocol"}[0]{text};
     my $filename = &getFilenameFromURL($url);
 #    print "$filename\n";
-    my @organisms = keys %{$relationships{derivedFrom}};
-    my $organismAccession = $organisms[0];
+    my $organismAccession = "";
+    if (exists $relationships{derivedFrom}){
+      my @organisms = keys %{$relationships{derivedFrom}};
+      $organismAccession = $organisms[0];
+    }
     $specimen_organism_relationship{$key} = $organismAccession;
     my %es_doc = (
       derivedFrom => $organismAccession,
@@ -340,7 +343,6 @@ sub process_specimens{
       push(@{$es_doc{specimenFromOrganism}{healthStatusAtCollection}}, {text => $$healthStatusAtCollection{text}, ontologyTerms => $$healthStatusAtCollection{ontologyTerms}[0]});
     }
     @{$es_doc{sameAs}} = keys %{$relationships{sameAs}} if (exists $relationships{sameAs});
-#    my @organisms = keys %{$relationships{organism}} 
 
     $es_doc{organism}=$organismInfoForSpecimen{$organismAccession};
     $organismReferredBySpecimen{$organismAccession}++;
@@ -456,15 +458,7 @@ sub process_cell_specimens{
     #therefore two steps needed to get organism: specimen from organism(sfo) first, then organism
     my @derivedFrom = keys %{$relationships{derivedFrom}};
     my $specimenFromOrganismAccession = $derivedFrom[0];
-#    my %sfo_data;
-#    if (exists $specimen_from_organism{$specimenFromOrganismAccession}){
-#      %sfo_data = %{$specimen_from_organism{$specimenFromOrganismAccession}};
-#    }else{
-#      my %tmp = &fetch_single_record($specimenFromOrganismAccession);
-#      %sfo_data = %{$tmp{$specimenFromOrganismAccession}};
-#    }
-#    my %relOrganism = &parse_relationship(\%sfo_data);
-#    my @organisms = keys %{$relOrganism{derivedFrom}};
+
     my $organismAccession = "";
     if (exists $specimen_organism_relationship{$specimenFromOrganismAccession}){
       $organismAccession = $specimen_organism_relationship{$specimenFromOrganismAccession};
@@ -514,6 +508,7 @@ sub process_cell_cultures{
     #therefore two steps needed to get organism: specimen from organism(sfo) first, then organism
     my @derivedFrom = keys %{$relationships{derivedFrom}};
     my $derivedFromAccession = $derivedFrom[0];
+
     my $organismAccession = "";
     if (exists $specimen_organism_relationship{$derivedFromAccession}){
       $organismAccession = $specimen_organism_relationship{$derivedFromAccession};
@@ -1051,10 +1046,9 @@ sub check_is_faang(){
 
 sub parse_relationship(){
   my %result;
-#  print Dumper($_[0]);
+  #relationships could be optional though in SampleTab submission way (current way) at least one group member/group relationship
   unless (exists $_[0]{relationships}){
-    print ERR "No relationships for $_[0]{accession}\n";
-#    return %result;
+    return %result;
   }
   my @relations = @{$_[0]{relationships}};
   my $accession = $_[0]{accession};
