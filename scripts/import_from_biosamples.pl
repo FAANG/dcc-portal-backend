@@ -63,7 +63,10 @@ my @knownCellLineColumns = ("cell line","biomaterial provider","catalogue number
 
 #my $accession = "SAMEA4448136"; #organism without relationship   
 #my %tmp = &fetch_single_record($accession);
-#print Dumper(\%tmp);
+#my $etag = &fetch_etag_biosample_by_accession($accession);
+#print "etag: $etag\n";
+#my $changed = &is_etag_changed($accession, "064d2ef7238dcedb87be8ac097d00ef7e");
+#exit;
 #&process_pool_specimen(\%tmp);
 #&process_organisms(\%tmp);
 #&process_specimens(\%tmp);
@@ -89,6 +92,8 @@ GetOptions(
 #croak "Need -project e.g. faang" unless ( $project);
 croak "Need -es_host e.g. ves-hx-e4:9200" unless ( $es_host);
 croak "Need -es_index_name e.g. faang, faang_build_1" unless ( $es_index_name);
+
+my $baseUrl = "https://wwwdev.ebi.ac.uk/";
 
 
 #legacy API
@@ -141,11 +146,16 @@ print "The program starts at ".localtime."\n";
 my $pastTime = time;
 my $savedTime = time;
 
+my %etags = &get_existing_etags();
+print "There are ".(scalar keys %etags)." records with etag in ES\n";
+print "Finish retrieving existing etags at ".localtime."\n";
+
 #retrieve all FAANG BioSamples from BioSample database
 
 if($legacy_flag){
   print "Importing legacy data\n";
-  my $url = "https://www.ebi.ac.uk/biosamples/samples?size=1000&filter=attr%3AOrganism%3A";
+
+  my $url = $baseUrl."biosamples/samples?size=1000&filter=attr%3AOrganism%3A";
   &fetch_records_by_species($url);
   print "There are ".(scalar keys %organism)." organisms for Legacy data\n";
   print "There are ".(scalar keys %specimen_from_organism)." specimens for Legacy data\n";
@@ -156,8 +166,10 @@ if($legacy_flag){
 
 }else{
   print "Importing FAANG data\n";
-  my $url = "https://www.ebi.ac.uk/biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG";
-  &fetch_records_by_project($url);
+  my $url = $baseUrl."biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG";
+  #&fetch_records_by_project($url);
+  &fetch_records_by_project_via_etag($url);
+
 }
 
 #print "Finish retrieving data from BioSample at ".localtime."\n";
@@ -258,8 +270,8 @@ foreach my $acc(keys %union){
 clean_elasticsearch('specimen');
 clean_elasticsearch('organism');
 $current = time;
-#print "Total ";
-#&convertSeconds($current - $savedTime);
+print "Total ";
+&convertSeconds($current - $savedTime);
 print "The program ends at ".localtime."\n";
 
 
@@ -733,6 +745,7 @@ sub populateBasicBiosampleInfo(){
   $result{name} = $$biosample{name};
   my $acc = $$biosample{accession};
   $result{biosampleId} = $acc;
+  $result{etag} = $$biosample{etag};
   #introduce an extra field called id_number which is used to sort biosample accessions in numeric order
   $result{"id_number"} = substr($acc,5);
   $result{description} = $$biosample{characteristics}{description}[0]{text};#V4.0 change
@@ -844,6 +857,66 @@ sub fetch_records_by_project {
   print "The sum is $total\n";
 }
 
+sub fetch_records_by_project_via_etag(){
+  my ($url) = @_;
+  my @biosample_ids = &fetch_biosamples_ids($url);
+  print "Finish getting the list of biosample ids from archive at ".localtime."\n";
+  my %hash;
+  foreach my $biosampleId(@biosample_ids){
+    my $changed = 1;
+    if(exists $etags{$biosampleId}){
+      $changed = &is_etag_changed($biosampleId,$etags{$biosampleId})
+    }
+    #same etag, i.e. no change, no need to update/index the sample
+    if ($changed == 0){ 
+      #indicate this biosample has been indexed
+      $indexed_samples{$biosampleId}=1;
+      #jump to next record
+      next;
+    }
+
+    my %tmp = &fetch_single_record($biosampleId);
+    my $newEtag = &fetch_etag_biosample_by_accession($biosampleId);
+    print "$biosampleId: old etag $etags{$biosampleId}  new etag  $newEtag\n";
+    next;
+    my %single = %{$tmp{$biosampleId}};
+    $single{etag} = $newEtag;
+    my $isFaangLabelled = &check_is_faang(\%single);
+
+    next if ($isFaangLabelled == 0);
+    my $material = $single{characteristics}{Material}[0]{text};
+
+    if($material eq "organism"){
+      $organism{$biosampleId} = \%single;
+    }
+    if($material eq "specimen from organism"){
+      $specimen_from_organism{$biosampleId} = \%single;
+    }
+    if($material eq "cell specimen"){
+      $cell_specimen{$biosampleId} = \%single;
+    }
+    if($material eq "cell culture"){
+      $cell_culture{$biosampleId} = \%single;
+    }
+    if($material eq "cell line"){
+      $cell_line{$biosampleId} = \%single;
+    }
+    if($material eq "pool of specimens"){
+      $pool_specimen{$biosampleId} = \%single;
+    }
+    $hash{$material}++;
+  }
+  my $total = 0;
+  foreach my $type(keys %hash){
+    $total += $hash{$type};
+    print "There are $hash{$type} $type records\n";
+  }
+  print "The sum is $total\n";
+  print "Finish comparing etags and retrieving necessary records at ".localtime."\n";
+  exit;
+}
+
+
 sub fetch_records_by_species {
   my $url = $_[0];
   foreach my $species(@legacy_animals){
@@ -930,7 +1003,7 @@ sub fetch_biosamples_json{
           $flag = 2;          
         }
         if ($flag > 0){
-          my $dcc_curated_url = "https://www.ebi.ac.uk/biosamples/samples/".$$item{accession}.".json?curationdomain=self.FAANG_DCC_curation";
+          my $dcc_curated_url = $baseUrl."biosamples/samples/".$$item{accession}.".json?curationdomain=self.FAANG_DCC_curation";
           $item = &fetch_json_by_url($dcc_curated_url);
         }
       }
@@ -941,13 +1014,26 @@ sub fetch_biosamples_json{
   return @biosamples;
 }
 
+sub fetch_biosamples_ids(){
+  my ($url) = @_;
+  my @ids;
+  while ($url && length($url)>0){
+    my $json_text = &fetch_json_by_url($url);
+    foreach my $item (@{$json_text->{_embedded}{samples}}){
+      push (@ids, $$item{accession});
+    }
+    $url = $$json_text{_links}{next}{href};
+  }
+  return @ids;
+}
+
 #get one BioSample record with the given accession
 #the returned value has the same data structure as %derivedFromOrganism 
 #for development purpose: much quicker to get one record than get all records
 sub fetch_single_record{
   my ($accession) = @_;
 #  my $url = "http://www.ebi.ac.uk/biosamples/api/samples/$accession"; #old API
-  my $url = "http://www.ebi.ac.uk/biosamples/samples/$accession";
+  my $url = $baseUrl."biosamples/samples/$accession";
   my $json_text = &fetch_json_by_url($url);
   my %hash;
   $hash{$json_text->{accession}} = $json_text;
@@ -1068,4 +1154,41 @@ sub parseDate(){
     return $1;
   }
   return $isoDate;
+}
+#query the ES server to retrieve all stored etags
+sub get_existing_etags(){
+  my %etags;
+  my $size = 100;
+  my $urlPrefix = "http://$es_host/$es_index_name/";
+  #sort is extremely important, otherwise the pagination does not work properly
+  my $urlSuffix = "/_search?_source=biosampleId,etag&sort=biosampleId&size=$size";
+  #BioSample splits into organism specimen
+  my @types = qw/organism specimen/;
+  foreach my $type(@types){
+    my $url = "$urlPrefix$type$urlSuffix";
+    my $json_text = fetch_json_by_url($url);
+    my $total = $$json_text{hits}{total};
+    my $numPartition = ($total - $total%$size)/$size;
+    #first time introducing etag, the etag could be empty
+    foreach my $item(@{$$json_text{hits}{hits}}){
+      if (exists $$item{_source}{etag}){
+        my $biosampleId = $$item{_source}{biosampleId};
+        my $etag = $$item{_source}{etag};
+        $etags{$biosampleId}=$etag;
+      }
+    }
+    for (my $i=1;$i<=$numPartition;$i++){
+      my $from = $i*$size;
+      my $newUrl = $url."&from=$from";
+      $json_text = fetch_json_by_url($newUrl);
+      foreach my $item(@{$$json_text{hits}{hits}}){
+        if (exists $$item{_source}{etag}){
+          my $biosampleId = $$item{_source}{biosampleId};
+          my $etag = $$item{_source}{etag};
+          $etags{$biosampleId}=$etag;
+        }
+      }
+    }
+  }
+  return %etags;
 }

@@ -1,15 +1,17 @@
 #!/usr/bin/env perl
-#version: 1.1.2
-#last update: 10/04/2018
-#1.1.0 add parseCSVline
+#version: 1.2
+#last update: 23/08/2018
+#1.1 add parseCSVline
 #1.1.1 improve trim function
 #1.1.2 add getFilenameFromURL
+#1.2 add code to retrieve etag according to BioSample id and check whether etag changes 
 
 use strict;
 use warnings;
 use JSON;
 use LWP::UserAgent;
 use WWW::Mechanize;
+use HTTP::Headers;
 
 #####Testing codes for parseCSVline
 #my @strs;
@@ -103,8 +105,32 @@ sub parseCSVline(){
     }
     return @result;
 }
+
+sub is_etag_changed(){
+  my ($accession, $etag) = @_;
+  my $url = "http://wwwdev.ebi.ac.uk/biosamples/samples/$accession";
+  my $browser = WWW::Mechanize->new();
+  $browser->add_header(Accept => 'application/json');
+  $browser->add_header("If-None-Match" => $etag);
+  $browser->get( $url );
+  my $status = $browser->status();
+  return 0 if ($status == 304);
+  return 1;
+}
+
+#get the etag header for the given accession
+sub fetch_etag_biosample_by_accession(){
+  my ($accession) = @_;
+  my $url = "http://wwwdev.ebi.ac.uk/biosamples/samples/$accession";
+  my $browser = WWW::Mechanize->new();
+  $browser->get( $url );
+#  print "Status: ".$browser->status()."\n";
+  my $etag = $browser->response()->headers()->header('etag');
+  return $etag;
+}
+
 #example usage: the links section of JSON on ebi sites
-sub fetch_json_by_url{
+sub fetch_json_by_url(){
   my ($json_url) = @_;
 
   my $browser = WWW::Mechanize->new();
