@@ -395,8 +395,10 @@ foreach my $record (@$json_text){
       #in the current ruleset, all unprocessed data should belong to RNA-Seq
       }else{
         #no corresponding column found in ENA
-        #my $rna_3_adapter_protocol = $$record{};
-        #my $rna_3_adapter_protocol_filename = &getFilenameFromURL($rna_3_adapter_protocol);
+        my $rna_3_adapter_protocol = $$record{rna_prep_3_protocol};
+        my $rna_3_adapter_protocol_filename = &getFilenameFromURL($rna_3_adapter_protocol);
+        my $rna_5_adapter_protocol = $$record{rna_prep_5_protocol};
+        my $rna_5_adapter_protocol_filename = &getFilenameFromURL($rna_5_adapter_protocol);
         my $library_pcr_protocol = $$record{library_pcr_isolation_protocol};
         my $library_pcr_protocol_filename = &getFilenameFromURL($library_pcr_protocol);
         my $rt_protocol = $$record{rt_prep_protocol};
@@ -404,14 +406,14 @@ foreach my $record (@$json_text){
         my $library_generation_protocol = $$record{library_gen_protocol};
         my $library_generation_protocol_filename = &getFilenameFromURL($library_generation_protocol);
         %section_info = (
-          #rnaPreparation3AdapterLigationProtocol => {
-          #  url => $rna_3_adapter_protocol,
-          #  filename => $rna_3_adapter_protocol_filename
-          #},
-          #rnaPreparation5AdapterLigationProtocol => {
-          #  url => $rna_5_adapter_protocol,
-          #  filename => $rna_5_adapter_protocol_filename
-          #},
+          rnaPreparation3AdapterLigationProtocol => {
+            url => $rna_3_adapter_protocol,
+            filename => $rna_3_adapter_protocol_filename
+          },
+          rnaPreparation5AdapterLigationProtocol => {
+            url => $rna_5_adapter_protocol,
+            filename => $rna_5_adapter_protocol_filename
+          },
           libraryGenerationPcrProductIsolationProtocol => {
             url => $library_pcr_protocol,
             filename => $library_pcr_protocol_filename

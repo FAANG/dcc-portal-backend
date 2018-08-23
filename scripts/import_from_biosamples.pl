@@ -877,8 +877,6 @@ sub fetch_records_by_project_via_etag(){
 
     my %tmp = &fetch_single_record($biosampleId);
     my $newEtag = &fetch_etag_biosample_by_accession($biosampleId);
-    print "$biosampleId: old etag $etags{$biosampleId}  new etag  $newEtag\n";
-    next;
     my %single = %{$tmp{$biosampleId}};
     $single{etag} = $newEtag;
     my $isFaangLabelled = &check_is_faang(\%single);
@@ -913,7 +911,6 @@ sub fetch_records_by_project_via_etag(){
   }
   print "The sum is $total\n";
   print "Finish comparing etags and retrieving necessary records at ".localtime."\n";
-  exit;
 }
 
 
