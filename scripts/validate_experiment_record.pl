@@ -133,6 +133,8 @@ sub parse(){
       #https://github.com/FAANG/faang-metadata/blob/master/rulesets/faang_samples.metadata_rules.json
       $tmp{name} = "Sample Description" if ($key eq "description");
       $tmp{name} = "Derived from" if ($key eq "derivedFrom");
+      $tmp{name} = "rna purity - 260:280 ratio" if ($key eq "rnaPurity260280ratio");
+      $tmp{name} = "rna purity - 260:230 ratio" if ($key eq "rnaPurity260230ratio");
       $tmp{value} = $data{$key};
       push(@attr,\%tmp);
     }
@@ -158,6 +160,8 @@ sub parseOntologyTerm(){
 sub parseHash(){
   my %hash = %{$_[0]};
   my $key = $_[1];
+  $key = "rna preparation 3' adapter ligation protocol" if ($key eq "rnaPreparation3AdapterLigationProtocol");
+  $key = "rna preparation 5' adapter ligation protocol" if ($key eq "rnaPreparation5AdapterLigationProtocol");
   my %tmp;
   if (exists $hash{ontologyTerms}){
     %tmp = &parseOntologyTerm($hash{ontologyTerms}) if (length $hash{ontologyTerms});#in 5.12, length $var retur undef when $var undefined

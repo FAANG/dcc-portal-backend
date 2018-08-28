@@ -20,13 +20,6 @@ require "misc.pl";
 #  print "\n";
 #}
 
-#my $pipe;
-#open $pipe,"SAMEA3540911_ena.json" or die "Could not find the file";
-#convert into json which is stored in a hash, return the ref to the hash
-#my $json_text = decode_json(&readHandleIntoString($pipe));
-#print Dumper($json);
-#exit;
-
 my $es_host;
 my $es_index_name = 'faang';
 my $error_log = "import_ena_error.log";
@@ -70,6 +63,10 @@ $browser->get( $url );
 my $content = $browser->content();
 my $json = new JSON;
 my $json_text = $json->decode($content);
+#debug code
+#my $fh;
+#open $fh,"test_api_result.txt";
+#my $json_text = &readHandleIntoJson($fh);
 
 #foreach my $record (@$json_text){
 #  print "$$record{secondary_study_accession} : $$record{sample_accession}\n" if (exists $manual_studies{$$record{secondary_study_accession}});
@@ -82,6 +79,7 @@ my $es = Search::Elasticsearch->new(nodes => $es_host, client => '1_0::Direct');
 
 #get specimen information from current elasticsearch server
 #which means that this script must be executed after import_from_biosample.pl
+
 my %biosample_ids = &getAllSpecimenIDs();
 croak "BioSample IDs were not imported" unless (%biosample_ids);
 #print "Number of specimen in ES: ".(scalar keys %biosample_ids)."\n";
@@ -433,7 +431,6 @@ foreach my $record (@$json_text){
         );
         %{$exp_es{"RNA-seq"}} = %section_info;
       }
-
 
       %{$experiments{$exp_id}} = %exp_es;
     }#end of unless(exists $experiments{$exp_id})
