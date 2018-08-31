@@ -63,10 +63,15 @@ $browser->get( $url );
 my $content = $browser->content();
 my $json = new JSON;
 my $json_text = $json->decode($content);
+
 #debug code
 #my $fh;
 #open $fh,"test_api_result.txt";
+#open $fh,"local_ena_cache.txt"; #local copy of ena api result
+#open $fh,"prjeb8784-experiment-api.json"; #for dataset prjeb8784
 #my $json_text = &readHandleIntoJson($fh);
+#print Dumper($json_text);
+#exit;
 
 #foreach my $record (@$json_text){
 #  print "$$record{secondary_study_accession} : $$record{sample_accession}\n" if (exists $manual_studies{$$record{secondary_study_accession}});
@@ -77,7 +82,7 @@ my $json_text = $json->decode($content);
 
 my $es = Search::Elasticsearch->new(nodes => $es_host, client => '1_0::Direct'); #client option to make it compatiable with elasticsearch 1.x APIs
 
-#get specimen information from current elasticsearch server
+#get specimen information from current elasticsearch server which will be used to calculate species for dataset etc.
 #which means that this script must be executed after import_from_biosample.pl
 
 my %biosample_ids = &getAllSpecimenIDs();
@@ -164,7 +169,7 @@ foreach my $record (@$json_text){
   }
   #by-product of finding specimen with unprocessed DNA files
   if ($file_type eq ""){
-#    print "BioSample record $$record{sample_accession} with $$record{run_accession} does not have any processed DNA files\n";
+#    print "BioSample record $$record{sample_accession} with $$record{run_accession} (experiment $$record{experiment_accession}) does not have any processed DNA files\n";
     next; #no file has been found
   }
   my $archive;
@@ -483,6 +488,7 @@ foreach my $record (@$json_text){
     %{$datasets{$dataset_id}} = %es_doc_dataset;
   }#end of for (@files)
 }
+
 print "The processed studies:\n";
 my @dataset_ids = sort keys %datasets;
 for (my $i=0;$i<scalar @dataset_ids;$i++){
@@ -540,6 +546,7 @@ foreach my $exp_id (sort {$a cmp $b} keys %experiments){
 #insert file into elasticsearch only when the corresponding experiment is valid
 #trapping error: the code can continue to run even after the die or errors, and it also captures the errors or dieing words.
 foreach my $file_id(keys %files){
+  next;
   my %es_doc = %{$files{$file_id}};
   my $exp_id = $es_doc{experiment}{accession};
 #  next unless (exists $exp_validation{$exp_id}); #for now every file is allowed into the data portal
@@ -558,7 +565,6 @@ foreach my $file_id(keys %files){
   $indexed_files{$file_id} = 1;
 }
 
-
 #now %datasets contain the following data:
 #under each dataset id key, the value is the corresponding dataset basic information
 #under the conserved tmp key, the value is another hash with dataset id as keys, and another hash having specimen, file, experiment information
@@ -566,6 +572,20 @@ foreach my $file_id(keys %files){
 foreach my $dataset_id (keys %datasets){
   next if ($dataset_id eq "tmp");
   my %es_doc_dataset = %{$datasets{$dataset_id}};
+  my %exps = %{$datasets{tmp}{$dataset_id}{experiment}};
+  my %only_valid_exps;
+  #determine dataset standard using the lowest experiment standard
+  my $dataset_standard = "FAANG";
+  foreach my $exp_id(keys %exps){
+    if (exists $exp_validation{$exp_id}){
+      $dataset_standard = "FAANG Legacy" if ($exp_validation{$exp_id} eq "FAANG Legacy");
+      $only_valid_exps{$exp_id} = $exps{$exp_id};
+    }else{ #not valid at all
+#      print "Invalid experiment $exp_id, excluded from $dataset_id\n";
+    }
+  }
+  $es_doc_dataset{standardMet} = $dataset_standard;
+#  print "Stardard $dataset_standard\n".(scalar keys %only_valid_exps)." valid experiments\n";
   #convert some sub-element from hash to array (hash to guarantee uniqueness)
   my %specimens = %{$datasets{tmp}{$dataset_id}{specimen}};
   my %species;
@@ -587,22 +607,11 @@ foreach my $dataset_id (keys %datasets){
   @{$es_doc_dataset{species}} = values %species;
 #  my @fileArr = values %{$datasets{tmp}{$dataset_id}{file}};
   @{$es_doc_dataset{file}} = sort {$$a{name} cmp $$b{name}} values %{$datasets{tmp}{$dataset_id}{file}};
-  @{$es_doc_dataset{experiment}} = values %{$datasets{tmp}{$dataset_id}{experiment}};
+  @{$es_doc_dataset{experiment}} = values %only_valid_exps;
   @{$es_doc_dataset{instrument}} = keys %{$datasets{tmp}{$dataset_id}{instrument}};
   @{$es_doc_dataset{centerName}} = keys %{$datasets{tmp}{$dataset_id}{centerName}};
   @{$es_doc_dataset{archive}} = sort {$a cmp $b} keys %{$datasets{tmp}{$dataset_id}{archive}};
 
-  #determine dataset standard using the lowest experiment standard
-  my $dataset_standard = "FAANG";
-  foreach my $exp_id(keys %{$datasets{tmp}{$dataset_id}{experiment}}){
-    if (exists $exp_validation{$exp_id}){
-      $dataset_standard = "FAANG Legacy" if ($exp_validation{$exp_id} eq "FAANG Legacy");
-    }else{ #not exists, that experiment invalid, then the whole dataset has no standard
-      $dataset_standard = "";
-      last;
-    }
-  }
-  $es_doc_dataset{standardMet} = $dataset_standard;
   #insert into ES
   eval{
     $es->index(
@@ -616,6 +625,7 @@ foreach my $dataset_id (keys %datasets){
     die "error indexing dataset in $es_index_name index:".$error->{text};
   }
 }
+
 #print Dumper(\%strategy);
 #exit;
 
