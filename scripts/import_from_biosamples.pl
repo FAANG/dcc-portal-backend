@@ -93,7 +93,8 @@ GetOptions(
 croak "Need -es_host e.g. ves-hx-e4:9200" unless ( $es_host);
 croak "Need -es_index_name e.g. faang, faang_build_1" unless ( $es_index_name);
 
-my $baseUrl = "https://wwwdev.ebi.ac.uk/";
+#my $baseUrl = "https://wwwdev.ebi.ac.uk/";
+my $baseUrl = "https://www.ebi.ac.uk/";
 
 
 #legacy API
@@ -167,8 +168,8 @@ if($legacy_flag){
 }else{
   print "Importing FAANG data\n";
   my $url = $baseUrl."biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG";
-  #&fetch_records_by_project($url);
-  &fetch_records_by_project_via_etag($url);
+  &fetch_records_by_project($url);
+  #&fetch_records_by_project_via_etag($url);
 
 }
 
@@ -200,7 +201,7 @@ $pastTime = $current;
 my $number_specimens_check = keys %specimen_from_organism;
 croak "Did not obtain any specimens from BioSamples" unless ( $number_specimens_check > 0);
 #organism needs to be processed first which populates %organismInfoForSpecimen
-#print "Indexing organism starts at ".localtime."\n";
+print "Indexing organism starts at ".localtime."\n";
 &process_organisms(\%organism);
 $current = time;
 &convertSeconds($current - $pastTime);
@@ -818,7 +819,7 @@ sub extractCustomField(){
   return \%result;
 }
 #fetch specimen data from BioSample and populate six hashes according to their material type
-sub fetch_records_by_project {
+sub fetch_records_by_project(){
   my $url = $_[0];
   my %hash;
   my @samples = &fetch_biosamples_json($url);
