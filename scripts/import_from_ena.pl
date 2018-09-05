@@ -13,13 +13,6 @@ use Data::Dumper;
 require "validate_experiment_record.pl";
 require "misc.pl";
 
-#my @sizes = qw/822938429 204 3475424256 107868/;
-#foreach my $size(@sizes){
-#  print "$size\t";
-#  print &convertReadable($size);
-#  print "\n";
-#}
-
 my $es_host;
 my $es_index_name = 'faang';
 my $error_log = "import_ena_error.log";
@@ -32,27 +25,6 @@ GetOptions(
 
 croak "Need -es_host" unless ($es_host);
 #print "Working on $es_index_name at $es_host\n";
-
-#my @acc = qw/ERR1017174_1 ERR1017174_2 ERR1017177_1 ERR1017177_2 ERR789177/;
-#my %hash;
-#foreach my $acc(@acc){
-#  my $cmd = "curl $es_host/$es_index_name/file/$acc|";
-#  my $fh;
-#  open $fh, $cmd;
-#  my $result = &readHandleIntoJson($fh);
-#  $hash{$acc} = $$result{_source};
-#}
-#print Dumper(\%hash);
-#&convertFilesIntoExperiments(\%hash);
-#exit;
-
-#find related samples for the interested studies
-#my %manual_studies = (
-#  ERP021264 => 1,
-#  ERP108707 => 1,
-#  ERP023413 => 1,
-#  ERP104216 => 1
-#);
 
 #Import FAANG data from FAANG endpoint of ENA API
 #ENA API documentation available at: http://www.ebi.ac.uk/ena/portal/api/doc?format=pdf
@@ -73,9 +45,6 @@ my $json_text = $json->decode($content);
 #print Dumper($json_text);
 #exit;
 
-#foreach my $record (@$json_text){
-#  print "$$record{secondary_study_accession} : $$record{sample_accession}\n" if (exists $manual_studies{$$record{secondary_study_accession}});
-#}
 
 #the line below enable to investigate the fields used in ENA
 #&investigateENAfields($json_text);
@@ -544,7 +513,7 @@ foreach my $exp_id (sort {$a cmp $b} keys %experiments){
 foreach my $file_id(keys %files){
   my %es_doc = %{$files{$file_id}};
   my $exp_id = $es_doc{experiment}{accession};
-#  next unless (exists $exp_validation{$exp_id}); #for now every file is allowed into the data portal
+  next unless (exists $exp_validation{$exp_id}); #for now only files linked to valid experiments are allowed into the data portal
   $es_doc{experiment}{standardMet} = $exp_validation{$exp_id} if (exists $exp_validation{$exp_id});
   eval{
     $es->index(
@@ -559,6 +528,7 @@ foreach my $file_id(keys %files){
   }
   $indexed_files{$file_id} = 1;
 }
+
 #now %datasets contain the following data:
 #under each dataset id key, the value is the corresponding dataset basic information
 #under the conserved tmp key, the value is another hash with dataset id as keys, and another hash having specimen, file, experiment information
@@ -605,8 +575,13 @@ foreach my $dataset_id (keys %datasets){
   }
   @{$es_doc_dataset{specimen}} = sort {$$a{biosampleId} cmp $$b{biosampleId}} @specimens;
   @{$es_doc_dataset{species}} = values %species;
-#  my @fileArr = values %{$datasets{tmp}{$dataset_id}{file}};
-  @{$es_doc_dataset{file}} = sort {$$a{name} cmp $$b{name}} values %{$datasets{tmp}{$dataset_id}{file}};
+  my @fileArr = values %{$datasets{tmp}{$dataset_id}{file}};
+  my @valid_files;
+  foreach my $fileEntry(sort {$$a{name} cmp $$b{name}} @fileArr){
+    my $file_id = $$fileEntry{fileId};
+    push (@valid_files,$fileEntry) if (exists $indexed_files{$file_id});
+  }
+  @{$es_doc_dataset{file}} = @valid_files;
   @{$es_doc_dataset{experiment}} = values %only_valid_exps;
   @{$es_doc_dataset{instrument}} = keys %{$datasets{tmp}{$dataset_id}{instrument}};
   @{$es_doc_dataset{centerName}} = keys %{$datasets{tmp}{$dataset_id}{centerName}};
