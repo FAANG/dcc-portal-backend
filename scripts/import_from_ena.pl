@@ -68,7 +68,7 @@ my $json_text = $json->decode($content);
 #my $fh;
 #open $fh,"test_api_result.txt";
 #open $fh,"local_ena_cache.txt"; #local copy of ena api result
-#open $fh,"prjeb8784-experiment-api.json"; #for dataset prjeb8784
+#open $fh,"PRJNA414087-experiment-api.json"; #for dataset prjeb8784
 #my $json_text = &readHandleIntoJson($fh);
 #print Dumper($json_text);
 #exit;
@@ -120,8 +120,10 @@ my %datasets;
 my %experiments;
 my %files;
 
+my %studies_from_api;
 my %strategy;
 foreach my $record (@$json_text){
+  $studies_from_api{$$record{study_accession}}++;
   #it seems that all records share the same set of fields, i.e. no need to check existance
 
   #hard coded to try to convert to accepted terms/add new fixed fields in FAANG ruleset
@@ -489,15 +491,21 @@ foreach my $record (@$json_text){
   }#end of for (@files)
 }
 
-print "The processed studies:\n";
-my @dataset_ids = sort keys %datasets;
+print "The dataset list:\n";
+#my @dataset_ids = sort keys %datasets;
+my @dataset_ids = sort keys %studies_from_api;
 for (my $i=0;$i<scalar @dataset_ids;$i++){
   my $dataset_id = $dataset_ids[$i];
-  next if ($dataset_id eq "tmp");
-  my %dataset_exps = %{$datasets{tmp}{$dataset_id}{experiment}};
-  my $num_exps = scalar keys %dataset_exps;
-  print "$i   $dataset_id has $num_exps experiments\n";
+  my $num_exps = 0;
+  if (exists $datasets{tmp}{$dataset_id}{experiment}){
+    my %dataset_exps = %{$datasets{tmp}{$dataset_id}{experiment}};
+    $num_exps = scalar keys %dataset_exps;
+  }
+  my $index = $i+1;
+  print "$index $dataset_id has $studies_from_api{$dataset_id} experiments from api and $num_exps experiments to be processed\n";
 }
+
+print "\nThere are ".((scalar keys %datasets)-1)." datasets to be processed\n"; #%dataset contains one artificial value set with the key as 'tmp'
 
 #finish retrieving the data from ena, now start to validate experiments
 #if not valid, no insertion of experiment and related file(s) into ES
@@ -515,38 +523,25 @@ foreach my $exp_id (sort {$a cmp $b} keys %experiments){
       $exp_es{standardMet} = $standards{$ruleset};
       $exp_es{versionLastStandardMet} = $ruleset_version if ($exp_es{standardMet} eq "FAANG");
       #move the insertion codes out the loop to allow insertion of even invalid experiments
-      #eval{
-      #  $es->index(
-      #    index => $es_index_name,
-      #    type => 'experiment',
-      #    id => $exp_id,
-      #    body => \%exp_es
-      #  );
-      #};
-      #if (my $error = $@) {
-      #  die "error indexing experiment in $es_index_name index:".$error->{text};
-      #}
-      last;
+      eval{
+        $es->index(
+          index => $es_index_name,
+          type => 'experiment',
+          id => $exp_id,
+          body => \%exp_es
+        );
+      };
+      if (my $error = $@) {
+        die "error indexing experiment in $es_index_name index:".$error->{text};
+      }
+      last; #if is FAANG standard, no need to deal with FAANG Legacy
     }
   }
-  eval{
-    $es->index(
-      index => $es_index_name,
-      type => 'experiment',
-      id => $exp_id,
-      body => \%exp_es
-    );
-  };
-  if (my $error = $@) {
-    die "error indexing experiment in $es_index_name index:".$error->{text};
-  }
-
 }
 
 #insert file into elasticsearch only when the corresponding experiment is valid
 #trapping error: the code can continue to run even after the die or errors, and it also captures the errors or dieing words.
 foreach my $file_id(keys %files){
-  next;
   my %es_doc = %{$files{$file_id}};
   my $exp_id = $es_doc{experiment}{accession};
 #  next unless (exists $exp_validation{$exp_id}); #for now every file is allowed into the data portal
@@ -564,7 +559,6 @@ foreach my $file_id(keys %files){
   }
   $indexed_files{$file_id} = 1;
 }
-
 #now %datasets contain the following data:
 #under each dataset id key, the value is the corresponding dataset basic information
 #under the conserved tmp key, the value is another hash with dataset id as keys, and another hash having specimen, file, experiment information
@@ -584,6 +578,12 @@ foreach my $dataset_id (keys %datasets){
 #      print "Invalid experiment $exp_id, excluded from $dataset_id\n";
     }
   }
+  my $num_valid_exps = scalar keys %only_valid_exps;
+  if ($num_valid_exps == 0){ #the dataset has no valid experiments, so skipped
+    print "dataset $dataset_id has no valid experiments, skipped.\n";
+    next;
+  }
+
   $es_doc_dataset{standardMet} = $dataset_standard;
 #  print "Stardard $dataset_standard\n".(scalar keys %only_valid_exps)." valid experiments\n";
   #convert some sub-element from hash to array (hash to guarantee uniqueness)
