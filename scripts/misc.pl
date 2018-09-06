@@ -1,10 +1,11 @@
 #!/usr/bin/env perl
-#version: 1.2
-#last update: 23/08/2018
+#version: 1.2.1
+#last update: 06/09/2018
 #1.1 add parseCSVline
 #1.1.1 improve trim function
 #1.1.2 add getFilenameFromURL
-#1.2 add code to retrieve etag according to BioSample id and check whether etag changes 
+#1.2 add code to retrieve etag according to BioSample id and check whether etag changes
+#1.2.1 change getFilenameFromURL logic to return original URL if not a PDF file
 
 use strict;
 use warnings;
@@ -108,7 +109,7 @@ sub parseCSVline(){
 
 sub is_etag_changed(){
   my ($accession, $etag) = @_;
-  my $url = "http://wwwdev.ebi.ac.uk/biosamples/samples/$accession";
+  my $url = "http://www.ebi.ac.uk/biosamples/samples/$accession";
   my $browser = WWW::Mechanize->new();
   $browser->add_header(Accept => 'application/json');
   $browser->add_header("If-None-Match" => $etag);
@@ -121,7 +122,7 @@ sub is_etag_changed(){
 #get the etag header for the given accession
 sub fetch_etag_biosample_by_accession(){
   my ($accession) = @_;
-  my $url = "http://wwwdev.ebi.ac.uk/biosamples/samples/$accession";
+  my $url = "http://www.ebi.ac.uk/biosamples/samples/$accession";
   my $browser = WWW::Mechanize->new();
   $browser->get( $url );
 #  print "Status: ".$browser->status()."\n";
@@ -141,12 +142,12 @@ sub fetch_json_by_url(){
   my $json_text = $json->decode($content);
   return $json_text;
 }
-#return the filename extracted from the given URL. If it is not a pdf file, return null
+#return the filename extracted from the given URL. If it is not a pdf file, return the original url
 sub getFilenameFromURL(){
     my $url = $_[0];
     my $idx = rindex ($url,".");
     my $suffix = lc(substr($url,$idx+1));
-    return unless ($suffix eq "pdf");
+    return $url unless ($suffix eq "pdf");
     $idx = rindex ($url,"/");
     my $filename = substr($url,$idx+1);
     return $filename;

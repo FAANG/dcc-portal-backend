@@ -168,8 +168,8 @@ if($legacy_flag){
 }else{
   print "Importing FAANG data\n";
   my $url = $baseUrl."biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG";
-  &fetch_records_by_project($url);
-  #&fetch_records_by_project_via_etag($url);
+  #&fetch_records_by_project($url);
+  &fetch_records_by_project_via_etag($url);
 
 }
 
