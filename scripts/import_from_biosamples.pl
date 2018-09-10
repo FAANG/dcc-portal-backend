@@ -35,6 +35,9 @@ my @knownCellCultureColumns = ("culture type","cell type","cell culture protocol
 my @knownCellLineColumns = ("cell line","biomaterial provider","catalogue number","number of passages","date established","publication","cell type","culture conditions","culture protocol","disease","karyotype");
 @{$knownColumns{"cell line"}} = @knownCellLineColumns;
 
+#my $baseUrl = "https://wwwdev.ebi.ac.uk/";
+my $baseUrl = "https://www.ebi.ac.uk/";
+
 #the code to test getFilenameFromURL
 #my $url = "http://www.ncbi.nlm.nih.gov/pubmed/16215741";
 #$url = "ftp://ftp.faang.ebi.ac.uk/ftp/protocols/samples/KU_Pool_creation_protocol_20170523.pdf";
@@ -62,7 +65,14 @@ my @knownCellLineColumns = ("cell line","biomaterial provider","catalogue number
 #my $accession = "SAMEA4451620"; #specimen from organism, physiological conditions which contains lactation duration information
 
 #my $accession = "SAMEA4448136"; #organism without relationship   
-#my %tmp = &fetch_single_record($accession);
+#my $accession = "SAMEA4675147";
+#my %organism_tmp = &fetch_single_record($accession);
+#$accession = "SAMEA4675134";    
+#my %specimen_tmp = &fetch_single_record($accession);
+#&process_organisms(\%organism_tmp);
+#&process_specimens(\%specimen_tmp);
+
+#exit;
 #my $etag = &fetch_etag_biosample_by_accession($accession);
 #print "etag: $etag\n";
 #my $changed = &is_etag_changed($accession, "064d2ef7238dcedb87be8ac097d00ef7e");
@@ -92,10 +102,6 @@ GetOptions(
 #croak "Need -project e.g. faang" unless ( $project);
 croak "Need -es_host e.g. ves-hx-e4:9200" unless ( $es_host);
 croak "Need -es_index_name e.g. faang, faang_build_1" unless ( $es_index_name);
-
-#my $baseUrl = "https://wwwdev.ebi.ac.uk/";
-my $baseUrl = "https://www.ebi.ac.uk/";
-
 
 #legacy API
 #my $url = "https://www.ebi.ac.uk/biosamples/samples/search/findByText?text=".$project_keyword;
@@ -357,7 +363,14 @@ sub process_specimens{
     }
     @{$es_doc{sameAs}} = keys %{$relationships{sameAs}} if (exists $relationships{sameAs});
 
-    $es_doc{organism}=$organismInfoForSpecimen{$organismAccession};
+    #the parent animal has not been processed e.g. only specimen record updated not the animal
+    unless (exists $organismInfoForSpecimen{$organismAccession}){
+      my %tmp = &fetch_single_record($organismAccession);
+      &addOrganismInfoForSpecimen($organismAccession,$tmp{$organismAccession});
+    }
+    
+    $es_doc{organism}=$organismInfoForSpecimen{$organismAccession};  
+    
     $organismReferredBySpecimen{$organismAccession}++;
 
     #the validation service can only be applied on FAANG data, not BioSample data
@@ -427,8 +440,8 @@ sub process_pool_specimen{
           $organismAccession = $specimen_organism_relationship{$derivedFrom};
           $organismReferredBySpecimen{$organismAccession}++;
           unless (exists $organismInfoForSpecimen{$organismAccession}){
-            print ERR "No organism information found for organism <$organismAccession> which is for $accession\n";
-            next;
+            my %tmp = &fetch_single_record($organismAccession);
+            &addOrganismInfoForSpecimen($organismAccession,$tmp{$organismAccession});
           }
 #          print "$organismAccession\n";
 #          print Dumper($organismInfoForSpecimen{$organismAccession});
@@ -500,6 +513,10 @@ sub process_cell_specimens{
     }
     @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
 
+    unless (exists $organismInfoForSpecimen{$organismAccession}){
+      my %tmp = &fetch_single_record($organismAccession);
+      &addOrganismInfoForSpecimen($organismAccession,$tmp{$organismAccession});
+    }
     $es_doc{organism}=$organismInfoForSpecimen{$organismAccession};
     $organismReferredBySpecimen{$organismAccession}++;
     %{$converted{$key}} = %es_doc;
@@ -557,6 +574,10 @@ sub process_cell_cultures{
 
     @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
 
+    unless (exists $organismInfoForSpecimen{$organismAccession}){
+      my %tmp = &fetch_single_record($organismAccession);
+      &addOrganismInfoForSpecimen($organismAccession,$tmp{$organismAccession});
+    }
     $es_doc{organism}=$organismInfoForSpecimen{$organismAccession};
     $organismReferredBySpecimen{$organismAccession}++;
     %{$converted{$key}} = %es_doc;
@@ -702,31 +723,14 @@ sub process_organisms(){
 
     %es_doc = %{&extractCustomField(\%es_doc,$organism,"organism")};
 
-    my @healthStatus;
-    foreach my $healthStatus (@{$$organism{characteristics}{"health status"}}){
-      push(@healthStatus, {
-                            text => $$healthStatus{text}, ontologyTerms => $$healthStatus{ontologyTerms}[0]
-                          });
-    }
+    my @healthStatus = &getHealthStatus($organism);
     @{$es_doc{healthStatus}} = @healthStatus;
 
     my %relationships = &parse_relationship($organism);
     @{$es_doc{childOf}} = keys %{$relationships{childOf}} if (exists $relationships{childOf});
     @{$es_doc{sameAs}} = keys %{$relationships{sameAs}} if (exists $relationships{sameAs});
 
-    $organismInfoForSpecimen{$accession}{biosampleId} = $$organism{accession};
-    $organismInfoForSpecimen{$accession}{organism} = {
-      text => $$organism{characteristics}{Organism}[0]{text}, 
-      ontologyTerms => $$organism{characteristics}{Organism}[0]{ontologyTerms}[0]
-    };
-    $organismInfoForSpecimen{$accession}{sex} = {
-      text => $$organism{characteristics}{Sex}[0]{text}, 
-      ontologyTerms => $$organism{characteristics}{Sex}[0]{ontologyTerms}[0]
-    };
-    $organismInfoForSpecimen{$accession}{breed} = {
-      text => $$organism{characteristics}{breed}[0]{text}, 
-      ontologyTerms => $$organism{characteristics}{breed}[0]{ontologyTerms}[0]
-    };
+    &addOrganismInfoForSpecimen($accession,$organism);
     @{$organismInfoForSpecimen{$accession}{healthStatus}} = @healthStatus;
     if (exists $$organism{characteristics}{strain}){
       $es_doc{breed} = {text => $$organism{characteristics}{strain}[0]{text}, ontologyTerms => $$organism{characteristics}{strain}[0]{ontologyTerms}[0]};
@@ -738,6 +742,36 @@ sub process_organisms(){
   }
   &insert_into_es(\%converted,"organism");
 }
+sub getHealthStatus(){
+  my ($organism) = @_;
+  my @healthStatus;
+  foreach my $healthStatus (@{$$organism{characteristics}{"health status"}}){
+    push(@healthStatus, {
+                          text => $$healthStatus{text}, ontologyTerms => $$healthStatus{ontologyTerms}[0]
+                        });
+  }
+  return @healthStatus;
+}
+
+sub addOrganismInfoForSpecimen(){
+  my ($accession,$organism) = @_;
+  $organismInfoForSpecimen{$accession}{biosampleId} = $$organism{accession};
+  $organismInfoForSpecimen{$accession}{organism} = {
+    text => $$organism{characteristics}{Organism}[0]{text}, 
+    ontologyTerms => $$organism{characteristics}{Organism}[0]{ontologyTerms}[0]
+  };
+  $organismInfoForSpecimen{$accession}{sex} = {
+    text => $$organism{characteristics}{Sex}[0]{text}, 
+    ontologyTerms => $$organism{characteristics}{Sex}[0]{ontologyTerms}[0]
+  };
+  $organismInfoForSpecimen{$accession}{breed} = {
+    text => $$organism{characteristics}{breed}[0]{text}, 
+    ontologyTerms => $$organism{characteristics}{breed}[0]{ontologyTerms}[0]
+  };
+  my @healthStatus = &getHealthStatus($organism);
+  @{$organismInfoForSpecimen{$accession}{healthStatus}} = @healthStatus;
+}
+
 #add basic information of BioSample record which is expected to exist for every single record into given hash
 #the basic set is compiled from cell line
 sub populateBasicBiosampleInfo(){
