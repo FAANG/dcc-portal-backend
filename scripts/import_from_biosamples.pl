@@ -944,6 +944,10 @@ sub fetch_records_by_project_via_etag(){
     $total += $hash{$type};
     print "There are $hash{$type} $type records\n";
   }
+  if ($total == 0){
+    print "All records have not been modified since last importation.";
+    exit;
+  }
   print "The sum is $total\n";
   print "Finish comparing etags and retrieving necessary records at ".localtime."\n";
 }
