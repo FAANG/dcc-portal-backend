@@ -65,7 +65,7 @@ my $baseUrl = "https://www.ebi.ac.uk/";
 #my $accession = "SAMEA4451620"; #specimen from organism, physiological conditions which contains lactation duration information
 
 #my $accession = "SAMEA4448136"; #organism without relationship   
-#my $accession = "SAMEA4675147";
+#my $accession = "SAMEA6215668";
 #my %organism_tmp = &fetch_single_record($accession);
 #$accession = "SAMEA4675134";    
 #my %specimen_tmp = &fetch_single_record($accession);
@@ -1027,27 +1027,33 @@ sub fetch_biosamples_json{
     #print Dumper($$json_text{page}); #contains total number, page size and page count
     foreach my $item (@{$json_text->{_embedded}{samples}}){
       #temporary codes to deal with the decimal degrees curation overwritten by biosample curation
-      if ($$item{characteristics}{Material}[0]{text} eq "organism"){
-        my $flag = 0;
-        if (exists $$item{characteristics}{'birth location latitude'} &&
-            exists $$item{characteristics}{'birth location latitude'}[0]{unit} &&
-            $$item{characteristics}{'birth location latitude'}[0]{unit} eq 'decimal degree'){
-          $flag = 1;
-        }elsif (exists $$item{characteristics}{'birth location longitude'} &&
-            exists $$item{characteristics}{'birth location longitude'}[0]{unit} &&
-            $$item{characteristics}{'birth location longitude'}[0]{unit} eq 'decimal degree'){
-          $flag = 2;          
-        }
-        if ($flag > 0){
-          my $dcc_curated_url = $baseUrl."biosamples/samples/".$$item{accession}.".json?curationdomain=self.FAANG_DCC_curation";
-          $item = &fetch_json_by_url($dcc_curated_url);
-        }
-      }
+      $item = &dealWithDecimalDegrees($item);
       push(@biosamples, $item);
     }
     $json_url = $$json_text{_links}{next}{href};
   }
   return @biosamples;
+}
+
+sub dealWithDecimalDegrees(){
+  my ($item) = @_;
+  if ($$item{characteristics}{Material}[0]{text} eq "organism"){
+    my $flag = 0;
+    if (exists $$item{characteristics}{'birth location latitude'} &&
+        exists $$item{characteristics}{'birth location latitude'}[0]{unit} &&
+        $$item{characteristics}{'birth location latitude'}[0]{unit} eq 'decimal degree'){
+      $flag = 1;
+    }elsif (exists $$item{characteristics}{'birth location longitude'} &&
+        exists $$item{characteristics}{'birth location longitude'}[0]{unit} &&
+        $$item{characteristics}{'birth location longitude'}[0]{unit} eq 'decimal degree'){
+      $flag = 2;          
+    }
+    if ($flag > 0){
+      my $dcc_curated_url = $baseUrl."biosamples/samples/".$$item{accession}.".json?curationdomain=self.FAANG_DCC_curation";
+      $item = &fetch_json_by_url($dcc_curated_url);
+    }
+  }
+  return $item;
 }
 
 sub fetch_biosamples_ids(){
@@ -1072,6 +1078,7 @@ sub fetch_single_record{
   my $url = $baseUrl."biosamples/samples/$accession";
   my $json_text = &fetch_json_by_url($url);
   my %hash;
+  $json_text = &dealWithDecimalDegrees($json_text);
   $hash{$json_text->{accession}} = $json_text;
   return %hash;
 }
