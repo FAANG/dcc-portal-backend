@@ -87,8 +87,8 @@ sub convert(){
     %typeSpecific = %{$data{$typeSpecific}};
     delete $data{$typeSpecific};
   }else{
-    print "Error: type specific data not found for $result{id}\n";
-    return;
+#    print "Error: type specific data not found for $result{id}\n";
+#    return;
   }
   @attr = &parse(\@attr,\%data);
   @attr = &parse(\@attr,\%typeSpecific);
