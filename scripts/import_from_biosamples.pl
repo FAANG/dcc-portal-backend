@@ -1184,6 +1184,9 @@ sub parse_relationship(){
   foreach my $ref(@relations){
 #      push(@{$result{$$ref{type}}},$$ref{target}) unless ($$ref{target} eq $accession);
 #      push(@{$result{toLowerCamelCase($$ref{type})}},$$ref{target}) unless ($$ref{target} eq $accession);
+      #in a animal-sample relationship target will be the animal
+      #in a membership relationship target will be this record while source will be the group
+      #therefore relationship having the accession as target should be ignored
       $result{$$ref{type}}{$$ref{target}}++ unless ($$ref{target} eq $accession);
       $result{toLowerCamelCase($$ref{type})}{$$ref{target}}++ unless ($$ref{target} eq $accession);
   }
