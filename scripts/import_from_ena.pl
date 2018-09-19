@@ -36,6 +36,19 @@ my $content = $browser->content();
 my $json = new JSON;
 my $json_text = $json->decode($content);
 
+my %technologies = (
+  "ATAC-seq"=>"ATAC-seq",
+  "methylation profiling by high throughput sequencing"=>"BS-seq",
+  "ChIP-seq"=>"ChIP-seq",
+  "DNase-Hypersensitivity seq"=>"DNase-seq",
+  "Hi-C"=>"Hi-C",
+  "microRNA profiling by high throughput sequencing"=>"RNA-seq",
+  "RNA-seq of coding RNA"=>"RNA-seq",
+  "RNA-seq of non coding RNA"=>"RNA-seq",
+  "transcription profiling by high throughput sequencing"=>"RNA-seq",
+  "whole genome sequencing assay"=>"WGS"
+);
+
 #debug code
 #my $fh;
 #open $fh,"test_api_result.txt";
@@ -421,7 +434,7 @@ foreach my $record (@$json_text){
       $es_doc_dataset{accession}=$dataset_id;
       $es_doc_dataset{alias}=$$record{study_alias};
       $es_doc_dataset{title}=$$record{study_title};
-      $es_doc_dataset{type}=$$record{study_type};
+      #$es_doc_dataset{type}=$$record{study_type};
       $es_doc_dataset{secondaryAccession}=$$record{secondary_study_accession};
     }
 
@@ -540,10 +553,15 @@ foreach my $dataset_id (keys %datasets){
   my %only_valid_exps;
   #determine dataset standard using the lowest experiment standard
   my $dataset_standard = "FAANG";
+  my %experiment_type;
   foreach my $exp_id(keys %exps){
     if (exists $exp_validation{$exp_id}){
       $dataset_standard = "FAANG Legacy" if ($exp_validation{$exp_id} eq "FAANG Legacy");
       $only_valid_exps{$exp_id} = $exps{$exp_id};
+      my $assay_type = $exps{$exp_id}{assayType};
+      #TODO decision needs to be made
+#      $experiment_type{$technologies{$assay_type}}++; 
+      $experiment_type{$assay_type}++;
     }else{ #not valid at all
 #      print "Invalid experiment $exp_id, excluded from $dataset_id\n";
     }
@@ -583,6 +601,7 @@ foreach my $dataset_id (keys %datasets){
   }
   @{$es_doc_dataset{file}} = @valid_files;
   @{$es_doc_dataset{experiment}} = values %only_valid_exps;
+  @{$es_doc_dataset{type}} = keys %experiment_type;
   @{$es_doc_dataset{instrument}} = keys %{$datasets{tmp}{$dataset_id}{instrument}};
   @{$es_doc_dataset{centerName}} = keys %{$datasets{tmp}{$dataset_id}{centerName}};
   @{$es_doc_dataset{archive}} = sort {$a cmp $b} keys %{$datasets{tmp}{$dataset_id}{archive}};
