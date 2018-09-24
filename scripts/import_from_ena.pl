@@ -554,13 +554,14 @@ foreach my $dataset_id (keys %datasets){
   #determine dataset standard using the lowest experiment standard
   my $dataset_standard = "FAANG";
   my %experiment_type;
+  my %tech_type;
   foreach my $exp_id(keys %exps){
     if (exists $exp_validation{$exp_id}){
       $dataset_standard = "FAANG Legacy" if ($exp_validation{$exp_id} eq "FAANG Legacy");
       $only_valid_exps{$exp_id} = $exps{$exp_id};
       my $assay_type = $exps{$exp_id}{assayType};
       #TODO decision needs to be made
-#      $experiment_type{$technologies{$assay_type}}++; 
+      $tech_type{$technologies{$assay_type}}++; 
       $experiment_type{$assay_type}++;
     }else{ #not valid at all
 #      print "Invalid experiment $exp_id, excluded from $dataset_id\n";
@@ -601,7 +602,8 @@ foreach my $dataset_id (keys %datasets){
   }
   @{$es_doc_dataset{file}} = @valid_files;
   @{$es_doc_dataset{experiment}} = values %only_valid_exps;
-  @{$es_doc_dataset{type}} = keys %experiment_type;
+  @{$es_doc_dataset{assayType}} = keys %experiment_type;
+  @{$es_doc_dataset{tech}} = keys %tech_type;
   @{$es_doc_dataset{instrument}} = keys %{$datasets{tmp}{$dataset_id}{instrument}};
   @{$es_doc_dataset{centerName}} = keys %{$datasets{tmp}{$dataset_id}{centerName}};
   @{$es_doc_dataset{archive}} = sort {$a cmp $b} keys %{$datasets{tmp}{$dataset_id}{archive}};

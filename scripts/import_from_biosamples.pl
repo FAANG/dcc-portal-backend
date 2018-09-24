@@ -21,8 +21,8 @@ require "misc.pl";
 my %knownColumns;
 #the known column names according to the rule set https://www.ebi.ac.uk/vg/faang/rule_sets/FAANG%20Samples
 #after removing these known columns, the left ones are the custom fields which need to be dealt with
-my @commonColumns = ("description","Material","project","availability","same as");
-my @knownOrganismColumns = ("Organism","Sex","birth date","breed","health status","birth location","birth location longitude","birth location latitude","birth weight","placental weight","pregnancy length","delivery timing","delivery ease","Child Of","pedigree","strain");#some submitter use strain instead of breed
+my @commonColumns = ("description","Material","Organism","project","availability","same as");
+my @knownOrganismColumns = ("Sex","birth date","breed","health status","birth location","birth location longitude","birth location latitude","birth weight","placental weight","pregnancy length","delivery timing","delivery ease","Child Of","pedigree","strain");#some submitter use strain instead of breed
 @{$knownColumns{"organism"}} = @knownOrganismColumns;
 my @knownSpecimenFromColumns = ("specimen collection date","animal age at collection","developmental stage","health status at collection","organism part","specimen collection protocol","fasted status","number of pieces","specimen volume","specimen size","specimen weight","specimen picture url","gestational age at sample collection");
 @{$knownColumns{"specimen from organism"}} = @knownSpecimenFromColumns;
