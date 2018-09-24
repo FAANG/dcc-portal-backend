@@ -47,8 +47,9 @@ GetOptions(
 croak "Need -es_host" unless ($es_host);
 my $es = Search::Elasticsearch->new(nodes => $es_host, client => '1_0::Direct'); #client option to make it compatiable with elasticsearch 1.x APIs
 
-&importBioSample("SAMEA3712494");
-exit;
+#&importBioSample("SAMEA3712494");
+#exit
+
 my %existingBiosamples;
 &getExistingIDs("specimen");
 &getExistingIDs("organism");
@@ -70,7 +71,10 @@ my $fieldList = &getFieldsList();
 my $speciesList = join(",",@species);
 
 my %todo;
+my %technologies;
 foreach my $term(@categories){
+  #TODO investigate the loss of experiments during the process one technology by another
+  next unless ($categories{$term} eq "BS-Seq");
   my $category = $categories{$term};
   next unless (exists $assayTypesToBeImported{$category});
 #  print "$term: assay type $assay_type  target $experiment_target\n";
@@ -85,7 +89,7 @@ foreach my $term(@categories){
     next if ($$record{project_name} eq "FAANG");#should be dealt with by sibling script
     push (@{$todo{$category}},$record);
   }
-#  }
+#  } #end of @species
 }
 #print "Working on $es_index_name at $es_host\n";
 
@@ -98,13 +102,21 @@ my %datasets;
 my %experiments;
 my %files;
 
-foreach my $category(keys %todo){
+foreach my $category(keys %todo) {
+  print "$category has ".(scalar @{$todo{$category}})." records\n";  
   my $assay_type = $assayTypesToBeImported{$category};
   my $experiment_target = $experimentTargets{$category};
+  $technologies{$assay_type} = $category;
 #  print "$category: assay type $assay_type  target $experiment_target\n";
 #  my $len  = scalar @{$todo{$category}};
 #  print "$len\n";
+  my %count;
+  my %withFiles;
   foreach my $record(@{$todo{$category}}){
+    next unless ($$record{study_accession} eq "PRJNA306952" 
+      || $$record{study_accession} eq "PRJNA481390"
+      || $$record{study_accession} eq "PRJNA386305");
+    $count{$$record{study_accession}}++;
     my $file_type = "";
     my $source_type = "";
     OUTER:
@@ -118,7 +130,7 @@ foreach my $category(keys %todo){
       }
     }
     next if (length $file_type == 0);
-
+    $withFiles{$$record{study_accession}}++;
     my $archive;
     if($source_type eq "fastq"){
       $archive = "ENA";
@@ -203,7 +215,7 @@ foreach my $category(keys %todo){
         $es_dataset{accession}=$dataset_id;
         $es_dataset{alias}=$$record{study_alias};
         $es_dataset{title}=$$record{study_title};
-        $es_dataset{type}=$category;
+#        $es_dataset{type}=$category;
         $es_dataset{secondaryAccession}=$$record{secondary_study_accession};
       }
 
@@ -234,7 +246,10 @@ foreach my $category(keys %todo){
 
       %{$datasets{$dataset_id}} = %es_dataset;
     }#end for foreach (@files)
-  }
+  }#end for each @{$todo{$category}}
+  print Dumper(\%count);
+  print Dumper(\%withFiles);
+
 }
 
 my @dataset_ids = sort keys %datasets;
@@ -287,7 +302,6 @@ foreach my $exp_id (sort {$a cmp $b} keys %experiments){
     }
   }
 }
-
 #insert file into elasticsearch only when the corresponding experiment is valid
 #trapping error: the code can continue to run even after the die or errors, and it also captures the errors or dieing words.
 foreach my $file_id(keys %files){
@@ -321,10 +335,16 @@ foreach my $dataset_id (keys %datasets){
   my %only_valid_exps;
   #determine dataset standard using the lowest experiment standard
   my $dataset_standard = "FAANG";
+  my %experiment_type;
+  my %tech_type;
   foreach my $exp_id(keys %exps){
     if (exists $exp_validation{$exp_id}){
       $dataset_standard = "FAANG Legacy" if ($exp_validation{$exp_id} eq "FAANG Legacy");
       $only_valid_exps{$exp_id} = $exps{$exp_id};
+      my $assay_type = $exps{$exp_id}{assayType};
+      #TODO decision needs to be made
+      $tech_type{$technologies{$assay_type}}++; 
+      $experiment_type{$assay_type}++;
     }else{ #not valid at all
 #      print "Invalid experiment $exp_id, excluded from $dataset_id\n";
     }
@@ -344,15 +364,15 @@ foreach my $dataset_id (keys %datasets){
   foreach my $specimen(keys %specimens){
     my $specimen_detail = $existingBiosamples{$specimen};
     my %es_doc_specimen = (
-      biosampleId => $$specimen_detail{biosampleId}
-#      material => $$specimen_detail{material},
-#      cellType => $$specimen_detail{cellType},
-#      organism => $$specimen_detail{organism}{organism},
-#      sex => $$specimen_detail{organism}{sex},
-#      breed => $$specimen_detail{organism}{breed}
+      biosampleId => $$specimen_detail{biosampleId},
+      material => $$specimen_detail{material},
+      cellType => $$specimen_detail{cellType},
+      organism => $$specimen_detail{organism}{organism},
+      sex => $$specimen_detail{organism}{sex},
+      breed => $$specimen_detail{organism}{breed}
     );
     push(@specimens,\%es_doc_specimen);
-#    $species{$$specimen_detail{organism}{organism}{text}} = $$specimen_detail{organism}{organism};
+    $species{$$specimen_detail{organism}{organism}{text}} = $$specimen_detail{organism}{organism};
   }
   @{$es_doc_dataset{specimen}} = sort {$$a{biosampleId} cmp $$b{biosampleId}} @specimens;
   @{$es_doc_dataset{species}} = values %species;
@@ -366,6 +386,8 @@ foreach my $dataset_id (keys %datasets){
   @{$es_doc_dataset{experiment}} = values %only_valid_exps;
   @{$es_doc_dataset{instrument}} = keys %{$datasets{tmp}{$dataset_id}{instrument}};
   @{$es_doc_dataset{archive}} = sort {$a cmp $b} keys %{$datasets{tmp}{$dataset_id}{archive}};
+  @{$es_doc_dataset{assayType}} = keys %experiment_type;
+  @{$es_doc_dataset{tech}} = keys %tech_type;
 
   #insert into ES
   eval{
@@ -696,15 +718,28 @@ sub importBioSample(){
   #being a FAANG record does not necessarily mean that it is in the ES due to the condition of meeting FAANG standard
   unless (exists $$json_text{characteristics}{project} && $$json_text{characteristics}{project}[0]{text} eq "FAANG"){
     $es_doc{biosampleId} = $accession;
+    $es_doc{name} = $$json_text{name};
     %{$es_doc{material}} = %material;
+    my $flagNonEBI = 0;
     if ($accession =~/^SAMEA/){
       $es_doc{"id_number"} = substr($accession,5);
     }else{
+      $flagNonEBI = 1;
       if ($accession =~/(\d+)/){
         $es_doc{"id_number"} = -$1;
       }
     }
-    $es_doc{description} = $$json_text{characteristics}{description}[0]{text} if (exists $$json_text{characteristics}{description});#V4.0 change
+    #In the BioSample's code converting NCBI BioSample records into EBI ones, XML <Description><Title>text</Title></Description>
+    #is saved in field "description title"
+    my $descKey = "description";
+    unless (exists $$json_text{characteristics}{$descKey}) {
+      if (exists $$json_text{characteristics}{"description title"}){
+        $descKey = "description title";
+      }else{
+        $descKey = "";
+      }
+    }
+    $es_doc{description} = $$json_text{characteristics}{$descKey}[0]{text} if (length $descKey>0);#V4.0 change
   
     my $organismKey = "organism";
     unless (exists $$json_text{characteristics}{$organismKey}) {
@@ -722,17 +757,55 @@ sub importBioSample(){
       );
     }
 
+    my %foundFields;
+    #https://www.ncbi.nlm.nih.gov/biosample/docs/attributes/?format=xml
+    #NCBI uses attributes, like EBI uses characteristics, <Name>field name</Name>
+    # FAANG field  => NCBI attribute(s)  
+    #organism part => tissue
+    #cell type => cell type
+    #breed => breed
+    #sex => sex
+    if ($flagNonEBI == 1){
+      if ($material{text} eq "organism"){
+        if (exists $$json_text{characteristics}{sex}){
+          $foundFields{"sex"}=1;
+          $es_doc{sex}{text} = $$json_text{characteristics}{sex}[0]{text};
+        }
+        if (exists $$json_text{characteristics}{breed}){
+          $foundFields{"breed"}=1;
+          $es_doc{breed}{text} = $$json_text{characteristics}{breed}[0]{text};
+        }
+      }else{
+        if (exists $$json_text{characteristics}{tissue}){
+          $foundFields{"tissue"}=1;
+          $es_doc{cellType}{text} = $$json_text{characteristics}{tissue}[0]{text};
+        }elsif (exists $$json_text{characteristics}{"cell type"}){
+          $foundFields{"cell type"}=1;
+          $es_doc{cellType}{text} = $$json_text{characteristics}{"cell type"}[0]{text};
+        }
+        if (exists $$json_text{characteristics}{sex}){
+          $foundFields{"sex"}=1;
+          $es_doc{organism}{sex}{text} = $$json_text{characteristics}{sex}[0]{text};
+        }
+        if (exists $$json_text{characteristics}{breed}){
+          $foundFields{"breed"}=1;
+          $es_doc{organism}{breed}{text} = $$json_text{characteristics}{breed}[0]{text};
+        }
+      }
+    }
+    #according to 
     $es_doc{releaseDate} = &parseDate($$json_text{release});
     $es_doc{updateDate} = &parseDate($$json_text{update});
-    $es_doc{standardMet} = "FAANG other";
+    $es_doc{standardMet} = "FAANG Basic";
     $es_doc{derivedFrom} = $animal if (length $animal > 0);
     @{$es_doc{childOf}} = @parentAnimals if (scalar @parentAnimals > 0);
     my @customs;
     my %characteristics = %{$$json_text{characteristics}};
     foreach my $name (keys %characteristics){
-      next if ($name eq "description");
+      next if ($name eq $descKey);
       next if ($name eq $organismKey);
       next if ($name eq $materialKey);
+      next if (exists $foundFields{$name});
       my $type = ref($characteristics{$name});
       my $toParse;
       if ($type eq "ARRAY"){
@@ -759,7 +832,7 @@ sub importBioSample(){
     @{$es_doc{customField}}=@customs;
 
 
-    print Dumper(\%es_doc);
+#    print Dumper(\%es_doc);exit;
     #import into ES
     my $type;
     if ($es_doc{material}{text} eq "organism"){
