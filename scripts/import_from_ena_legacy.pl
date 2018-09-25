@@ -47,8 +47,11 @@ GetOptions(
 croak "Need -es_host" unless ($es_host);
 my $es = Search::Elasticsearch->new(nodes => $es_host, client => '1_0::Direct'); #client option to make it compatiable with elasticsearch 1.x APIs
 
+my $exitFlag = 0;
 #&importBioSample("SAMEA3712494");
-#exit
+#&importBioSample("SAMEA3995839");
+#&importBioSample("SAMEA4434479");
+#exit;
 
 my %existingBiosamples;
 &getExistingIDs("specimen");
@@ -74,7 +77,7 @@ my %todo;
 my %technologies;
 foreach my $term(@categories){
   #TODO investigate the loss of experiments during the process one technology by another
-  next unless ($categories{$term} eq "BS-Seq");
+#  next if ($categories{$term} eq "BS-Seq");
   my $category = $categories{$term};
   next unless (exists $assayTypesToBeImported{$category});
 #  print "$term: assay type $assay_type  target $experiment_target\n";
@@ -85,6 +88,7 @@ foreach my $term(@categories){
   foreach my $record (@$json_text){
 #    my $species = $$record{tax_id};
     my $study_accession = $$record{study_accession};
+    next if ($study_accession eq "PRJEB12143"); #this study contains the sample records which are currently unreachable SAMEA3712494
     next if (exists $existingDatasets{$study_accession});#already exists in ES and meet FAANG standard
     next if ($$record{project_name} eq "FAANG");#should be dealt with by sibling script
     push (@{$todo{$category}},$record);
@@ -113,9 +117,9 @@ foreach my $category(keys %todo) {
   my %count;
   my %withFiles;
   foreach my $record(@{$todo{$category}}){
-    next unless ($$record{study_accession} eq "PRJNA306952" 
-      || $$record{study_accession} eq "PRJNA481390"
-      || $$record{study_accession} eq "PRJNA386305");
+#    next unless ($$record{study_accession} eq "PRJNA306952" 
+#      || $$record{study_accession} eq "PRJNA481390"
+#      || $$record{study_accession} eq "PRJNA386305");
     $count{$$record{study_accession}}++;
     my $file_type = "";
     my $source_type = "";
@@ -247,7 +251,9 @@ foreach my $category(keys %todo) {
       %{$datasets{$dataset_id}} = %es_dataset;
     }#end for foreach (@files)
   }#end for each @{$todo{$category}}
+  print "data from API:\n";
   print Dumper(\%count);
+  print "data for experiments with files\n";
   print Dumper(\%withFiles);
 
 }
@@ -264,7 +270,7 @@ for (my $i=0;$i<scalar @dataset_ids;$i++){
   my $index = $i+1;
   print "$index $dataset_id has $num_exps experiments to be processed\n";
 }
-
+#exit;
 print "\nThere are ".((scalar keys %datasets)-1)." datasets to be processed\n"; #%dataset contains one artificial value set with the key as 'tmp'
 
 print "The information of invalid records will be stored in $error_log\n\n";
@@ -323,6 +329,8 @@ foreach my $file_id(keys %files){
   }
   $indexed_files{$file_id} = 1;
 }
+
+#print Dumper(\%datasets);
 
 #now %datasets contain the following data:
 #under each dataset id key, the value is the corresponding dataset basic information
@@ -760,37 +768,67 @@ sub importBioSample(){
     my %foundFields;
     #https://www.ncbi.nlm.nih.gov/biosample/docs/attributes/?format=xml
     #NCBI uses attributes, like EBI uses characteristics, <Name>field name</Name>
-    # FAANG field  => NCBI attribute(s)  
-    #organism part => tissue
-    #cell type => cell type
-    #breed => breed
-    #sex => sex
-    if ($flagNonEBI == 1){
-      if ($material{text} eq "organism"){
-        if (exists $$json_text{characteristics}{sex}){
-          $foundFields{"sex"}=1;
-          $es_doc{sex}{text} = $$json_text{characteristics}{sex}[0]{text};
-        }
-        if (exists $$json_text{characteristics}{breed}){
-          $foundFields{"breed"}=1;
-          $es_doc{breed}{text} = $$json_text{characteristics}{breed}[0]{text};
-        }
-      }else{
+    # FAANG mandatory field  => NCBI attribute(s)      EBI
+    #organism part => tissue                organism part
+    #cell type => cell type                 cell typ
+    #breed => breed                         breed
+    #sex => sex                             sex
+    #developmental stage => development stage     developmental stage
+    if ($material{text} eq "organism"){
+      if (exists $$json_text{characteristics}{sex}){
+        $foundFields{"sex"}=1;
+        $es_doc{sex}{text} = $$json_text{characteristics}{sex}[0]{text};
+      }
+      if (exists $$json_text{characteristics}{breed}){
+        $foundFields{"breed"}=1;
+        $es_doc{breed}{text} = $$json_text{characteristics}{breed}[0]{text};
+      }
+    }else{
+      if ($flagNonEBI == 1){
         if (exists $$json_text{characteristics}{tissue}){
           $foundFields{"tissue"}=1;
           $es_doc{cellType}{text} = $$json_text{characteristics}{tissue}[0]{text};
+          $es_doc{specimenFromOrganism}{organismPart}{text} = $es_doc{cellType}{text};
         }elsif (exists $$json_text{characteristics}{"cell type"}){
           $foundFields{"cell type"}=1;
           $es_doc{cellType}{text} = $$json_text{characteristics}{"cell type"}[0]{text};
         }
-        if (exists $$json_text{characteristics}{sex}){
-          $foundFields{"sex"}=1;
-          $es_doc{organism}{sex}{text} = $$json_text{characteristics}{sex}[0]{text};
+        if (exists $$json_text{characteristics}{"development stage"}){
+          $foundFields{"development stage"} = 1;
+          $es_doc{specimenFromOrganism}{developmentalStage}{text} = $$json_text{characteristics}{"development stage"}[0]{text};
         }
-        if (exists $$json_text{characteristics}{breed}){
-          $foundFields{"breed"}=1;
-          $es_doc{organism}{breed}{text} = $$json_text{characteristics}{breed}[0]{text};
+      }else{ #from EBI BioSample archive
+        if (exists $$json_text{characteristics}{"organism part"}){
+          $foundFields{"organism part"}=1;
+          $es_doc{cellType}{text} = $$json_text{characteristics}{"organism part"}[0]{text};
+          $es_doc{specimenFromOrganism}{organismPart}{text} = $es_doc{cellType}{text};
+        }elsif (exists $$json_text{characteristics}{"cell type"}){
+          $foundFields{"cell type"}=1;
+          $es_doc{cellType}{text} = $$json_text{characteristics}{"cell type"}[0]{text};
         }
+        if (exists $$json_text{characteristics}{"developmental stage"}){
+          $foundFields{"developmental stage"} = 1;
+          $es_doc{specimenFromOrganism}{developmentalStage}{text} = $$json_text{characteristics}{"developmental stage"}[0]{text};
+        }
+      }
+      if (exists $$json_text{characteristics}{"cell line"}){
+        $foundFields{"cell line"} = 1;
+        $es_doc{"cellLine"}{"cellLine"}=$$json_text{characteristics}{"cell line"}[0]{text};
+
+        %material = (
+          text => "cell line",
+          ontologyTerms => "http://purl.obolibrary.org/obo/CLO_0000031"
+        );
+        $confirmedMaterialFlag = 1;
+
+      }
+      if (exists $$json_text{characteristics}{sex}){
+        $foundFields{"sex"}=1;
+        $es_doc{organism}{sex}{text} = $$json_text{characteristics}{sex}[0]{text};
+      }
+      if (exists $$json_text{characteristics}{breed}){
+        $foundFields{"breed"}=1;
+        $es_doc{organism}{breed}{text} = $$json_text{characteristics}{breed}[0]{text};
       }
     }
     #according to 
@@ -832,7 +870,9 @@ sub importBioSample(){
     @{$es_doc{customField}}=@customs;
 
 
-#    print Dumper(\%es_doc);exit;
+    if($exitFlag == 1){
+      print Dumper(\%es_doc);exit;
+    }
     #import into ES
     my $type;
     if ($es_doc{material}{text} eq "organism"){
