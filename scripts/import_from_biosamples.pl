@@ -35,8 +35,8 @@ my @knownCellCultureColumns = ("culture type","cell type","cell culture protocol
 my @knownCellLineColumns = ("cell line","biomaterial provider","catalogue number","number of passages","date established","publication","cell type","culture conditions","culture protocol","disease","karyotype");
 @{$knownColumns{"cell line"}} = @knownCellLineColumns;
 
-#my $baseUrl = "https://wwwdev.ebi.ac.uk/";
-my $baseUrl = "https://www.ebi.ac.uk/";
+my $baseUrl = "https://wwwdev.ebi.ac.uk/";
+#my $baseUrl = "https://www.ebi.ac.uk/";
 
 #the code to test getFilenameFromURL
 #my $url = "http://www.ncbi.nlm.nih.gov/pubmed/16215741";
@@ -173,7 +173,8 @@ if($legacy_flag){
 
 }else{
   print "Importing FAANG data\n";
-  my $url = $baseUrl."biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG";
+#  my $url = $baseUrl."biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG";
+  my $url = $baseUrl."biosamples/accessions?project=FAANG&limit=100000";
   #&fetch_records_by_project($url);
   &fetch_records_by_project_via_etag($url);
 
@@ -945,7 +946,8 @@ sub fetch_records_by_project_via_etag(){
     print "There are $hash{$type} $type records\n";
   }
   if ($total == 0){
-    print "All records have not been modified since last importation.";
+    print "All records have not been modified since last importation.\n";
+    print "Exit program at ".localtime."\n";
     exit;
   }
   print "The sum is $total\n";
@@ -1059,13 +1061,19 @@ sub dealWithDecimalDegrees(){
 sub fetch_biosamples_ids(){
   my ($url) = @_;
   my @ids;
-  while ($url && length($url)>0){
-    my $json_text = &fetch_json_by_url($url);
-    foreach my $item (@{$json_text->{_embedded}{samples}}){
-      push (@ids, $$item{accession});
-    }
-    $url = $$json_text{_links}{next}{href};
-  }
+#  while ($url && length($url)>0){
+#    my $json_text = &fetch_json_by_url($url);
+#    foreach my $item (@{$json_text->{_embedded}{samples}}){
+#      push (@ids, $$item{accession});
+#    }
+#    $url = $$json_text{_links}{next}{href};
+#  }
+  my $json_text = &fetch_json_by_url($url);
+  @ids = @{$json_text};
+#  print scalar @ids;
+#print Dumper(@ids);
+#exit;
+
   return @ids;
 }
 
