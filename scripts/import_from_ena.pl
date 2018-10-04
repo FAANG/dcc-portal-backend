@@ -104,10 +104,11 @@ my %files;
 
 my %studies_from_api;
 my %strategy;
+my %exps_in_dataset;
 foreach my $record (@$json_text){
   $studies_from_api{$$record{study_accession}}++;
   #it seems that all records share the same set of fields, i.e. no need to check existance
-
+#  next unless ($$record{study_accession} eq "PRJEB25677");
   #hard coded to try to convert to accepted terms/add new fixed fields in FAANG ruleset
   my $library_strategy = $$record{library_strategy};
   my $assay_type = $$record{assay_type};
@@ -426,6 +427,7 @@ foreach my $record (@$json_text){
 
     #collect information for datasets
     my $dataset_id = $$record{study_accession};
+    $exps_in_dataset{$exp_id} = $dataset_id;
     my %es_doc_dataset;
     if (exists $datasets{$dataset_id}){
       %es_doc_dataset = %{$datasets{$dataset_id}};
@@ -484,7 +486,7 @@ for (my $i=0;$i<scalar @dataset_ids;$i++){
     $num_exps = scalar keys %dataset_exps;
   }
   my $index = $i+1;
-  print "$index $dataset_id has $studies_from_api{$dataset_id} experiments from api and $num_exps experiments to be processed\n";
+  print "$index $dataset_id has $studies_from_api{$dataset_id} runs from api and $num_exps experiments to be processed\n";
 }
 
 print "\nThere are ".((scalar keys %datasets)-1)." datasets to be processed\n"; #%dataset contains one artificial value set with the key as 'tmp'
@@ -499,7 +501,7 @@ foreach my $exp_id (sort {$a cmp $b} keys %experiments){
   my %exp_es = %{$experiments{$exp_id}};
   foreach my $ruleset(@rulesets){
     if($validationResult{$ruleset}{detail}{$exp_id}{status} eq "error"){
-      print ERR "$exp_id\tExperiment\terror\t$validationResult{$ruleset}{detail}{$exp_id}{message}\n";
+      print ERR "$exp_id\t$exps_in_dataset{$exp_id}\tExperiment\terror\t$validationResult{$ruleset}{detail}{$exp_id}{message}\n";
     }else{
       $exp_validation{$exp_id} = $standards{$ruleset};
       $exp_es{standardMet} = $standards{$ruleset};
