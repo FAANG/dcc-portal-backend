@@ -1,7 +1,6 @@
 {
     "specimen": {
         "dynamic": "strict",
-        "_all": {"enabled": false},
         "properties": {
             "biosampleId": {
                 "type": "keyword",

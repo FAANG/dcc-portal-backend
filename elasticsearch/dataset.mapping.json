@@ -1,6 +1,5 @@
 {
     "dataset": {
-        "_all": {"enabled": false},
         "dynamic": "strict",
         "properties": {
             "accession": {

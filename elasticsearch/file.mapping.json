@@ -1,6 +1,5 @@
 {
     "file": {
-        "_all": {"enabled": false},
         "dynamic": "strict",
         "properties": {
             "specimen": {
