@@ -4,11 +4,11 @@
         "_all": {"enabled": false},
         "properties": {
             "biosampleId": {
-                "type": "string",
-                "index": "not_analyzed",
+                "type": "keyword",
+                "index": false,
                 "fields": {
                   "std": {
-                    "type": "string",
+                    "type": "text",
                     "analyzer": "standard"
                   }
                 }
@@ -18,103 +18,103 @@
                 "analyzer": "standard"
             },
             "etag": {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword",
+                "index": false
             },
             "name": {
-                "type": "string",
-                "index": "not_analyzed",
+                "type": "keyword",
+                "index": false,
                 "fields": {
                   "std": {
-                    "type": "string",
+                    "type": "text",
                     "analyzer": "standard"
                   }
                 }
             },
             "description": {
-                "type": "string",
-                "index": "not_analyzed",
+                "type": "keyword",
+                "index": false,
                 "fields": {
                   "std": {
-                    "type": "string",
+                    "type": "text",
                     "analyzer": "standard"
                   }
                 }
             },
             "releaseDate": {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword",
+                "index": false
             },
             "updateDate": {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword",
+                "index": false
             },
             "standardMet": {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword",
+                "index": false
             },
             "versionLastStandardMet": {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword",
+                "index": false
             },
             "project": {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword",
+                "index": false
             },
             "organization": {
                 "properties": {
                     "name": {
-                        "type": "string",
-                        "index": "not_analyzed",
+                        "type": "keyword",
+                        "index": false,
                         "fields": {
                           "autocomp": {
-                            "type": "string",
+                            "type": "text",
                             "analyzer": "autocomp"
                           }
                         }
                     },
                     "role": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                     },
                     "URL": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                     }
                 }
             },
             "customField": {
                 "properties": {
                     "name": {
-                        "type": "string",
-                        "index": "not_analyzed",
+                        "type": "keyword",
+                        "index": false,
                         "fields": {
                           "std": {
-                            "type": "string",
+                            "type": "text",
                             "analyzer": "standard"
                           }
                         }
                     },
                     "value": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                     },
                     "unit": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                     },
                     "ontologyTerms": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                     }
                 }
             },
             "sameAs": {
-                "type": "string",
-                "index": "not_analyzed",
+                "type": "keyword",
+                "index": false,
                 "fields": {
                   "std": {
-                    "type": "string",
+                    "type": "text",
                     "analyzer": "standard"
                   }
                 }
@@ -122,186 +122,186 @@
             "material": {
                 "properties": {
                     "text": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                     },
                     "ontologyTerms": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                     }
                 }
             },
             "availability": {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword",
+                "index": false
             },
             "organism": {
                 "properties": {
                     "text": {
-                        "type": "string",
-                        "index": "not_analyzed",
+                        "type": "keyword",
+                        "index": false,
                         "fields": {
                             "autocomp": {
-                                "type": "string",
+                                "type": "text",
                                 "analyzer": "autocomp"
                             }
                         }
                     },
                     "ontologyTerms": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                     }
                 }
             },
             "sex": {
                 "properties": {
                     "text": {
-                        "type": "string",
-                        "index": "not_analyzed",
+                        "type": "keyword",
+                        "index": false,
                         "fields": {
                             "autocomp": {
-                                "type": "string",
+                                "type": "text",
                                 "analyzer": "autocomp"
                             }
                         }
                     },
                     "ontologyTerms": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                     }
                 }
             },
             "breed": {
                 "properties": {
                     "text": {
-                        "type": "string",
-                        "index": "not_analyzed",
+                        "type": "keyword",
+                        "index": false,
                         "fields": {
                             "autocomp": {
-                                "type": "string",
+                                "type": "text",
                                 "analyzer": "autocomp"
                             },
                             "lower_case_sort": { 
-                                "type": "string",
+                                "type": "text",
                                 "analyzer": "case_insensitive_sort"
                             }
                         }
                     },
                     "ontologyTerms": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                     }
                 }
             },
             "birthDate": {
                 "properties": {
                     "text": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                         },
                     "unit": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                     }
                 }
             },
             "healthStatus": {
                 "properties": {
                     "text": {
-                        "type": "string",
-                        "index": "not_analyzed",
+                        "type": "keyword",
+                        "index": false,
                         "fields": {
                             "autocomp": {
-                                "type": "string",
+                                "type": "text",
                                 "analyzer": "autocomp"
                             }
                         }
                     },
                     "ontologyTerms": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                     }
                 }
             },
             "birthLocation":  {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword",
+                "index": false
             },
             "birthLocationLongitude": {
                 "properties": {
                     "text": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                         },
                     "unit": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                     }
                 }
             },
             "birthLocationLatitude": {
                 "properties": {
                     "text": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                         },
                     "unit": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                     }
                 }
             },
             "birthWeight": {
                 "properties": {
                     "text": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                         },
                     "unit": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                     }
                 }
             },
             "placentalWeight": {
                 "properties": {
                     "text": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                         },
                     "unit": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                     }
                 }
             },
             "pregnancyLength": {
                 "properties": {
                     "text": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                         },
                     "unit": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword",
+                        "index": false
                     }
                 }
             },
             "deliveryTiming": {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword",
+                "index": false
             },
             "deliveryEase": {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword",
+                "index": false
             },
             "childOf": {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword",
+                "index": false
             },
             "pedigree": {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword",
+                "index": false
             }
         }
     }
