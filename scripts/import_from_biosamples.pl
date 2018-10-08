@@ -1070,7 +1070,7 @@ sub fetch_biosamples_ids(){
 #  }
   my $json_text = &fetch_json_by_url($url);
   @ids = @{$json_text};
-#  print scalar @ids;
+  print scalar @ids."\n";
 #print Dumper(@ids);
 #exit;
 

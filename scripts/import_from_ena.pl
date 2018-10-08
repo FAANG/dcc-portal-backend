@@ -368,8 +368,9 @@ foreach my $record (@$json_text){
           libraryGenerationProtocol => {
             url => $library_generation_protocol,
             filename => $library_generation_protocol_filename
-          },
-          librarySelection => lc($$record{library_selection})#lc function due to the allowed value is in all lower cases
+          }
+          #,
+          #librarySelection => lc($$record{library_selection})#lc function due to the allowed value is in all lower cases
           #maxFragmentSizeSelectionRange => $$record{},
           #minFragmentSizeSelectionRange => $$record{},
         );
