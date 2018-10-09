@@ -1092,8 +1092,8 @@ sub clean_elasticsearch{
   # scroll: keeps track of which results have already been returned and so is able to return sorted results more efficiently than with deep pagination
   # scan search: disables any scoring or sorting and to return results in the most efficient way possibl
   my $scroll = $es->scroll_helper(
-    index => $es_index_name,
-    type => $type,
+    index => $type,
+    type => "doc",
     search_type => 'scan',
     size => 500,
   );
@@ -1101,8 +1101,8 @@ sub clean_elasticsearch{
   while (my $loaded_doc = $scroll->next) {
     next SCROLL if $indexed_samples{$loaded_doc->{_id}};
     $es->delete(
-      index => $es_index_name,
-      type => $type,
+      index => $type,
+      type => "doc",
       id => $loaded_doc->{_id},
     );
   }
@@ -1148,8 +1148,8 @@ sub insert_into_es(){
     #trapping error: the code can continue to run even after the die or errors, and it also captures the errors or dieing words.
     eval{
       $es->index(
-        index => $es_index_name,
-        type => $type,
+        index => $type,
+        type => "doc",
         id => $biosampleId,
         body => \%es_doc
       );
@@ -1202,7 +1202,7 @@ sub parseDate(){
 sub get_existing_etags(){
   my %etags;
   my $size = 100;
-  my $urlPrefix = "http://$es_host/$es_index_name/";
+  my $urlPrefix = "http://$es_host/";
   #sort is extremely important, otherwise the pagination does not work properly
   my $urlSuffix = "/_search?_source=biosampleId,etag&sort=biosampleId&size=$size";
   #BioSample splits into organism specimen

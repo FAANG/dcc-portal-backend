@@ -494,8 +494,8 @@ foreach my $exp_id (sort {$a cmp $b} keys %experiments){
       #move the insertion codes out the loop to allow insertion of even invalid experiments
       eval{
         $es->index(
-          index => $es_index_name,
-          type => 'experiment',
+          index => 'experiment',
+          type => 'doc',
           id => $exp_id,
           body => \%exp_es
         );
@@ -517,8 +517,8 @@ foreach my $file_id(keys %files){
   $es_doc{experiment}{standardMet} = $exp_validation{$exp_id} if (exists $exp_validation{$exp_id});
   eval{
     $es->index(
-      index => $es_index_name,
-      type => 'file',
+      index => 'file',
+      type => 'doc',
       id => $file_id,
       body => \%es_doc
     );
@@ -590,8 +590,8 @@ foreach my $dataset_id (keys %datasets){
   #insert into ES
   eval{
     $es->index(
-      index => $es_index_name,
-      type => 'dataset',
+      index => 'dataset',
+      type => 'doc',
       id => $dataset_id,
       body => \%es_doc_dataset
     );
@@ -623,8 +623,8 @@ sub clean_elasticsearch{
   # scroll: keeps track of which results have already been returned and so is able to return sorted results more efficiently than with deep pagination
   # scan search: disables any scoring or sorting and to return results in the most efficient way possibl
   my $filescroll = $es->scroll_helper(
-    index => $es_index_name,
-    type => 'file',
+    index => 'file',
+    type => 'doc',
     search_type => 'scan',
     size => 500,
   );
@@ -632,8 +632,8 @@ sub clean_elasticsearch{
   while (my $loaded_doc = $filescroll->next) {
     next SCROLL if $indexed_files{$loaded_doc->{_id}};
     $es->delete(
-      index => $es_index_name,
-      type => 'file',
+      index => 'file',
+      type => 'doc',
       id => $loaded_doc->{_id},
     );
   }
@@ -644,8 +644,8 @@ sub clean_elasticsearch{
 sub getAllSpecimenIDs(){
   my %biosample_ids;
   my $scroll = $es->scroll_helper(
-    index => $es_index_name,
-    type => 'specimen',
+    index => 'specimen',
+    type => 'doc',
     search_type => 'scan',
     size => 500,
   );
