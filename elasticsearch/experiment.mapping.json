@@ -1,169 +1,137 @@
 {
     "experiment": {
-        "_all": {"enabled": false},
         "dynamic": "strict",
         "properties": {
             "accession": {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword"
             },
             "assayType": {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword"
             },
             "experimentTarget": {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword"
             },
             "standardMet": {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword"
             },
             "versionLastStandardMet": {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword"
             },
             "sampleStorage": {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword"
             },
             "sampleStorageProcessing": {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword"
             },
             "samplingToPreparationInterval": {
                 "properties": {
                     "text": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                         },
                     "unit": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     }
                 }
             },
             "experimentalProtocol": {
                 "properties": {
                     "url": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     },
                     "filename": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     }
                 }
             },
             "extractionProtocol": {
                 "properties": {
                     "url": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     },
                     "filename": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     }
                 }
             },
             "libraryPreparationLocation":  {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword"
             },
             "libraryPreparationLocationLongitude": {
                 "properties": {
                     "text": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                         },
                     "unit": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     }
                 }
             },
             "libraryPreparationLocationLatitude": {
                 "properties": {
                     "text": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                         },
                     "unit": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     }
                 }
             },
             "libraryPreparationDate": {
                 "properties": {
                     "text": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                         },
                     "unit": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     }
                 }
             },
             "sequencingLocation":  {
-                "type": "string",
-                "index": "not_analyzed"
+                "type": "keyword"
             },
             "sequencingLocationLongitude": {
                 "properties": {
                     "text": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                         },
                     "unit": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     }
                 }
             },
             "sequencingLocationLatitude": {
                 "properties": {
                     "text": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                         },
                     "unit": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     }
                 }
             },
             "sequencingDate": {
                 "properties": {
                     "text": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                         },
                     "unit": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     }
                 }
             },
             "customField": {
                 "properties": {
                     "name": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     },
                     "value": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     },
                     "unit": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     },
                     "ontologyTerms": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     }
                 }
             },
@@ -172,12 +140,10 @@
                     "transposaseProtocol": {
                         "properties": {
                             "url": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             },
                             "filename": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             }
                         }
                     }
@@ -186,48 +152,39 @@
             "BS-seq": {
                 "properties": {
                     "librarySelection": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     },
                     "bisulfiteConversionProtocol": {
                         "properties": {
                             "url": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             },
                             "filename": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             }
                         }
                     },
                     "pcrProductIsolationProtocol": {
                         "properties": {
                             "url": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             },
                             "filename": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             }
                         }
                     },
                     "bisulfiteConversionPercent": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     },
                     "restrictionEnzyme": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     },
                     "maxFragmentSizeSelectionRange": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     },
                     "minFragmentSizeSelectionRange": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     }
                 }
             },
@@ -236,34 +193,27 @@
                     "chipProtocol": {
                         "properties": {
                             "url": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             },
                             "filename": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             }
                         }
                     },
                     "chipAntibodyProvider": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     },
                     "chipAntibodyCatalog": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     },
                     "chipAntibodyLot": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     },
                     "libraryGenerationMaxFragmentSizeRange": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     },
                     "libraryGenerationMinFragmentSizeRange": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     }
                 }
             },
@@ -272,22 +222,18 @@
                     "chipProtocol": {
                         "properties": {
                             "url": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             },
                             "filename": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             }
                         }
                     },
                     "libraryGenerationMaxFragmentSizeRange": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     },
                     "libraryGenerationMinFragmentSizeRange": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     }
                 }
             },
@@ -296,12 +242,10 @@
                     "dnaseProtocol": {
                         "properties": {
                             "url": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             },
                             "filename": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             }
                         }
                     }
@@ -310,12 +254,10 @@
             "Hi-C": {
                 "properties": {
                     "restrictionEnzyme": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     },
                     "restrictionSite": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     }
                 }
             },
@@ -324,78 +266,64 @@
                     "rnaPreparation3AdapterLigationProtocol": {
                         "properties": {
                             "url": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             },
                             "filename": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             }
                         }
                     },
                     "rnaPreparation5AdapterLigationProtocol": {
                         "properties": {
                             "url": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             },
                             "filename": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             }
                         }
                     },
                     "libraryGenerationPcrProductIsolationProtocol": {
                         "properties": {
                             "url": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             },
                             "filename": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             }
                         }
                     },
                     "preparationReverseTranscriptionProtocol": {
                         "properties": {
                             "url": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             },
                             "filename": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             }
                         }
                     },
                     "libraryGenerationProtocol": {
                         "properties": {
                             "url": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             },
                             "filename": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             }
                         }
                     },
                     "readStrand": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     },
                     "rnaPurity260280ratio": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     },
                     "rnaPurity260230ratio": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     },
                     "rnaIntegrityNumber": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     }
                 }
             },
@@ -404,30 +332,25 @@
                     "libraryGenerationPcrProductIsolationProtocol": {
                         "properties": {
                             "url": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             },
                             "filename": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             }
                         }
                     },
                     "libraryGenerationProtocol": {
                         "properties": {
                             "url": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             },
                             "filename": {
-                                "type": "string",
-                                "index": "not_analyzed"
+                                "type": "keyword"
                             }
                         }
                     },
                     "librarySelection": {
-                        "type": "string",
-                        "index": "not_analyzed"
+                        "type": "keyword"
                     }
                 }
             }

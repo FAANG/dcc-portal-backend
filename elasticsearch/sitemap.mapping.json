@@ -1,21 +1,15 @@
 {
     "sitemap": {
         "dynamic": "strict",
-        "_all": {
-            "enabled": false
-        }, 
         "properties": {
             "content": {
-                "type": "string",
-                "index": "analyzed"
+                "type": "keyword"
             }, 
             "title": {
-                "type": "string",
-                "index": "analyzed"
+                "type": "keyword"
             }, 
             "url": {
-                "index": "no", 
-                "type": "string"
+                "type": "keyword"
             }
         }
     }

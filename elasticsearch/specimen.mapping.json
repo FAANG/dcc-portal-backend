@@ -4,7 +4,6 @@
         "properties": {
             "biosampleId": {
                 "type": "keyword",
-                "index": false,
                 "fields": {
                   "std": {
                     "type": "text",
@@ -13,16 +12,13 @@
                 }
             },
             "id_number": {
-                "type": "keyword",
-                "analyzer": false
+                "type": "integer"
             },
             "etag": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "name": {
                 "type": "keyword",
-                "index": false,
                 "fields": {
                   "std": {
                     "type": "text",
@@ -32,7 +28,6 @@
             },
             "description": {
                 "type": "keyword",
-                "index": false,
                 "fields": {
                   "std": {
                     "type": "text",
@@ -41,30 +36,24 @@
                 }
             },
             "releaseDate": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "updateDate": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "standardMet": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "versionLastStandardMet": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "project": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "organization": {
                 "properties": {
                     "name": {
                         "type": "keyword",
-                        "index": false,
                         "fields": {
                           "autocomp": {
                             "type": "text",
@@ -73,12 +62,10 @@
                         }
                     },
                     "role": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "URL": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
@@ -86,7 +73,6 @@
                 "properties": {
                     "name": {
                         "type": "keyword",
-                        "index": false,
                         "fields": {
                           "std": {
                             "type": "text",
@@ -95,34 +81,28 @@
                         }
                     },
                     "value": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "unit": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "ontologyTerms": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
             "material": {
                 "properties": {
                     "text": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "ontologyTerms": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
             "derivedFrom": {
                 "type": "keyword",
-                "index": false,
                 "fields": {
                   "std": {
                     "type": "text",
@@ -132,7 +112,6 @@
             },
             "sameAs": {
                 "type": "keyword",
-                "index": false,
                 "fields": {
                   "std": {
                     "type": "text",
@@ -141,14 +120,12 @@
                 }
             },
             "availability": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "cellType": {
                 "properties": {
                     "text": {
                         "type": "keyword",
-                        "index": false,
                         "fields": {
                             "autocomp": {
                                 "type": "text",
@@ -157,8 +134,7 @@
                         }
                     },
                     "ontologyTerms": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
@@ -166,7 +142,6 @@
                 "properties": {
                     "biosampleId": {
                         "type": "keyword",
-                        "index": false,
                         "fields": {
                           "std": {
                             "type": "text",
@@ -178,7 +153,6 @@
                         "properties": {
                             "text": {
                                 "type": "keyword",
-                                "index": false,
                                 "fields": {
                                     "autocomp": {
                                         "type": "text",
@@ -187,8 +161,7 @@
                                 }
                             },
                             "ontologyTerms": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
@@ -196,7 +169,6 @@
                         "properties": {
                             "text": {
                                 "type": "keyword",
-                                "index": false,
                                 "fields": {
                                     "autocomp": {
                                         "type": "text",
@@ -205,8 +177,7 @@
                                 }
                             },
                             "ontologyTerms": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
@@ -214,7 +185,6 @@
                         "properties": {
                             "text": {
                                 "type": "keyword",
-                                "index": false,
                                 "fields": {
                                     "autocomp": {
                                         "type": "text",
@@ -227,8 +197,7 @@
                                 }
                             },
                             "ontologyTerms": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
@@ -236,7 +205,6 @@
                         "properties": {
                             "text": {
                                 "type": "keyword",
-                                "index": false,
                                 "fields": {
                                     "autocomp": {
                                         "type": "text",
@@ -245,8 +213,7 @@
                                 }
                             },
                             "ontologyTerms": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     }
@@ -257,32 +224,27 @@
                     "specimenCollectionDate": {
                         "properties": {
                             "text": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "unit": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "animalAgeAtCollection": {
                         "properties": {
                             "text": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "unit": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "developmentalStage": {
                         "properties": {
                             "text": {
-                                "type": "keyword",
-                                "index": false,
+                                "type": "keyword"
                                 "fields": {
                                     "autocomp": {
                                         "type": "text",
@@ -291,8 +253,7 @@
                                 }
                             },
                             "ontologyTerms": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
@@ -300,7 +261,6 @@
                         "properties": {
                             "text": {
                                 "type": "keyword",
-                                "index": false,
                                 "fields": {
                                     "autocomp": {
                                         "type": "text",
@@ -309,8 +269,7 @@
                                 }
                             },
                             "ontologyTerms": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
@@ -318,7 +277,6 @@
                         "properties": {
                             "text": {
                                 "type": "keyword",
-                                "index": false,
                                 "fields": {
                                     "autocomp": {
                                         "type": "text",
@@ -327,88 +285,73 @@
                                 }
                             },
                             "ontologyTerms": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "specimenCollectionProtocol": {
                         "properties": {
                             "url": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "filename": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "fastedStatus": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "numberOfPieces": {
                         "properties": {
                             "text": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "unit": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "specimenVolume": {
                         "properties": {
                             "text": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "unit": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "specimenSize": {
                         "properties": {
                             "text": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "unit": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "specimenWeight": {
                         "properties": {
                             "text": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "unit": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "specimenPictureUrl": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "gestationalAgeAtSampleCollection": {
                         "properties": {
                             "text": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "unit": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     }
@@ -419,96 +362,80 @@
                     "poolCreationDate": {
                         "properties": {
                             "text": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "unit": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "poolCreationProtocol": {
                         "properties": {
                             "url": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "filename": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "specimenVolume": {
                         "properties": {
                             "text": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "unit": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "specimenSize": {
                         "properties": {
                             "text": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "unit": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "specimenWeight": {
                         "properties": {
                             "text": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "unit": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "specimenPictureUrl": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
             "cellSpecimen": {
                 "properties": {
                     "markers": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "cellType": {
                         "properties": {
                             "text": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "ontologyTerms": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "purificationProtocol": {
                         "properties": {
                             "url": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "filename": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     }
@@ -519,46 +446,38 @@
                     "cultureType": {
                         "properties": {
                             "text": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "ontologyTerms": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "cellType": {
                         "properties": {
                             "text": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "ontologyTerms": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "cellCultureProtocol": {
                         "properties": {
                             "url": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "filename": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "cultureConditions": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "numberOfPassages": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
@@ -567,8 +486,7 @@
                     "organism": {
                         "properties": {
                             "text": {
-                                "type": "keyword",
-                                "index": false,
+                                "type": "keyword"
                                 "fields": {
                                     "autocomp": {
                                         "type": "text",
@@ -577,8 +495,7 @@
                                 }
                             },
                             "ontologyTerms": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
@@ -586,7 +503,6 @@
                         "properties": {
                             "text": {
                                 "type": "keyword",
-                                "index": false,
                                 "fields": {
                                     "autocomp": {
                                         "type": "text",
@@ -595,14 +511,12 @@
                                 }
                             },
                             "ontologyTerms": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "cellLine": {
                         "type": "keyword",
-                        "index": false,
                         "fields": {
                           "std": {
                             "type": "text",
@@ -611,38 +525,31 @@
                         }
                     },
                     "biomaterialProvider": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "catalogueNumber": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "numberOfPassages": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "dateEstablished": {
                         "properties": {
                             "text": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "unit": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "publication": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "breed": {
                         "properties": {
                             "text": {
                                 "type": "keyword",
-                                "index": false,
                                 "fields": {
                                     "autocomp": {
                                         "type": "text",
@@ -651,36 +558,30 @@
                                 }
                             },
                             "ontologyTerms": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "cellType": {
                         "properties": {
                             "text": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "ontologyTerms": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "cultureConditions": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "cultureProtocol": {
                         "properties": {
                             "url": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             },
                             "filename": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
@@ -688,7 +589,6 @@
                         "properties": {
                             "text": {
                                 "type": "keyword",
-                                "index": false,
                                 "fields": {
                                     "autocomp": {
                                         "type": "text",
@@ -697,14 +597,12 @@
                                 }
                             },
                             "ontologyTerms": {
-                                "type": "keyword",
-                                "index": false
+                                "type": "keyword"
                             }
                         }
                     },
                     "karyotype": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             }

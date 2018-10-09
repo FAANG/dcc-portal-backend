@@ -4,7 +4,6 @@
         "properties": {
             "specimen": {
                 "type": "keyword",
-                "index": false,
                 "fields": {
                     "std": {
                         "type": "text",
@@ -14,7 +13,6 @@
             },
             "organism": {
                 "type": "keyword",
-                "index": false,
                 "fields": {
                     "std": {
                         "type": "text",
@@ -26,7 +24,6 @@
                 "properties": {
                     "text": {
                         "type": "keyword",
-                        "index": false,
                         "fields": {
                             "autocomp": {
                                 "type": "text",
@@ -35,14 +32,12 @@
                         }
                     },
                     "ontologyTerms": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
             "url": {
                 "type": "keyword",
-                "index": false,
                 "fields": {
                     "keywords": {
                         "type": "text",
@@ -51,134 +46,104 @@
                 }
             },
             "name": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "type": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "size": {
-                "type": "keyword",
-                "index": false
+                "type": "long"
             },
             "readableSize": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "checksum": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "checksumMethod": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "archive": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "readCount": {
-                "type": "keyword",
-                "index": false
+                "type": "long"
             },
             "baseCount": {
-                "type": "keyword",
-                "index": false
+                "type": "long"
             },
             "releaseDate": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "updateDate": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "submission": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "experiment": {
                 "properties": {
                     "accession": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "target": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "assayType": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "standardMet": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
             "study": {
                 "properties": {
                     "accession": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "alias": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "type": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "secondaryAccession": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "title": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
             "run": {
                 "properties": {
                     "accession": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "alias": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "platform": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "instrument": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "centerName": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "sequencingDate": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "sequencingLocation": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "sequencingLatitude": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "sequencingLongitude": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             }

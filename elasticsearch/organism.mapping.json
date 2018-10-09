@@ -4,7 +4,6 @@
         "properties": {
             "biosampleId": {
                 "type": "keyword",
-                "index": false,
                 "fields": {
                   "std": {
                     "type": "text",
@@ -17,12 +16,10 @@
                 "analyzer": "standard"
             },
             "etag": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "name": {
-                "type": "keyword",
-                "index": false,
+                "type": "keyword"
                 "fields": {
                   "std": {
                     "type": "text",
@@ -31,8 +28,7 @@
                 }
             },
             "description": {
-                "type": "keyword",
-                "index": false,
+                "type": "keyword"
                 "fields": {
                   "std": {
                     "type": "text",
@@ -41,30 +37,24 @@
                 }
             },
             "releaseDate": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "updateDate": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "standardMet": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "versionLastStandardMet": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "project": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "organization": {
                 "properties": {
                     "name": {
-                        "type": "keyword",
-                        "index": false,
+                        "type": "keyword"
                         "fields": {
                           "autocomp": {
                             "type": "text",
@@ -73,20 +63,17 @@
                         }
                     },
                     "role": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "URL": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
             "customField": {
                 "properties": {
                     "name": {
-                        "type": "keyword",
-                        "index": false,
+                        "type": "keyword"
                         "fields": {
                           "std": {
                             "type": "text",
@@ -95,22 +82,18 @@
                         }
                     },
                     "value": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "unit": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "ontologyTerms": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
             "sameAs": {
                 "type": "keyword",
-                "index": false,
                 "fields": {
                   "std": {
                     "type": "text",
@@ -121,24 +104,20 @@
             "material": {
                 "properties": {
                     "text": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     },
                     "ontologyTerms": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
             "availability": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "organism": {
                 "properties": {
                     "text": {
-                        "type": "keyword",
-                        "index": false,
+                        "type": "keyword"
                         "fields": {
                             "autocomp": {
                                 "type": "text",
@@ -147,8 +126,7 @@
                         }
                     },
                     "ontologyTerms": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
@@ -156,7 +134,6 @@
                 "properties": {
                     "text": {
                         "type": "keyword",
-                        "index": false,
                         "fields": {
                             "autocomp": {
                                 "type": "text",
@@ -165,8 +142,7 @@
                         }
                     },
                     "ontologyTerms": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
@@ -174,7 +150,6 @@
                 "properties": {
                     "text": {
                         "type": "keyword",
-                        "index": false,
                         "fields": {
                             "autocomp": {
                                 "type": "text",
@@ -187,28 +162,24 @@
                         }
                     },
                     "ontologyTerms": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
             "birthDate": {
                 "properties": {
                     "text": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                         },
                     "unit": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
             "healthStatus": {
                 "properties": {
                     "text": {
-                        "type": "keyword",
-                        "index": false,
+                        "type": "keyword"
                         "fields": {
                             "autocomp": {
                                 "type": "text",
@@ -217,90 +188,74 @@
                         }
                     },
                     "ontologyTerms": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
             "birthLocation":  {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "birthLocationLongitude": {
                 "properties": {
                     "text": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                         },
                     "unit": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
             "birthLocationLatitude": {
                 "properties": {
                     "text": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                         },
                     "unit": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
             "birthWeight": {
                 "properties": {
                     "text": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                         },
                     "unit": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
             "placentalWeight": {
                 "properties": {
                     "text": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                         },
                     "unit": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
             "pregnancyLength": {
                 "properties": {
                     "text": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                         },
                     "unit": {
-                        "type": "keyword",
-                        "index": false
+                        "type": "keyword"
                     }
                 }
             },
             "deliveryTiming": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "deliveryEase": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "childOf": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             },
             "pedigree": {
-                "type": "keyword",
-                "index": false
+                "type": "keyword"
             }
         }
     }

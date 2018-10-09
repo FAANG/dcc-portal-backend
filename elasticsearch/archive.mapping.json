@@ -1,13 +1,11 @@
 {
     "archive": {
         "dynamic": "strict",
-        "_all": {"enabled": false},
         "properties": {
             "ENA": {
                 "properties": {
                     "id": {
-                      "type": "string",
-                      "index": "not_analyzed"
+                      "type": "keyword"
                     }
                 }
             }
