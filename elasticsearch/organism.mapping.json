@@ -12,14 +12,13 @@
                 }
             },
             "id_number": {
-                "type": "integer",
-                "analyzer": "standard"
+                "type": "integer"
             },
             "etag": {
                 "type": "keyword"
             },
             "name": {
-                "type": "keyword"
+                "type": "keyword",
                 "fields": {
                   "std": {
                     "type": "text",
@@ -28,7 +27,7 @@
                 }
             },
             "description": {
-                "type": "keyword"
+                "type": "keyword",
                 "fields": {
                   "std": {
                     "type": "text",
@@ -54,7 +53,7 @@
             "organization": {
                 "properties": {
                     "name": {
-                        "type": "keyword"
+                        "type": "keyword",
                         "fields": {
                           "autocomp": {
                             "type": "text",
@@ -73,7 +72,7 @@
             "customField": {
                 "properties": {
                     "name": {
-                        "type": "keyword"
+                        "type": "keyword",
                         "fields": {
                           "std": {
                             "type": "text",
@@ -117,7 +116,7 @@
             "organism": {
                 "properties": {
                     "text": {
-                        "type": "keyword"
+                        "type": "keyword",
                         "fields": {
                             "autocomp": {
                                 "type": "text",
@@ -179,7 +178,7 @@
             "healthStatus": {
                 "properties": {
                     "text": {
-                        "type": "keyword"
+                        "type": "keyword",
                         "fields": {
                             "autocomp": {
                                 "type": "text",

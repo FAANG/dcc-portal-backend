@@ -129,7 +129,7 @@
             "species": {
                 "properties": {
                     "text": {
-                        "type": "keyword"
+                        "type": "keyword",
                         "fields": {
                             "autocomp": {
                                 "type": "text",
@@ -151,7 +151,7 @@
             "file":{
                 "properties":{
                     "url": {
-                        "type": "keyword"
+                        "type": "keyword",
                         "fields": {
                             "keywords": {
                                 "type": "text",
@@ -202,7 +202,7 @@
                 }
             },
             "instrument": {
-                "type": "keyword"
+                "type": "keyword",
                 "fields": {
                     "autocomp": {
                         "type": "text",
