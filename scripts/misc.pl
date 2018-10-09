@@ -1,11 +1,12 @@
 #!/usr/bin/env perl
-#version: 1.2.1
-#last update: 06/09/2018
+#version: 1.2.2
+#last update: /09/2018
 #1.1 add parseCSVline
 #1.1.1 improve trim function
 #1.1.2 add getFilenameFromURL
 #1.2 add code to retrieve etag according to BioSample id and check whether etag changes
 #1.2.1 change getFilenameFromURL logic to return original URL if not a PDF file
+#1.2.2 add 2nd parameter to fetch_json_by_url which allows the program continue even the url does not exists
 
 use strict;
 use warnings;
@@ -132,11 +133,22 @@ sub fetch_etag_biosample_by_accession(){
 
 #example usage: the links section of JSON on ebi sites
 sub fetch_json_by_url(){
-  my ($json_url) = @_;
+  my $json_url = $_[0];
+  my $continue = 0;
+  $continue = $_[1] if (scalar @_ >1);
 
   my $browser = WWW::Mechanize->new();
   #$browser->show_progress(1);  # Enable for WWW::Mechanize GET logging
-  $browser->get( $json_url );
+  eval {
+    $browser->get( $json_url );
+  };
+  if ($@) {
+    if ($continue == 0){
+      die $@;
+    }else{
+      return "";
+    }
+  }
   my $content = $browser->content();
   my $json = new JSON;
   my $json_text = $json->decode($content);
