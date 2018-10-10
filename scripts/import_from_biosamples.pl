@@ -128,7 +128,7 @@ my %standards = ("FAANG Samples"=>"FAANG","FAANG Legacy Samples"=>"FAANG Legacy"
 my $ruleset_version = &getRulesetVersion();
 print "Rule set release: $ruleset_version\n";
 
-my $es = Search::Elasticsearch->new(nodes => $es_host, client => '5_0::Direct');#client option to make it compatiable with elasticsearch 1.x APIs
+my $es = Search::Elasticsearch->new(nodes => $es_host, client => '6_0::Direct');#client option to make it compatiable with elasticsearch 1.x APIs
 
 my %indexed_samples;
 
