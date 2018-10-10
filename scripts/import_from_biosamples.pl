@@ -128,7 +128,7 @@ my %standards = ("FAANG Samples"=>"FAANG","FAANG Legacy Samples"=>"FAANG Legacy"
 my $ruleset_version = &getRulesetVersion();
 print "Rule set release: $ruleset_version\n";
 
-my $es = Search::Elasticsearch->new(nodes => $es_host, client => '1_0::Direct');#client option to make it compatiable with elasticsearch 1.x APIs
+my $es = Search::Elasticsearch->new(nodes => $es_host, client => '5_0::Direct');#client option to make it compatiable with elasticsearch 1.x APIs
 
 my %indexed_samples;
 
@@ -1094,7 +1094,6 @@ sub clean_elasticsearch{
   my $scroll = $es->scroll_helper(
     index => $type,
     type => "doc",
-    search_type => 'scan',
     size => 500,
   );
   SCROLL:

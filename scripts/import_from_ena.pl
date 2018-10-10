@@ -49,7 +49,7 @@ my $json_text = $json->decode($content);
 #the line below enable to investigate the fields used in ENA
 #&investigateENAfields($json_text);
 
-my $es = Search::Elasticsearch->new(nodes => $es_host, client => '1_0::Direct'); #client option to make it compatiable with elasticsearch 1.x APIs
+my $es = Search::Elasticsearch->new(nodes => $es_host, client => '5_0::Direct'); #client option to make it compatiable with elasticsearch 1.x APIs
 
 #get specimen information from current elasticsearch server which will be used to calculate species for dataset etc.
 #which means that this script must be executed after import_from_biosample.pl
