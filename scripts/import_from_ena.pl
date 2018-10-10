@@ -625,7 +625,6 @@ sub clean_elasticsearch{
   my $filescroll = $es->scroll_helper(
     index => 'file',
     type => 'doc',
-    search_type => 'scan',
     size => 500,
   );
   SCROLL:
@@ -646,7 +645,6 @@ sub getAllSpecimenIDs(){
   my $scroll = $es->scroll_helper(
     index => 'specimen',
     type => 'doc',
-    search_type => 'scan',
     size => 500,
   );
   while (my $loaded_doc = $scroll->next) {
