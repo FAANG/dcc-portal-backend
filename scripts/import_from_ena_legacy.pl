@@ -12,14 +12,15 @@ use Data::Dumper;
 
 require "validate_experiment_record.pl";
 require "misc.pl";
-
+#one technology (category) could be represented by different terms
+#for example, WGS and Whole Genome Sequencing are for the same technology
 my %categories = &initializeCategories();
 my @categories = keys %categories;
 
 my %organisms;
 my %specimen_from_organisms;
 my %checkedMaterial;
-
+#the species are considered to be suitable for FAANG
 my %species=(
   "9031"=>"Gallus gallus",
   "9913"=>"Bos taurus",
@@ -47,6 +48,7 @@ GetOptions(
 croak "Need -es_host" unless ($es_host);
 my $es = Search::Elasticsearch->new(nodes => $es_host, client => '1_0::Direct'); #client option to make it compatiable with elasticsearch 1.x APIs
 
+#debug purpose to avoid keep commenting the multiple print statements
 my $exitFlag = 0;
 #&importBioSample("SAMEA3712494");
 #&importBioSample("SAMEA3995839");
@@ -57,28 +59,76 @@ my %existingBiosamples;
 &getExistingIDs("specimen");
 &getExistingIDs("organism");
 
-
+#get the datasets meeting the FAANG standard
 my %existingDatasets = &getFAANGstandardDatasets();
 
 my %assayTypesToBeImported = (
   "ATAC-seq" => "ATAC-seq",
   "BS-Seq" => "methylation profiling by high throughput sequencing",
-  "Hi-C" => "Hi-C"
+  "Hi-C" => "Hi-C",
+  "DNase" => "DNase-Hypersensitivity seq",
+#  "RNA-Seq" => "",
+  "WGS" => "whole genome sequencing assay",
+  "ChIP-Seq" => "ChIP-seq"
 );
 my %experimentTargets = (
   "ATAC-seq" => "open_chromatin_region",
   "BS-Seq" => "DNA methylation",
-  "Hi-C" => "chromatin"
+  "Hi-C" => "chromatin",
+  "DNase" => "open_chromatin_region",
+  "RNA-Seq" => "Unknown ",
+  "WGS" => "input DNA",
+  "ChIP-Seq" => "Unknown"
 );
+
+#get the fields need to be returned from ENA API
 my $fieldList = &getFieldsList();
 my $speciesList = join(",",@species);
+my %studiesWithMissedSample = (
+  "PRJEB12143" => 1, #this study contains the sample records which are currently unreachable SAMEA3712494
+  "PRJEB12324" => 1, #this study contains the sample records which are currently unreachable SAMEA3723253
+  "PRJEB12325" => 1, #this study contains the sample records which are currently unreachable SAMEA3723308
+  "PRJEB12832" => 1, #this study contains the sample records which are currently unreachable SAMEA3879478
+  "PRJEB14491" => 1, #this study contains the sample records which are currently unreachable SAMEA4040736
+  "PRJEB15527" => 1, #this study contains the sample records which are currently unreachable SAMEA4469169
+  "PRJEB19479" => 1, #this study contains the sample records which are currently unreachable SAMEA91810168
+  "PRJEB21942" => 1, #this study contains the sample records which are currently unreachable SAMEA104221508
+  "PRJEB22390" => 1, #this study contains the sample records which are currently unreachable SAMEA104233649
+  "PRJEB6921" => 1, #this study contains the sample records which are currently unreachable SAMEA97954918
+  "PRJEB25937" => 1, #this study contains the sample records which are currently unreachable SAMEA1069020
+  "PRJEB26011" => 1, #this study contains the sample records which are currently unreachable SAMEA4450095
+  "PRJEB26429" => 1, #this study contains the sample records which are currently unreachable SAMEA4609995
+  "PRJEB18113" => 1, #this study contains the sample records which are currently unreachable SAMEA4644726
+  "PRJEB27309" => 1, #this study contains the sample records which are currently unreachable SAMEA4730269
+  "PRJEB27379" => 1, #this study contains the sample records which are currently unreachable SAMEA4780233
+  "PRJEB14779" => 1, #this study contains the sample records which are currently unreachable SAMEA4822838
+  "PRJEB28191" => 1, #this study contains the sample records which are currently unreachable SAMEA4827645
+  "PRJEB28820" => 1, #this study contains the sample records which are currently unreachable SAMEA4940312
+  "PRJEB14418" => 1, #this study contains the sample records which are currently unreachable SAMEA4949193
+  "PRJNA283480" => 1, #this study contains the sample records which are currently unreachable SAMN03652922
+  "PRJNA353057" => 1, #this study contains the sample records which are currently unreachable SAMN06009237
+  "PRJNA399234" => 1, #this study contains the sample records which are currently unreachable SAMN07594319
+  "PRJNA430351" => 1, #this study contains the sample records which are currently unreachable SAMN07570019
+  "PRJNA471759" => 1, #this study contains the sample records which are currently unreachable SAMN09217476
+  "PRJNA477833" => 1, #this study contains the sample records which are currently unreachable SAMN09510408
+  "PRJNA479946" => 1, #this study contains the sample records which are currently unreachable SAMN09579787
+  "PRJNA478565" => 1, #this study contains the sample records which are currently unreachable SAMN09519611
+  "PRJNA482384" => 1, #this study contains the sample records which are currently unreachable SAMN09703921
+  "PRJNA310684" => 1, #this study contains the sample records which are currently unreachable SAMN09841864
+  "PRJNA488985" => 1, #this study contains the sample records which are currently unreachable SAMN09947070
+
+#  "PRJEB12325" => 1, #this study contains the sample records which are currently unreachable SAMEA3723308
+#  "PRJEB12325" => 1, #this study contains the sample records which are currently unreachable SAMEA3723308
+#  "PRJEB12325" => 1, #this study contains the sample records which are currently unreachable SAMEA3723308
+  "PRJEB12703" => 1  #this study contains the sample records which are currently unreachable SAMEA3869564
+);
+
 
 my %todo;
 my %technologies;
 foreach my $term(@categories){
-  #TODO investigate the loss of experiments during the process one technology by another
-#  next if ($categories{$term} eq "BS-Seq");
   my $category = $categories{$term};
+  next unless ($category eq "WGS");
   next unless (exists $assayTypesToBeImported{$category});
 #  print "$term: assay type $assay_type  target $experiment_target\n";
 #  foreach my $species(@species){
@@ -88,9 +138,9 @@ foreach my $term(@categories){
   foreach my $record (@$json_text){
 #    my $species = $$record{tax_id};
     my $study_accession = $$record{study_accession};
-    next if ($study_accession eq "PRJEB12143"); #this study contains the sample records which are currently unreachable SAMEA3712494
+    next if (exists $studiesWithMissedSample{$study_accession}); 
     next if (exists $existingDatasets{$study_accession});#already exists in ES and meet FAANG standard
-    next if ($$record{project_name} eq "FAANG");#should be dealt with by sibling script
+    next if ($$record{project_name} eq "FAANG");#should be dealt with by sibling script import_from_ena.pl
     push (@{$todo{$category}},$record);
   }
 #  } #end of @species
@@ -251,10 +301,10 @@ foreach my $category(keys %todo) {
       %{$datasets{$dataset_id}} = %es_dataset;
     }#end for foreach (@files)
   }#end for each @{$todo{$category}}
-  print "data from API:\n";
-  print Dumper(\%count);
-  print "data for experiments with files\n";
-  print Dumper(\%withFiles);
+#  print "data from API:\n";
+#  print Dumper(\%count);
+#  print "data for experiments with files\n";
+#  print Dumper(\%withFiles);
 
 }
 
@@ -268,9 +318,13 @@ for (my $i=0;$i<scalar @dataset_ids;$i++){
     $num_exps = scalar keys %dataset_exps;
   }
   my $index = $i+1;
-  print "$index $dataset_id has $num_exps experiments to be processed\n";
+  print "$index $dataset_id has $num_exps runs to be processed\n";
 }
-#exit;
+
+if ((scalar keys %datasets)==0){
+  print "There are no datasets found.\n";
+  exit;
+}
 print "\nThere are ".((scalar keys %datasets)-1)." datasets to be processed\n"; #%dataset contains one artificial value set with the key as 'tmp'
 
 print "The information of invalid records will be stored in $error_log\n\n";
@@ -336,6 +390,7 @@ foreach my $file_id(keys %files){
 #under each dataset id key, the value is the corresponding dataset basic information
 #under the conserved tmp key, the value is another hash with dataset id as keys, and another hash having specimen, file, experiment information
 #deal with datasets
+my $countInsertedDataset = 0;
 foreach my $dataset_id (keys %datasets){
   next if ($dataset_id eq "tmp");
   my %es_doc_dataset = %{$datasets{$dataset_id}};
@@ -408,8 +463,12 @@ foreach my $dataset_id (keys %datasets){
   };
   if (my $error = $@) {
     die "error indexing dataset in $es_index_name index:".$error->{text};
+  }else{
+    $countInsertedDataset++;
+    print "Dataset $dataset_id inserted\n";
   }
 }
+print "Total $countInsertedDataset datasets inserted\n";
 
 #investigation work
 #print out content of fields to check how to predict the technology used in the dataset
@@ -570,6 +629,7 @@ sub initializeCategories(){
   $result{"Whole Genome Shotgun Sequence"}="WGS";
 
   $result{"ChIP-Seq"}="ChIP-Seq";
+  $result{"ChIP-seq"}="ChIP-Seq";
   $result{"ChIP-seq Histones"}="ChIP-Seq";
 
   $result{"Hi-C"}="Hi-C";
@@ -623,7 +683,7 @@ sub getFieldsList(){
 
 sub getFAANGstandardDatasets(){
   my %results;
-  #two-step process: first to get how many datasets in the ES
+  #two-step process: first to get how many datasets in the ES as the default size is 20
   my $esUrl = "http://$es_host/$es_index_name/dataset/_search?_source=standardMet";
   my $browser = WWW::Mechanize->new();
   $browser->get( $esUrl );
