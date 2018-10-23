@@ -302,7 +302,7 @@ foreach my $record (@$json_text){
         my $pcr_isolation_protocol = $$record{pcr_isolation_protocol};
         my $pcr_isolation_protocol_filename = &getFilenameFromURL($pcr_isolation_protocol);
         %section_info = (
-          librarySelection => $$record{library_selection},
+          librarySelection => $$record{faang_library_selection},
           bisulfiteConversionProtocol => {
             url => $conversion_protocol,
             filename => $conversion_protocol_filename
@@ -316,9 +316,9 @@ foreach my $record (@$json_text){
           #maxFragmentSizeSelectionRange => $$record{},
           #minFragmentSizeSelectionRange => $$record{},
         );
-        $section_info{librarySelection} = "RRBS" if (lc($section_info{librarySelection}) eq "reduced representation");
-        $section_info{librarySelection} = "RRBS" if (lc($section_info{librarySelection}) eq "size fractionation");
-        $section_info{librarySelection} = "WGBS" if (lc($section_info{librarySelection}) eq "whole genome");
+        #$section_info{librarySelection} = "RRBS" if (lc($section_info{librarySelection}) eq "reduced representation");
+        #$section_info{librarySelection} = "RRBS" if (lc($section_info{librarySelection}) eq "size fractionation");
+        #$section_info{librarySelection} = "WGBS" if (lc($section_info{librarySelection}) eq "whole genome");
         %{$exp_es{"BS-seq"}} = %section_info;
       }elsif($assay_type eq "ChIP-seq"){
         my $chip_protocol = $$record{chip_protocol};
@@ -368,9 +368,8 @@ foreach my $record (@$json_text){
           libraryGenerationProtocol => {
             url => $library_generation_protocol,
             filename => $library_generation_protocol_filename
-          }
-          #,
-          #librarySelection => lc($$record{library_selection})#lc function due to the allowed value is in all lower cases
+          },
+          librarySelection => $$record{faang_library_selection}#lc function due to the allowed value is in all lower cases
           #maxFragmentSizeSelectionRange => $$record{},
           #minFragmentSizeSelectionRange => $$record{},
         );
