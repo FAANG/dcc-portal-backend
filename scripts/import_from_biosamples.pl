@@ -35,8 +35,8 @@ my @knownCellCultureColumns = ("culture type","cell type","cell culture protocol
 my @knownCellLineColumns = ("cell line","biomaterial provider","catalogue number","number of passages","date established","publication","cell type","culture conditions","culture protocol","disease","karyotype");
 @{$knownColumns{"cell line"}} = @knownCellLineColumns;
 
-my $baseUrl = "https://wwwdev.ebi.ac.uk/";
-#my $baseUrl = "https://www.ebi.ac.uk/";
+#my $baseUrl = "https://wwwdev.ebi.ac.uk/";
+my $baseUrl = "https://www.ebi.ac.uk/";
 
 #the code to test getFilenameFromURL
 #my $url = "http://www.ncbi.nlm.nih.gov/pubmed/16215741";
