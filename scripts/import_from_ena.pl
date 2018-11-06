@@ -316,6 +316,7 @@ foreach my $record (@$json_text){
           #maxFragmentSizeSelectionRange => $$record{},
           #minFragmentSizeSelectionRange => $$record{},
         );
+        $section_info{librarySelection} = "RRBS" if ($section_info{librarySelection} eq "RBBS");
         #$section_info{librarySelection} = "RRBS" if (lc($section_info{librarySelection}) eq "reduced representation");
         #$section_info{librarySelection} = "RRBS" if (lc($section_info{librarySelection}) eq "size fractionation");
         #$section_info{librarySelection} = "WGBS" if (lc($section_info{librarySelection}) eq "whole genome");

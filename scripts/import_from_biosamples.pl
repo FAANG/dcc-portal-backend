@@ -293,7 +293,8 @@ sub process_specimens{
     my %relationships = &parse_relationship($specimen);
 
     my $url = $$specimen{characteristics}{"specimen collection protocol"}[0]{text};
-    my $filename = &getFilenameFromURL($url);
+    my $filename = &getFilenameFromURL($url,$key);
+#    my $filename = &getFilenameFromURL($url);
 #    print "$filename\n";
     my $organismAccession = "";
     if (exists $relationships{derivedFrom}){
@@ -393,7 +394,8 @@ sub process_pool_specimen{
     my %relationships = &parse_relationship($specimen);
 
     my $url = $$specimen{characteristics}{"pool creation protocol"}[0]{text};
-    my $filename = &getFilenameFromURL($url);
+    my $filename = &getFilenameFromURL($url,$accession);
+#    my $filename = &getFilenameFromURL($url);
 
     my %es_doc = (
 #      sameAs => ,     #according to ruleset, it should be single value entry, i.e. use a hash. However for all other types, an array is used, to make it consistent, use array here as well
@@ -479,7 +481,8 @@ sub process_cell_specimens{
     my %relationships = &parse_relationship($specimen);
     
     my $url = $$specimen{characteristics}{"purification protocol"}[0]{text};
-    my $filename = &getFilenameFromURL($url);
+    my $filename = &getFilenameFromURL($url,$key);
+#    my $filename = &getFilenameFromURL($url);
 
     #cell specimen derive from specimen from organism
     #therefore two steps needed to get organism: specimen from organism(sfo) first, then organism
@@ -533,7 +536,7 @@ sub process_cell_cultures{
     my %relationships = &parse_relationship($specimen);
 
     my $url = $$specimen{characteristics}{"cell culture protocol"}[0]{text};
-    my $filename = &getFilenameFromURL($url);
+    my $filename = &getFilenameFromURL($url,$key);
 
     #cell culture derive from specimen from organism
     #therefore two steps needed to get organism: specimen from organism(sfo) first, then organism
@@ -597,7 +600,7 @@ sub process_cell_lines{
     my $filename ;
     if (exists $$specimen{characteristics}{"culture protocol"}[0]{text}){
       $url = $$specimen{characteristics}{"culture protocol"}[0]{text};
-      $filename = &getFilenameFromURL($url);
+      $filename = &getFilenameFromURL($url,$key);
     }
     my %es_doc = (
       cellLine => {
@@ -1079,14 +1082,16 @@ sub fetch_biosamples_ids(){
 
 #get one BioSample record with the given accession
 #the returned value has the same data structure as %derivedFromOrganism 
-#for development purpose: much quicker to get one record than get all records
+#initially for development purpose: much quicker to get one record than get all records
+#after introducing etag, it turns out to be the main method
 sub fetch_single_record{
   my ($accession) = @_;
 #  my $url = "http://www.ebi.ac.uk/biosamples/api/samples/$accession"; #old API
-  my $url = $baseUrl."biosamples/samples/$accession";
+#  my $url = $baseUrl."biosamples/samples/$accession";
+  my $url = $baseUrl."biosamples/samples/$accession.json?curationdomain=self.FAANG_DCC_curation";
   my $json_text = &fetch_json_by_url($url);
   my %hash;
-  $json_text = &dealWithDecimalDegrees($json_text);
+#  $json_text = &dealWithDecimalDegrees($json_text);
   $hash{$json_text->{accession}} = $json_text;
   return %hash;
 }
