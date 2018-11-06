@@ -1093,7 +1093,7 @@ sub clean_elasticsearch{
   # scan search: disables any scoring or sorting and to return results in the most efficient way possibl
   my $scroll = $es->scroll_helper(
     index => $type,
-    type => "doc",
+    type => "_doc",
     size => 500,
   );
   SCROLL:
@@ -1101,7 +1101,7 @@ sub clean_elasticsearch{
     next SCROLL if $indexed_samples{$loaded_doc->{_id}};
     $es->delete(
       index => $type,
-      type => "doc",
+      type => "_doc",
       id => $loaded_doc->{_id},
     );
   }
@@ -1148,7 +1148,7 @@ sub insert_into_es(){
     eval{
       $es->index(
         index => $type,
-        type => "doc",
+        type => "_doc",
         id => $biosampleId,
         body => \%es_doc
       );

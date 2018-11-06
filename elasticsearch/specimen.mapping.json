@@ -1,609 +1,607 @@
 {
-    "specimen": {
-        "dynamic": "strict",
-        "properties": {
-            "biosampleId": {
-                "type": "keyword",
-                "fields": {
-                  "std": {
+    "dynamic": "strict",
+    "properties": {
+        "biosampleId": {
+            "type": "keyword",
+            "fields": {
+                "std": {
                     "type": "text",
                     "analyzer": "standard"
-                  }
                 }
-            },
-            "id_number": {
-                "type": "integer"
-            },
-            "etag": {
-                "type": "keyword"
-            },
-            "name": {
-                "type": "keyword",
-                "fields": {
-                  "std": {
+            }
+        },
+        "id_number": {
+            "type": "integer"
+        },
+        "etag": {
+            "type": "keyword"
+        },
+        "name": {
+            "type": "keyword",
+            "fields": {
+                "std": {
                     "type": "text",
                     "analyzer": "standard"
-                  }
                 }
-            },
-            "description": {
-                "type": "keyword",
-                "fields": {
-                  "std": {
+            }
+        },
+        "description": {
+            "type": "keyword",
+            "fields": {
+                "std": {
                     "type": "text",
                     "analyzer": "standard"
-                  }
                 }
-            },
-            "releaseDate": {
-                "type": "keyword"
-            },
-            "updateDate": {
-                "type": "keyword"
-            },
-            "standardMet": {
-                "type": "keyword"
-            },
-            "versionLastStandardMet": {
-                "type": "keyword"
-            },
-            "project": {
-                "type": "keyword"
-            },
-            "organization": {
-                "properties": {
-                    "name": {
-                        "type": "keyword",
-                        "fields": {
-                          "autocomp": {
+            }
+        },
+        "releaseDate": {
+            "type": "keyword"
+        },
+        "updateDate": {
+            "type": "keyword"
+        },
+        "standardMet": {
+            "type": "keyword"
+        },
+        "versionLastStandardMet": {
+            "type": "keyword"
+        },
+        "project": {
+            "type": "keyword"
+        },
+        "organization": {
+            "properties": {
+                "name": {
+                    "type": "keyword",
+                    "fields": {
+                        "autocomp": {
                             "type": "text",
                             "analyzer": "autocomp"
-                          }
                         }
-                    },
-                    "role": {
-                        "type": "keyword"
-                    },
-                    "URL": {
-                        "type": "keyword"
                     }
+                },
+                "role": {
+                    "type": "keyword"
+                },
+                "URL": {
+                    "type": "keyword"
                 }
-            },
-            "customField": {
-                "properties": {
-                    "name": {
-                        "type": "keyword",
-                        "fields": {
-                          "std": {
+            }
+        },
+        "customField": {
+            "properties": {
+                "name": {
+                    "type": "keyword",
+                    "fields": {
+                        "std": {
                             "type": "text",
                             "analyzer": "standard"
-                          }
                         }
-                    },
-                    "value": {
-                        "type": "keyword"
-                    },
-                    "unit": {
-                        "type": "keyword"
-                    },
-                    "ontologyTerms": {
-                        "type": "keyword"
                     }
+                },
+                "value": {
+                    "type": "keyword"
+                },
+                "unit": {
+                    "type": "keyword"
+                },
+                "ontologyTerms": {
+                    "type": "keyword"
                 }
-            },
-            "material": {
-                "properties": {
-                    "text": {
-                        "type": "keyword"
-                    },
-                    "ontologyTerms": {
-                        "type": "keyword"
-                    }
+            }
+        },
+        "material": {
+            "properties": {
+                "text": {
+                    "type": "keyword"
+                },
+                "ontologyTerms": {
+                    "type": "keyword"
                 }
-            },
-            "derivedFrom": {
-                "type": "keyword",
-                "fields": {
-                  "std": {
+            }
+        },
+        "derivedFrom": {
+            "type": "keyword",
+            "fields": {
+                "std": {
                     "type": "text",
                     "analyzer": "standard"
-                  }
                 }
-            },
-            "sameAs": {
-                "type": "keyword",
-                "fields": {
-                  "std": {
+            }
+        },
+        "sameAs": {
+            "type": "keyword",
+            "fields": {
+                "std": {
                     "type": "text",
                     "analyzer": "standard"
-                  }
                 }
-            },
-            "availability": {
-                "type": "keyword"
-            },
-            "cellType": {
-                "properties": {
-                    "text": {
-                        "type": "keyword",
-                        "fields": {
-                            "autocomp": {
-                                "type": "text",
-                                "analyzer": "autocomp"
-                            }
+            }
+        },
+        "availability": {
+            "type": "keyword"
+        },
+        "cellType": {
+            "properties": {
+                "text": {
+                    "type": "keyword",
+                    "fields": {
+                        "autocomp": {
+                            "type": "text",
+                            "analyzer": "autocomp"
                         }
-                    },
-                    "ontologyTerms": {
-                        "type": "keyword"
                     }
+                },
+                "ontologyTerms": {
+                    "type": "keyword"
                 }
-            },
-            "organism": {
-                "properties": {
-                    "biosampleId": {
-                        "type": "keyword",
-                        "fields": {
-                          "std": {
+            }
+        },
+        "organism": {
+            "properties": {
+                "biosampleId": {
+                    "type": "keyword",
+                    "fields": {
+                        "std": {
                             "type": "text",
                             "analyzer": "standard"
-                          }
                         }
-                    },
-                    "organism": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword",
-                                "fields": {
-                                    "autocomp": {
-                                        "type": "text",
-                                        "analyzer": "autocomp"
-                                    }
+                    }
+                },
+                "organism": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword",
+                            "fields": {
+                                "autocomp": {
+                                    "type": "text",
+                                    "analyzer": "autocomp"
                                 }
-                            },
-                            "ontologyTerms": {
-                                "type": "keyword"
                             }
+                        },
+                        "ontologyTerms": {
+                            "type": "keyword"
                         }
-                    },
-                    "sex": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword",
-                                "fields": {
-                                    "autocomp": {
-                                        "type": "text",
-                                        "analyzer": "autocomp"
-                                    }
+                    }
+                },
+                "sex": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword",
+                            "fields": {
+                                "autocomp": {
+                                    "type": "text",
+                                    "analyzer": "autocomp"
                                 }
-                            },
-                            "ontologyTerms": {
-                                "type": "keyword"
                             }
+                        },
+                        "ontologyTerms": {
+                            "type": "keyword"
                         }
-                    },
-                    "breed": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword",
-                                "fields": {
-                                    "autocomp": {
-                                        "type": "text",
-                                        "analyzer": "autocomp"
-                                    },
-                                    "lower_case_sort": { 
-                                        "type": "text",
-                                        "analyzer": "case_insensitive_sort"
-                                    }
+                    }
+                },
+                "breed": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword",
+                            "fields": {
+                                "autocomp": {
+                                    "type": "text",
+                                    "analyzer": "autocomp"
+                                },
+                                "lower_case_sort": {
+                                    "type": "text",
+                                    "analyzer": "case_insensitive_sort"
                                 }
-                            },
-                            "ontologyTerms": {
-                                "type": "keyword"
                             }
+                        },
+                        "ontologyTerms": {
+                            "type": "keyword"
                         }
-                    },
-                    "healthStatus": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword",
-                                "fields": {
-                                    "autocomp": {
-                                        "type": "text",
-                                        "analyzer": "autocomp"
-                                    }
+                    }
+                },
+                "healthStatus": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword",
+                            "fields": {
+                                "autocomp": {
+                                    "type": "text",
+                                    "analyzer": "autocomp"
                                 }
-                            },
-                            "ontologyTerms": {
-                                "type": "keyword"
                             }
+                        },
+                        "ontologyTerms": {
+                            "type": "keyword"
                         }
                     }
                 }
-            },
-            "specimenFromOrganism": {
-                "properties": {
-                    "specimenCollectionDate": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword"
-                            },
-                            "unit": {
-                                "type": "keyword"
-                            }
+            }
+        },
+        "specimenFromOrganism": {
+            "properties": {
+                "specimenCollectionDate": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword"
+                        },
+                        "unit": {
+                            "type": "keyword"
                         }
-                    },
-                    "animalAgeAtCollection": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword"
-                            },
-                            "unit": {
-                                "type": "keyword"
-                            }
+                    }
+                },
+                "animalAgeAtCollection": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword"
+                        },
+                        "unit": {
+                            "type": "keyword"
                         }
-                    },
-                    "developmentalStage": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword",
-                                "fields": {
-                                    "autocomp": {
-                                        "type": "text",
-                                        "analyzer": "autocomp"
-                                    }
+                    }
+                },
+                "developmentalStage": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword",
+                            "fields": {
+                                "autocomp": {
+                                    "type": "text",
+                                    "analyzer": "autocomp"
                                 }
-                            },
-                            "ontologyTerms": {
-                                "type": "keyword"
                             }
+                        },
+                        "ontologyTerms": {
+                            "type": "keyword"
                         }
-                    },
-                    "healthStatusAtCollection": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword",
-                                "fields": {
-                                    "autocomp": {
-                                        "type": "text",
-                                        "analyzer": "autocomp"
-                                    }
+                    }
+                },
+                "healthStatusAtCollection": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword",
+                            "fields": {
+                                "autocomp": {
+                                    "type": "text",
+                                    "analyzer": "autocomp"
                                 }
-                            },
-                            "ontologyTerms": {
-                                "type": "keyword"
                             }
+                        },
+                        "ontologyTerms": {
+                            "type": "keyword"
                         }
-                    },
-                    "organismPart": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword",
-                                "fields": {
-                                    "autocomp": {
-                                        "type": "text",
-                                        "analyzer": "autocomp"
-                                    }
+                    }
+                },
+                "organismPart": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword",
+                            "fields": {
+                                "autocomp": {
+                                    "type": "text",
+                                    "analyzer": "autocomp"
                                 }
-                            },
-                            "ontologyTerms": {
-                                "type": "keyword"
                             }
+                        },
+                        "ontologyTerms": {
+                            "type": "keyword"
                         }
-                    },
-                    "specimenCollectionProtocol": {
-                        "properties": {
-                            "url": {
-                                "type": "keyword"
-                            },
-                            "filename": {
-                                "type": "keyword"
-                            }
+                    }
+                },
+                "specimenCollectionProtocol": {
+                    "properties": {
+                        "url": {
+                            "type": "keyword"
+                        },
+                        "filename": {
+                            "type": "keyword"
                         }
-                    },
-                    "fastedStatus": {
-                        "type": "keyword"
-                    },
-                    "numberOfPieces": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword"
-                            },
-                            "unit": {
-                                "type": "keyword"
-                            }
+                    }
+                },
+                "fastedStatus": {
+                    "type": "keyword"
+                },
+                "numberOfPieces": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword"
+                        },
+                        "unit": {
+                            "type": "keyword"
                         }
-                    },
-                    "specimenVolume": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword"
-                            },
-                            "unit": {
-                                "type": "keyword"
-                            }
+                    }
+                },
+                "specimenVolume": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword"
+                        },
+                        "unit": {
+                            "type": "keyword"
                         }
-                    },
-                    "specimenSize": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword"
-                            },
-                            "unit": {
-                                "type": "keyword"
-                            }
+                    }
+                },
+                "specimenSize": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword"
+                        },
+                        "unit": {
+                            "type": "keyword"
                         }
-                    },
-                    "specimenWeight": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword"
-                            },
-                            "unit": {
-                                "type": "keyword"
-                            }
+                    }
+                },
+                "specimenWeight": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword"
+                        },
+                        "unit": {
+                            "type": "keyword"
                         }
-                    },
-                    "specimenPictureUrl": {
-                        "type": "keyword"
-                    },
-                    "gestationalAgeAtSampleCollection": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword"
-                            },
-                            "unit": {
-                                "type": "keyword"
-                            }
+                    }
+                },
+                "specimenPictureUrl": {
+                    "type": "keyword"
+                },
+                "gestationalAgeAtSampleCollection": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword"
+                        },
+                        "unit": {
+                            "type": "keyword"
                         }
                     }
                 }
-            },
-            "poolOfSpecimens": {
-                "properties": {
-                    "poolCreationDate": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword"
-                            },
-                            "unit": {
-                                "type": "keyword"
-                            }
-                        }
-                    },
-                    "poolCreationProtocol": {
-                        "properties": {
-                            "url": {
-                                "type": "keyword"
-                            },
-                            "filename": {
-                                "type": "keyword"
-                            }
-                        }
-                    },
-                    "specimenVolume": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword"
-                            },
-                            "unit": {
-                                "type": "keyword"
-                            }
-                        }
-                    },
-                    "specimenSize": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword"
-                            },
-                            "unit": {
-                                "type": "keyword"
-                            }
-                        }
-                    },
-                    "specimenWeight": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword"
-                            },
-                            "unit": {
-                                "type": "keyword"
-                            }
-                        }
-                    },
-                    "specimenPictureUrl": {
-                        "type": "keyword"
-                    }
-                }
-            },
-            "cellSpecimen": {
-                "properties": {
-                    "markers": {
-                        "type": "keyword"
-                    },
-                    "cellType": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword"
-                            },
-                            "ontologyTerms": {
-                                "type": "keyword"
-                            }
-                        }
-                    },
-                    "purificationProtocol": {
-                        "properties": {
-                            "url": {
-                                "type": "keyword"
-                            },
-                            "filename": {
-                                "type": "keyword"
-                            }
+            }
+        },
+        "poolOfSpecimens": {
+            "properties": {
+                "poolCreationDate": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword"
+                        },
+                        "unit": {
+                            "type": "keyword"
                         }
                     }
+                },
+                "poolCreationProtocol": {
+                    "properties": {
+                        "url": {
+                            "type": "keyword"
+                        },
+                        "filename": {
+                            "type": "keyword"
+                        }
+                    }
+                },
+                "specimenVolume": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword"
+                        },
+                        "unit": {
+                            "type": "keyword"
+                        }
+                    }
+                },
+                "specimenSize": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword"
+                        },
+                        "unit": {
+                            "type": "keyword"
+                        }
+                    }
+                },
+                "specimenWeight": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword"
+                        },
+                        "unit": {
+                            "type": "keyword"
+                        }
+                    }
+                },
+                "specimenPictureUrl": {
+                    "type": "keyword"
                 }
-            },
-            "cellCulture": {
-                "properties": {
-                    "cultureType": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword"
-                            },
-                            "ontologyTerms": {
-                                "type": "keyword"
-                            }
+            }
+        },
+        "cellSpecimen": {
+            "properties": {
+                "markers": {
+                    "type": "keyword"
+                },
+                "cellType": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword"
+                        },
+                        "ontologyTerms": {
+                            "type": "keyword"
                         }
-                    },
-                    "cellType": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword"
-                            },
-                            "ontologyTerms": {
-                                "type": "keyword"
-                            }
+                    }
+                },
+                "purificationProtocol": {
+                    "properties": {
+                        "url": {
+                            "type": "keyword"
+                        },
+                        "filename": {
+                            "type": "keyword"
                         }
-                    },
-                    "cellCultureProtocol": {
-                        "properties": {
-                            "url": {
-                                "type": "keyword"
-                            },
-                            "filename": {
-                                "type": "keyword"
-                            }
-                        }
-                    },
-                    "cultureConditions": {
-                        "type": "keyword"
-                    },
-                    "numberOfPassages": {
-                        "type": "keyword"
                     }
                 }
-            },
-            "cellLine": {
-                "properties": {
-                    "organism": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword",
-                                "fields": {
-                                    "autocomp": {
-                                        "type": "text",
-                                        "analyzer": "autocomp"
-                                    }
+            }
+        },
+        "cellCulture": {
+            "properties": {
+                "cultureType": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword"
+                        },
+                        "ontologyTerms": {
+                            "type": "keyword"
+                        }
+                    }
+                },
+                "cellType": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword"
+                        },
+                        "ontologyTerms": {
+                            "type": "keyword"
+                        }
+                    }
+                },
+                "cellCultureProtocol": {
+                    "properties": {
+                        "url": {
+                            "type": "keyword"
+                        },
+                        "filename": {
+                            "type": "keyword"
+                        }
+                    }
+                },
+                "cultureConditions": {
+                    "type": "keyword"
+                },
+                "numberOfPassages": {
+                    "type": "keyword"
+                }
+            }
+        },
+        "cellLine": {
+            "properties": {
+                "organism": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword",
+                            "fields": {
+                                "autocomp": {
+                                    "type": "text",
+                                    "analyzer": "autocomp"
                                 }
-                            },
-                            "ontologyTerms": {
-                                "type": "keyword"
                             }
+                        },
+                        "ontologyTerms": {
+                            "type": "keyword"
                         }
-                    },
-                    "sex": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword",
-                                "fields": {
-                                    "autocomp": {
-                                        "type": "text",
-                                        "analyzer": "autocomp"
-                                    }
+                    }
+                },
+                "sex": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword",
+                            "fields": {
+                                "autocomp": {
+                                    "type": "text",
+                                    "analyzer": "autocomp"
                                 }
-                            },
-                            "ontologyTerms": {
-                                "type": "keyword"
                             }
+                        },
+                        "ontologyTerms": {
+                            "type": "keyword"
                         }
-                    },
-                    "cellLine": {
-                        "type": "keyword",
-                        "fields": {
-                          "std": {
+                    }
+                },
+                "cellLine": {
+                    "type": "keyword",
+                    "fields": {
+                        "std": {
                             "type": "text",
                             "analyzer": "standard"
-                          }
                         }
-                    },
-                    "biomaterialProvider": {
-                        "type": "keyword"
-                    },
-                    "catalogueNumber": {
-                        "type": "keyword"
-                    },
-                    "numberOfPassages": {
-                        "type": "keyword"
-                    },
-                    "dateEstablished": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword"
-                            },
-                            "unit": {
-                                "type": "keyword"
-                            }
-                        }
-                    },
-                    "publication": {
-                        "type": "keyword"
-                    },
-                    "breed": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword",
-                                "fields": {
-                                    "autocomp": {
-                                        "type": "text",
-                                        "analyzer": "autocomp"
-                                    }
-                                }
-                            },
-                            "ontologyTerms": {
-                                "type": "keyword"
-                            }
-                        }
-                    },
-                    "cellType": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword"
-                            },
-                            "ontologyTerms": {
-                                "type": "keyword"
-                            }
-                        }
-                    },
-                    "cultureConditions": {
-                        "type": "keyword"
-                    },
-                    "cultureProtocol": {
-                        "properties": {
-                            "url": {
-                                "type": "keyword"
-                            },
-                            "filename": {
-                                "type": "keyword"
-                            }
-                        }
-                    },
-                    "disease": {
-                        "properties": {
-                            "text": {
-                                "type": "keyword",
-                                "fields": {
-                                    "autocomp": {
-                                        "type": "text",
-                                        "analyzer": "autocomp"
-                                    }
-                                }
-                            },
-                            "ontologyTerms": {
-                                "type": "keyword"
-                            }
-                        }
-                    },
-                    "karyotype": {
-                        "type": "keyword"
                     }
+                },
+                "biomaterialProvider": {
+                    "type": "keyword"
+                },
+                "catalogueNumber": {
+                    "type": "keyword"
+                },
+                "numberOfPassages": {
+                    "type": "keyword"
+                },
+                "dateEstablished": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword"
+                        },
+                        "unit": {
+                            "type": "keyword"
+                        }
+                    }
+                },
+                "publication": {
+                    "type": "keyword"
+                },
+                "breed": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword",
+                            "fields": {
+                                "autocomp": {
+                                    "type": "text",
+                                    "analyzer": "autocomp"
+                                }
+                            }
+                        },
+                        "ontologyTerms": {
+                            "type": "keyword"
+                        }
+                    }
+                },
+                "cellType": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword"
+                        },
+                        "ontologyTerms": {
+                            "type": "keyword"
+                        }
+                    }
+                },
+                "cultureConditions": {
+                    "type": "keyword"
+                },
+                "cultureProtocol": {
+                    "properties": {
+                        "url": {
+                            "type": "keyword"
+                        },
+                        "filename": {
+                            "type": "keyword"
+                        }
+                    }
+                },
+                "disease": {
+                    "properties": {
+                        "text": {
+                            "type": "keyword",
+                            "fields": {
+                                "autocomp": {
+                                    "type": "text",
+                                    "analyzer": "autocomp"
+                                }
+                            }
+                        },
+                        "ontologyTerms": {
+                            "type": "keyword"
+                        }
+                    }
+                },
+                "karyotype": {
+                    "type": "keyword"
                 }
             }
         }

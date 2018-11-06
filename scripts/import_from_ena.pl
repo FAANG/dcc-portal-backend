@@ -495,7 +495,7 @@ foreach my $exp_id (sort {$a cmp $b} keys %experiments){
       eval{
         $es->index(
           index => 'experiment',
-          type => 'doc',
+          type => '_doc',
           id => $exp_id,
           body => \%exp_es
         );
@@ -518,7 +518,7 @@ foreach my $file_id(keys %files){
   eval{
     $es->index(
       index => 'file',
-      type => 'doc',
+      type => '_doc',
       id => $file_id,
       body => \%es_doc
     );
@@ -591,7 +591,7 @@ foreach my $dataset_id (keys %datasets){
   eval{
     $es->index(
       index => 'dataset',
-      type => 'doc',
+      type => '_doc',
       id => $dataset_id,
       body => \%es_doc_dataset
     );
@@ -624,7 +624,7 @@ sub clean_elasticsearch{
   # scan search: disables any scoring or sorting and to return results in the most efficient way possibl
   my $filescroll = $es->scroll_helper(
     index => 'file',
-    type => 'doc',
+    type => '_doc',
     size => 500,
   );
   SCROLL:
@@ -632,7 +632,7 @@ sub clean_elasticsearch{
     next SCROLL if $indexed_files{$loaded_doc->{_id}};
     $es->delete(
       index => 'file',
-      type => 'doc',
+      type => '_doc',
       id => $loaded_doc->{_id},
     );
   }
@@ -644,7 +644,7 @@ sub getAllSpecimenIDs(){
   my %biosample_ids;
   my $scroll = $es->scroll_helper(
     index => 'specimen',
-    type => 'doc',
+    type => '_doc',
     size => 500,
   );
   while (my $loaded_doc = $scroll->next) {
