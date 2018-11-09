@@ -36,6 +36,19 @@ my $content = $browser->content();
 my $json = new JSON;
 my $json_text = $json->decode($content);
 
+my %technologies = (
+  "ATAC-seq"=>"ATAC-seq",
+  "methylation profiling by high throughput sequencing"=>"BS-seq",
+  "ChIP-seq"=>"ChIP-seq",
+  "DNase-Hypersensitivity seq"=>"DNase-seq",
+  "Hi-C"=>"Hi-C",
+  "microRNA profiling by high throughput sequencing"=>"RNA-seq",
+  "RNA-seq of coding RNA"=>"RNA-seq",
+  "RNA-seq of non coding RNA"=>"RNA-seq",
+  "transcription profiling by high throughput sequencing"=>"RNA-seq",
+  "whole genome sequencing assay"=>"WGS"
+);
+
 #debug code
 #my $fh;
 #open $fh,"test_api_result.txt";
@@ -91,10 +104,11 @@ my %files;
 
 my %studies_from_api;
 my %strategy;
+my %exps_in_dataset;
 foreach my $record (@$json_text){
   $studies_from_api{$$record{study_accession}}++;
   #it seems that all records share the same set of fields, i.e. no need to check existance
-
+#  next unless ($$record{study_accession} eq "PRJEB25677");
   #hard coded to try to convert to accepted terms/add new fixed fields in FAANG ruleset
   my $library_strategy = $$record{library_strategy};
   my $assay_type = $$record{assay_type};
@@ -288,7 +302,7 @@ foreach my $record (@$json_text){
         my $pcr_isolation_protocol = $$record{pcr_isolation_protocol};
         my $pcr_isolation_protocol_filename = &getFilenameFromURL($pcr_isolation_protocol);
         %section_info = (
-          librarySelection => $$record{library_selection},
+          librarySelection => $$record{faang_library_selection},
           bisulfiteConversionProtocol => {
             url => $conversion_protocol,
             filename => $conversion_protocol_filename
@@ -302,9 +316,10 @@ foreach my $record (@$json_text){
           #maxFragmentSizeSelectionRange => $$record{},
           #minFragmentSizeSelectionRange => $$record{},
         );
-        $section_info{librarySelection} = "RRBS" if (lc($section_info{librarySelection}) eq "reduced representation");
-        $section_info{librarySelection} = "RRBS" if (lc($section_info{librarySelection}) eq "size fractionation");
-        $section_info{librarySelection} = "WGBS" if (lc($section_info{librarySelection}) eq "whole genome");
+        $section_info{librarySelection} = "RRBS" if ($section_info{librarySelection} eq "RBBS");
+        #$section_info{librarySelection} = "RRBS" if (lc($section_info{librarySelection}) eq "reduced representation");
+        #$section_info{librarySelection} = "RRBS" if (lc($section_info{librarySelection}) eq "size fractionation");
+        #$section_info{librarySelection} = "WGBS" if (lc($section_info{librarySelection}) eq "whole genome");
         %{$exp_es{"BS-seq"}} = %section_info;
       }elsif($assay_type eq "ChIP-seq"){
         my $chip_protocol = $$record{chip_protocol};
@@ -355,7 +370,7 @@ foreach my $record (@$json_text){
             url => $library_generation_protocol,
             filename => $library_generation_protocol_filename
           },
-          librarySelection => lc($$record{library_selection})#lc function due to the allowed value is in all lower cases
+          librarySelection => $$record{faang_library_selection}#lc function due to the allowed value is in all lower cases
           #maxFragmentSizeSelectionRange => $$record{},
           #minFragmentSizeSelectionRange => $$record{},
         );
@@ -413,6 +428,7 @@ foreach my $record (@$json_text){
 
     #collect information for datasets
     my $dataset_id = $$record{study_accession};
+    $exps_in_dataset{$exp_id} = $dataset_id;
     my %es_doc_dataset;
     if (exists $datasets{$dataset_id}){
       %es_doc_dataset = %{$datasets{$dataset_id}};
@@ -421,7 +437,7 @@ foreach my $record (@$json_text){
       $es_doc_dataset{accession}=$dataset_id;
       $es_doc_dataset{alias}=$$record{study_alias};
       $es_doc_dataset{title}=$$record{study_title};
-      $es_doc_dataset{type}=$$record{study_type};
+      #$es_doc_dataset{type}=$$record{study_type};
       $es_doc_dataset{secondaryAccession}=$$record{secondary_study_accession};
     }
 
@@ -471,7 +487,7 @@ for (my $i=0;$i<scalar @dataset_ids;$i++){
     $num_exps = scalar keys %dataset_exps;
   }
   my $index = $i+1;
-  print "$index $dataset_id has $studies_from_api{$dataset_id} experiments from api and $num_exps experiments to be processed\n";
+  print "$index $dataset_id has $studies_from_api{$dataset_id} runs from api and $num_exps experiments to be processed\n";
 }
 
 print "\nThere are ".((scalar keys %datasets)-1)." datasets to be processed\n"; #%dataset contains one artificial value set with the key as 'tmp'
@@ -486,7 +502,7 @@ foreach my $exp_id (sort {$a cmp $b} keys %experiments){
   my %exp_es = %{$experiments{$exp_id}};
   foreach my $ruleset(@rulesets){
     if($validationResult{$ruleset}{detail}{$exp_id}{status} eq "error"){
-      print ERR "$exp_id\tExperiment\terror\t$validationResult{$ruleset}{detail}{$exp_id}{message}\n";
+      print ERR "$exp_id\t$exps_in_dataset{$exp_id}\tExperiment\terror\t$validationResult{$ruleset}{detail}{$exp_id}{message}\n";
     }else{
       $exp_validation{$exp_id} = $standards{$ruleset};
       $exp_es{standardMet} = $standards{$ruleset};
@@ -540,10 +556,16 @@ foreach my $dataset_id (keys %datasets){
   my %only_valid_exps;
   #determine dataset standard using the lowest experiment standard
   my $dataset_standard = "FAANG";
+  my %experiment_type;
+  my %tech_type;
   foreach my $exp_id(keys %exps){
     if (exists $exp_validation{$exp_id}){
       $dataset_standard = "FAANG Legacy" if ($exp_validation{$exp_id} eq "FAANG Legacy");
       $only_valid_exps{$exp_id} = $exps{$exp_id};
+      my $assay_type = $exps{$exp_id}{assayType};
+      #TODO decision needs to be made
+      $tech_type{$technologies{$assay_type}}++; 
+      $experiment_type{$assay_type}++;
     }else{ #not valid at all
 #      print "Invalid experiment $exp_id, excluded from $dataset_id\n";
     }
@@ -583,6 +605,8 @@ foreach my $dataset_id (keys %datasets){
   }
   @{$es_doc_dataset{file}} = @valid_files;
   @{$es_doc_dataset{experiment}} = values %only_valid_exps;
+  @{$es_doc_dataset{assayType}} = keys %experiment_type;
+  @{$es_doc_dataset{tech}} = keys %tech_type;
   @{$es_doc_dataset{instrument}} = keys %{$datasets{tmp}{$dataset_id}{instrument}};
   @{$es_doc_dataset{centerName}} = keys %{$datasets{tmp}{$dataset_id}{centerName}};
   @{$es_doc_dataset{archive}} = sort {$a cmp $b} keys %{$datasets{tmp}{$dataset_id}{archive}};

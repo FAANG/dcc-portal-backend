@@ -1,216 +1,219 @@
 {
-    "dynamic": "strict",
-    "properties": {
-        "accession": {
-            "type": "keyword",
-            "fields": {
-                "std": {
-                    "type": "text",
-                    "analyzer": "standard"
-                }
+  "dynamic": "strict",
+  "properties": {
+    "accession": {
+      "type": "keyword",
+      "fields": {
+        "std": {
+          "type": "text",
+          "analyzer": "standard"
+        }
+      }
+    },
+    "standardMet": {
+      "type": "keyword"
+    },
+    "title": {
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp"
+        }
+      }
+    },
+    "alias": {
+      "type": "keyword"
+    },
+    "assayType": {
+      "type": "keyword"
+    },
+    "tech": {
+      "type": "keyword"
+    },
+    "secondaryAccession": {
+      "type": "keyword",
+      "fields": {
+        "std": {
+          "type": "text",
+          "analyzer": "standard"
+        }
+      }
+    },
+    "archive": {
+      "type": "keyword"
+    },
+    "specimen": {
+      "properties": {
+        "biosampleId": {
+          "type": "keyword",
+          "fields": {
+            "std": {
+              "type": "text",
+              "analyzer": "standard"
             }
+          }
         },
-        "standardMet": {
-            "type": "keyword"
+        "material": {
+          "properties": {
+            "text": {
+              "type": "keyword"
+            },
+            "ontologyTerms": {
+              "type": "keyword"
+            }
+          }
         },
-        "title": {
-            "type": "keyword",
-            "fields": {
+        "cellType": {
+          "properties": {
+            "text": {
+              "type": "keyword",
+              "fields": {
                 "autocomp": {
-                    "type": "text",
-                    "analyzer": "autocomp"
+                  "type": "text",
+                  "analyzer": "autocomp"
                 }
+              }
+            },
+            "ontologyTerms": {
+              "type": "keyword"
             }
+          }
         },
-        "alias": {
-            "type": "keyword"
+        "organism": {
+          "properties": {
+            "text": {
+              "type": "keyword"
+            },
+            "ontologyTerms": {
+              "type": "keyword"
+            }
+          }
         },
-        "type": {
-            "type": "keyword"
-        },
-        "secondaryAccession": {
-            "type": "keyword",
-            "fields": {
-                "std": {
-                    "type": "text",
-                    "analyzer": "standard"
+        "sex": {
+          "properties": {
+            "text": {
+              "type": "keyword",
+              "fields": {
+                "autocomp": {
+                  "type": "text",
+                  "analyzer": "autocomp"
                 }
+              }
+            },
+            "ontologyTerms": {
+              "type": "keyword"
             }
+          }
         },
-        "archive": {
-            "type": "keyword"
-        },
-        "specimen": {
-            "properties": {
-                "biosampleId": {
-                    "type": "keyword",
-                    "fields": {
-                        "std": {
-                            "type": "text",
-                            "analyzer": "standard"
-                        }
-                    }
+        "breed": {
+          "properties": {
+            "text": {
+              "type": "keyword",
+              "fields": {
+                "autocomp": {
+                  "type": "text",
+                  "analyzer": "autocomp"
                 },
-                "material": {
-                    "properties": {
-                        "text": {
-                            "type": "keyword"
-                        },
-                        "ontologyTerms": {
-                            "type": "keyword"
-                        }
-                    }
-                },
-                "cellType": {
-                    "properties": {
-                        "text": {
-                            "type": "keyword",
-                            "fields": {
-                                "autocomp": {
-                                    "type": "text",
-                                    "analyzer": "autocomp"
-                                }
-                            }
-                        },
-                        "ontologyTerms": {
-                            "type": "keyword"
-                        }
-                    }
-                },
-                "organism": {
-                    "properties": {
-                        "text": {
-                            "type": "keyword"
-                        },
-                        "ontologyTerms": {
-                            "type": "keyword"
-                        }
-                    }
-                },
-                "sex": {
-                    "properties": {
-                        "text": {
-                            "type": "keyword",
-                            "fields": {
-                                "autocomp": {
-                                    "type": "text",
-                                    "analyzer": "autocomp"
-                                }
-                            }
-                        },
-                        "ontologyTerms": {
-                            "type": "keyword"
-                        }
-                    }
-                },
-                "breed": {
-                    "properties": {
-                        "text": {
-                            "type": "keyword",
-                            "fields": {
-                                "autocomp": {
-                                    "type": "text",
-                                    "analyzer": "autocomp"
-                                },
-                                "lower_case_sort": {
-                                    "type": "text",
-                                    "analyzer": "case_insensitive_sort"
-                                }
-                            }
-                        },
-                        "ontologyTerms": {
-                            "type": "keyword"
-                        }
-                    }
+                "lower_case_sort": {
+                  "type": "text",
+                  "analyzer": "case_insensitive_sort"
                 }
+              }
+            },
+            "ontologyTerms": {
+              "type": "keyword"
             }
-        },
-        "species": {
-            "properties": {
-                "text": {
-                    "type": "keyword",
-                    "fields": {
-                        "autocomp": {
-                            "type": "text",
-                            "analyzer": "autocomp"
-                        }
-                    }
-                },
-                "ontologyTerms": {
-                    "type": "keyword"
-                }
+          }
+        }
+      }
+    },
+    "species": {
+      "properties": {
+        "text": {
+          "type": "keyword",
+          "fields": {
+            "autocomp": {
+              "type": "text",
+              "analyzer": "autocomp"
             }
+          }
         },
-        "releaseDate": {
-            "type": "keyword"
-        },
-        "updateDate": {
-            "type": "keyword"
-        },
-        "file": {
-            "properties": {
-                "url": {
-                    "type": "keyword",
-                    "fields": {
-                        "keywords": {
-                            "type": "text",
-                            "analyzer": "ftp_url"
-                        }
-                    }
-                },
-                "name": {
-                    "type": "keyword"
-                },
-                "fileId": {
-                    "type": "keyword"
-                },
-                "experiment": {
-                    "type": "keyword"
-                },
-                "type": {
-                    "type": "keyword"
-                },
-                "size": {
-                    "type": "keyword"
-                },
-                "readableSize": {
-                    "type": "keyword"
-                },
-                "archive": {
-                    "type": "keyword"
-                },
-                "readCount": {
-                    "type": "keyword"
-                },
-                "baseCount": {
-                    "type": "keyword"
-                }
+        "ontologyTerms": {
+          "type": "keyword"
+        }
+      }
+    },
+    "releaseDate": {
+      "type": "keyword"
+    },
+    "updateDate": {
+      "type": "keyword"
+    },
+    "file": {
+      "properties": {
+        "url": {
+          "type": "keyword",
+          "fields": {
+            "keywords": {
+              "type": "text",
+              "analyzer": "ftp_url"
             }
+          }
+        },
+        "name": {
+          "type": "keyword"
+        },
+        "fileId": {
+          "type": "keyword"
         },
         "experiment": {
-            "properties": {
-                "accession": {
-                    "type": "keyword"
-                },
-                "target": {
-                    "type": "keyword"
-                },
-                "assayType": {
-                    "type": "keyword"
-                }
-            }
+          "type": "keyword"
         },
-        "instrument": {
-            "type": "keyword",
-            "fields": {
-                "autocomp": {
-                    "type": "text",
-                    "analyzer": "autocomp"
-                }
-            }
+        "type": {
+          "type": "keyword"
         },
-        "centerName": {
-            "type": "keyword"
+        "size": {
+          "type": "keyword"
+        },
+        "readableSize": {
+          "type": "keyword"
+        },
+        "archive": {
+          "type": "keyword"
+        },
+        "readCount": {
+          "type": "keyword"
+        },
+        "baseCount": {
+          "type": "keyword"
         }
+      }
+    },
+    "experiment": {
+      "properties": {
+        "accession": {
+          "type": "keyword"
+        },
+        "target": {
+          "type": "keyword"
+        },
+        "assayType": {
+          "type": "keyword"
+        }
+      }
+    },
+    "instrument": {
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp"
+        }
+      }
+    },
+    "centerName": {
+      "type": "keyword"
     }
+  }
 }

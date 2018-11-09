@@ -21,8 +21,8 @@ require "misc.pl";
 my %knownColumns;
 #the known column names according to the rule set https://www.ebi.ac.uk/vg/faang/rule_sets/FAANG%20Samples
 #after removing these known columns, the left ones are the custom fields which need to be dealt with
-my @commonColumns = ("description","Material","project","availability","same as");
-my @knownOrganismColumns = ("Organism","Sex","birth date","breed","health status","birth location","birth location longitude","birth location latitude","birth weight","placental weight","pregnancy length","delivery timing","delivery ease","Child Of","pedigree","strain");#some submitter use strain instead of breed
+my @commonColumns = ("description","Material","Organism","project","availability","same as");
+my @knownOrganismColumns = ("Sex","birth date","breed","health status","birth location","birth location longitude","birth location latitude","birth weight","placental weight","pregnancy length","delivery timing","delivery ease","Child Of","pedigree","strain");#some submitter use strain instead of breed
 @{$knownColumns{"organism"}} = @knownOrganismColumns;
 my @knownSpecimenFromColumns = ("specimen collection date","animal age at collection","developmental stage","health status at collection","organism part","specimen collection protocol","fasted status","number of pieces","specimen volume","specimen size","specimen weight","specimen picture url","gestational age at sample collection");
 @{$knownColumns{"specimen from organism"}} = @knownSpecimenFromColumns;
@@ -173,7 +173,8 @@ if($legacy_flag){
 
 }else{
   print "Importing FAANG data\n";
-  my $url = $baseUrl."biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG";
+#  my $url = $baseUrl."biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG";
+  my $url = $baseUrl."biosamples/accessions?project=FAANG&limit=100000";
   #&fetch_records_by_project($url);
   &fetch_records_by_project_via_etag($url);
 
@@ -292,7 +293,8 @@ sub process_specimens{
     my %relationships = &parse_relationship($specimen);
 
     my $url = $$specimen{characteristics}{"specimen collection protocol"}[0]{text};
-    my $filename = &getFilenameFromURL($url);
+    my $filename = &getFilenameFromURL($url,$key);
+#    my $filename = &getFilenameFromURL($url);
 #    print "$filename\n";
     my $organismAccession = "";
     if (exists $relationships{derivedFrom}){
@@ -392,7 +394,8 @@ sub process_pool_specimen{
     my %relationships = &parse_relationship($specimen);
 
     my $url = $$specimen{characteristics}{"pool creation protocol"}[0]{text};
-    my $filename = &getFilenameFromURL($url);
+    my $filename = &getFilenameFromURL($url,$accession);
+#    my $filename = &getFilenameFromURL($url);
 
     my %es_doc = (
 #      sameAs => ,     #according to ruleset, it should be single value entry, i.e. use a hash. However for all other types, an array is used, to make it consistent, use array here as well
@@ -478,7 +481,8 @@ sub process_cell_specimens{
     my %relationships = &parse_relationship($specimen);
     
     my $url = $$specimen{characteristics}{"purification protocol"}[0]{text};
-    my $filename = &getFilenameFromURL($url);
+    my $filename = &getFilenameFromURL($url,$key);
+#    my $filename = &getFilenameFromURL($url);
 
     #cell specimen derive from specimen from organism
     #therefore two steps needed to get organism: specimen from organism(sfo) first, then organism
@@ -532,7 +536,7 @@ sub process_cell_cultures{
     my %relationships = &parse_relationship($specimen);
 
     my $url = $$specimen{characteristics}{"cell culture protocol"}[0]{text};
-    my $filename = &getFilenameFromURL($url);
+    my $filename = &getFilenameFromURL($url,$key);
 
     #cell culture derive from specimen from organism
     #therefore two steps needed to get organism: specimen from organism(sfo) first, then organism
@@ -596,7 +600,7 @@ sub process_cell_lines{
     my $filename ;
     if (exists $$specimen{characteristics}{"culture protocol"}[0]{text}){
       $url = $$specimen{characteristics}{"culture protocol"}[0]{text};
-      $filename = &getFilenameFromURL($url);
+      $filename = &getFilenameFromURL($url,$key);
     }
     my %es_doc = (
       cellLine => {
@@ -945,7 +949,8 @@ sub fetch_records_by_project_via_etag(){
     print "There are $hash{$type} $type records\n";
   }
   if ($total == 0){
-    print "All records have not been modified since last importation.";
+    print "All records have not been modified since last importation.\n";
+    print "Exit program at ".localtime."\n";
     exit;
   }
   print "The sum is $total\n";
@@ -1059,26 +1064,34 @@ sub dealWithDecimalDegrees(){
 sub fetch_biosamples_ids(){
   my ($url) = @_;
   my @ids;
-  while ($url && length($url)>0){
-    my $json_text = &fetch_json_by_url($url);
-    foreach my $item (@{$json_text->{_embedded}{samples}}){
-      push (@ids, $$item{accession});
-    }
-    $url = $$json_text{_links}{next}{href};
-  }
+#  while ($url && length($url)>0){
+#    my $json_text = &fetch_json_by_url($url);
+#    foreach my $item (@{$json_text->{_embedded}{samples}}){
+#      push (@ids, $$item{accession});
+#    }
+#    $url = $$json_text{_links}{next}{href};
+#  }
+  my $json_text = &fetch_json_by_url($url);
+  @ids = @{$json_text};
+  print scalar @ids."\n";
+#print Dumper(@ids);
+#exit;
+
   return @ids;
 }
 
 #get one BioSample record with the given accession
 #the returned value has the same data structure as %derivedFromOrganism 
-#for development purpose: much quicker to get one record than get all records
+#initially for development purpose: much quicker to get one record than get all records
+#after introducing etag, it turns out to be the main method
 sub fetch_single_record{
   my ($accession) = @_;
 #  my $url = "http://www.ebi.ac.uk/biosamples/api/samples/$accession"; #old API
-  my $url = $baseUrl."biosamples/samples/$accession";
+#  my $url = $baseUrl."biosamples/samples/$accession";
+  my $url = $baseUrl."biosamples/samples/$accession.json?curationdomain=self.FAANG_DCC_curation";
   my $json_text = &fetch_json_by_url($url);
   my %hash;
-  $json_text = &dealWithDecimalDegrees($json_text);
+#  $json_text = &dealWithDecimalDegrees($json_text);
   $hash{$json_text->{accession}} = $json_text;
   return %hash;
 }
@@ -1183,6 +1196,9 @@ sub parse_relationship(){
   foreach my $ref(@relations){
 #      push(@{$result{$$ref{type}}},$$ref{target}) unless ($$ref{target} eq $accession);
 #      push(@{$result{toLowerCamelCase($$ref{type})}},$$ref{target}) unless ($$ref{target} eq $accession);
+      #in a animal-sample relationship target will be the animal
+      #in a membership relationship target will be this record while source will be the group
+      #therefore relationship having the accession as target should be ignored
       $result{$$ref{type}}{$$ref{target}}++ unless ($$ref{target} eq $accession);
       $result{toLowerCamelCase($$ref{type})}{$$ref{target}}++ unless ($$ref{target} eq $accession);
   }
