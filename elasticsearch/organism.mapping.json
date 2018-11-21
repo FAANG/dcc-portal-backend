@@ -17,6 +17,16 @@
                 "type": "integer",
                 "analyzer": "standard"
             },
+            "alternativeId": {
+                "type": "string",
+                "index": "not_analyzed",
+                "fields": {
+                  "std": {
+                    "type": "string",
+                    "analyzer": "standard"
+                  }
+                }
+            },
             "etag": {
                 "type": "string",
                 "index": "not_analyzed"
@@ -107,16 +117,6 @@
                         "type": "string",
                         "index": "not_analyzed"
                     }
-                }
-            },
-            "sameAs": {
-                "type": "string",
-                "index": "not_analyzed",
-                "fields": {
-                  "std": {
-                    "type": "string",
-                    "analyzer": "standard"
-                  }
                 }
             },
             "material": {
