@@ -63,7 +63,7 @@ my $baseUrl = "https://www.ebi.ac.uk/";
 #my $accession = "SAMEA4451615"; #organism, environmental conditions and physiological conditions
 #my $accession = "SAMEA103988626"; #specimen from organism, physiological conditions
 #my $accession = "SAMEA4451620"; #specimen from organism, physiological conditions which contains lactation duration information
-
+#my $accession = "SAMEA104496890";#spcimen from organism, EBI equivalent sample
 #my $accession = "SAMEA4448136"; #organism without relationship   
 #my $accession = "SAMEA6215668";
 #my %organism_tmp = &fetch_single_record($accession);
@@ -206,7 +206,8 @@ $pastTime = $current;
 
 #Check whether specimens were obtained from BioSamples
 my $number_specimens_check = keys %specimen_from_organism;
-croak "Did not obtain any specimens from BioSamples" unless ( $number_specimens_check > 0);
+my $number_organism_check = keys %organism;
+croak "Did not obtain any specimens from BioSamples" unless ( $number_specimens_check > 0 || $number_organism_check > 0);
 #organism needs to be processed first which populates %organismInfoForSpecimen
 print "Indexing organism starts at ".localtime."\n";
 &process_organisms(\%organism);
@@ -363,7 +364,6 @@ sub process_specimens{
     foreach my $healthStatusAtCollection (@{$$specimen{characteristics}{"health status at collection"}}){
       push(@{$es_doc{specimenFromOrganism}{healthStatusAtCollection}}, {text => $$healthStatusAtCollection{text}, ontologyTerms => $$healthStatusAtCollection{ontologyTerms}[0]});
     }
-    @{$es_doc{sameAs}} = keys %{$relationships{sameAs}} if (exists $relationships{sameAs});
 
     #the parent animal has not been processed e.g. only specimen record updated not the animal
     unless (exists $organismInfoForSpecimen{$organismAccession}){
@@ -372,6 +372,7 @@ sub process_specimens{
     }
     
     $es_doc{organism}=$organismInfoForSpecimen{$organismAccession};  
+    @{$es_doc{alternativeId}} = &getAlternative(\%relationships);
     
     $organismReferredBySpecimen{$organismAccession}++;
 
@@ -456,7 +457,7 @@ sub process_pool_specimen{
         }
       } 
     }
-    @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
+    @{$es_doc{alternativeId}} = &getAlternative(\%relationships);
     #assign the collective value of organism, sex and breed for all related specimen
     my @arr = ("organism","sex","breed");
     foreach my $type(@arr){
@@ -515,7 +516,7 @@ sub process_cell_specimens{
     foreach my $cellType (@{$$specimen{characteristics}{"cell type"}}){
       push(@{$es_doc{cellSpecimen}{cellType}}, $cellType);
     }
-    @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
+    @{$es_doc{alternativeId}} = &getAlternative(\%relationships);
 
     unless (exists $organismInfoForSpecimen{$organismAccession}){
       my %tmp = &fetch_single_record($organismAccession);
@@ -576,7 +577,7 @@ sub process_cell_cultures{
       ontologyTerms => $$specimen{characteristics}{"cell type"}[0]{ontologyTerms}[0]
     };
 
-    @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
+    @{$es_doc{alternativeId}} = &getAlternative(\%relationships);
 
     unless (exists $organismInfoForSpecimen{$organismAccession}){
       my %tmp = &fetch_single_record($organismAccession);
@@ -650,7 +651,7 @@ sub process_cell_lines{
     };
 
     $es_doc{derivedFrom} = $relationships{derivedFrom}[0] if (exists $relationships{derivedFrom});
-    @{$es_doc{sameAs}} = @{$relationships{sameAs}} if (exists $relationships{sameAs});
+    @{$es_doc{alternativeId}} = &getAlternative(\%relationships);
 
      #print Dumper(\%relationships);exit;
     #at the time of development there is no data in BioSample to have derived from value so this part is commented out
@@ -732,7 +733,8 @@ sub process_organisms(){
 
     my %relationships = &parse_relationship($organism);
     @{$es_doc{childOf}} = keys %{$relationships{childOf}} if (exists $relationships{childOf});
-    @{$es_doc{sameAs}} = keys %{$relationships{sameAs}} if (exists $relationships{sameAs});
+    my @alternative = &getAlternative(\%relationships);
+    @{$es_doc{alternativeId}} = @alternative;
 
     &addOrganismInfoForSpecimen($accession,$organism);
     @{$organismInfoForSpecimen{$accession}{healthStatus}} = @healthStatus;
@@ -746,6 +748,24 @@ sub process_organisms(){
   }
   &insert_into_es(\%converted,"organism");
 }
+
+sub getAlternative(){
+  my %relationships = %{$_[0]};
+#  print Dumper(\%relationships);
+  my @result;
+  if (exists $relationships{sameAs}){
+    foreach my $acc(keys %{$relationships{sameAs}}){
+      push (@result, $acc);
+    }
+  }
+  if (exists $relationships{"EBI equivalent BioSample"}){
+    foreach my $acc(keys %{$relationships{"EBI equivalent BioSample"}}){
+      push (@result, $acc);
+    }
+  }
+  return @result;
+}
+
 sub getHealthStatus(){
   my ($organism) = @_;
   my @healthStatus;
@@ -1188,9 +1208,11 @@ sub check_is_faang(){
 sub parse_relationship(){
   my %result;
   #relationships could be optional though in SampleTab submission way (current way) at least one group member/group relationship
+  #check the existance, not exist, return an empty hash
   unless (exists $_[0]{relationships}){
     return %result;
   }
+  #parse
   my @relations = @{$_[0]{relationships}};
   my $accession = $_[0]{accession};
   foreach my $ref(@relations){
@@ -1199,8 +1221,16 @@ sub parse_relationship(){
       #in a animal-sample relationship target will be the animal
       #in a membership relationship target will be this record while source will be the group
       #therefore relationship having the accession as target should be ignored
-      $result{$$ref{type}}{$$ref{target}}++ unless ($$ref{target} eq $accession);
-      $result{toLowerCamelCase($$ref{type})}{$$ref{target}}++ unless ($$ref{target} eq $accession);
+      my $type = $$ref{type};
+      if ($type eq "EBI equivalent BioSample" || $type eq "same as"){#the relationship does not have direction
+        my $target = $$ref{source};
+        $target = $$ref{target} if ($target eq $accession);
+        $result{$type}{$target}++;
+        $result{toLowerCamelCase($type)}{$target}++;
+      }else{
+        $result{$type}{$$ref{target}}++ unless ($$ref{target} eq $accession);
+        $result{toLowerCamelCase($type)}{$$ref{target}}++ unless ($$ref{target} eq $accession);
+      }
   }
   return %result;
 }

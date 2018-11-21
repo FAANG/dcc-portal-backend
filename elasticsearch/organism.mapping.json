@@ -13,6 +13,15 @@
         "id_number": {
             "type": "integer"
         },
+      "alternativeId": {
+        "type": "keyword",
+        "fields": {
+          "std": {
+            "type": "text",
+            "analyzer": "standard"
+          }
+        }
+      },
         "etag": {
             "type": "keyword"
         },
@@ -87,15 +96,6 @@
                 },
                 "ontologyTerms": {
                     "type": "keyword"
-                }
-            }
-        },
-        "sameAs": {
-            "type": "keyword",
-            "fields": {
-                "std": {
-                    "type": "text",
-                    "analyzer": "standard"
                 }
             }
         },
