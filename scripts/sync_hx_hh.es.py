@@ -48,7 +48,7 @@ def rsync_snapshot():
 
 def restore_snapshot(es_fallback, es_production, today, snapshot_name):
     parameters = {
-        "indices": "file,organism,specimen,dataset",
+        "indices": "file2,organism2,specimen2,dataset2,experiment",
         "ignore_unavailable": True,
         "rename_pattern": "([a-z]+)",
         "rename_replacement": "$1-{}".format(today)
