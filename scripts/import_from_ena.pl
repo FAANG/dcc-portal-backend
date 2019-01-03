@@ -106,7 +106,8 @@ my %studies_from_api;
 my %strategy;
 my %exps_in_dataset;
 foreach my $record (@$json_text){
-  #next unless ($$record{study_accession} eq "PRJEB22535");
+#  next unless ($$record{study_accession} eq "PRJEB22535");
+#  next unless ($$record{study_accession} eq "PRJEB27364");
   $studies_from_api{$$record{study_accession}}++;
   #it seems that all records share the same set of fields, i.e. no need to check existance
   #hard coded to try to convert to accepted terms/add new fixed fields in FAANG ruleset
@@ -368,9 +369,19 @@ foreach my $record (@$json_text){
         );
         %{$exp_es{"DNase-seq"}} = %section_info;
       }elsif($assay_type eq "Hi-C"){
+        my $hi_c_protocol;
+        my $hi_c_protocol_filename;
+        if ($$record{hi_c_protocol}){
+          $hi_c_protocol = $$record{hi_c_protocol};
+          $hi_c_protocol_filename = &getFilenameFromURL($hi_c_protocol,"$exp_id hi-c protocol");
+        }
         %section_info = (
           restrictionEnzyme => $$record{restriction_enzyme},
-          restrictionSite => $$record{restriction_site}
+          restrictionSite => $$record{restriction_site},
+          "hi-cProtocol" =>{
+            url => $hi_c_protocol,
+            filename => $hi_c_protocol_filename
+          }
         );
         %{$exp_es{"Hi-C"}} = %section_info;
       }elsif($assay_type eq "whole genome sequencing assay"){

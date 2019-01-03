@@ -316,6 +316,18 @@
                     "restrictionSite": {
                         "type": "string",
                         "index": "not_analyzed"
+                    },
+                    "hi-cProtocol": {
+                        "properties": {
+                            "url": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            },
+                            "filename": {
+                                "type": "string",
+                                "index": "not_analyzed"
+                            }
+                        }
                     }
                 }
             },
