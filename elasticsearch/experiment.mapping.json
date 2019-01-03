@@ -257,6 +257,16 @@
         },
         "restrictionSite": {
           "type": "keyword"
+        },
+        "hi-cProtocol": {
+          "properties": {
+            "url": {
+              "type": "keyword"
+            },
+            "filename": {
+              "type": "keyword"
+            }
+          }
         }
       }
     },

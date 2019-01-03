@@ -158,7 +158,8 @@ sub fetch_json_by_url(){
 #return the filename extracted from the given URL. If it is not a pdf file, return the original url
 sub getFilenameFromURL(){
     my $url = $_[0];
-    my $acc = $_[1];
+    my $acc = "";
+    $acc = $_[1] if ((scalar @_)>1);
     if (length($url) == 0){
       print "$acc url is empty\n";
       return ""

@@ -106,9 +106,10 @@ my %studies_from_api;
 my %strategy;
 my %exps_in_dataset;
 foreach my $record (@$json_text){
+#  next unless ($$record{study_accession} eq "PRJEB22535");
+#  next unless ($$record{study_accession} eq "PRJEB27364");
   $studies_from_api{$$record{study_accession}}++;
   #it seems that all records share the same set of fields, i.e. no need to check existance
-#  next unless ($$record{study_accession} eq "PRJEB25677");
   #hard coded to try to convert to accepted terms/add new fixed fields in FAANG ruleset
   my $library_strategy = $$record{library_strategy};
   my $assay_type = $$record{assay_type};
@@ -235,10 +236,18 @@ foreach my $record (@$json_text){
     #assume experiment information would be the same across ENA based on the experiment accession
     my $exp_id = $$record{experiment_accession};
     unless (exists $experiments{$exp_id}){
-      my $experiment_protocol = $$record{experimental_protocol};
-      my $experiment_protocol_filename = &getFilenameFromURL($experiment_protocol);
-      my $extraction_protocol = $$record{extraction_protocol};
-      my $extraction_protocol_filename = &getFilenameFromURL($extraction_protocol);
+      my $experiment_protocol;
+      my $experiment_protocol_filename;
+      if ($$record{experimental_protocol}){
+        $experiment_protocol = $$record{experimental_protocol};
+        $experiment_protocol_filename = &getFilenameFromURL($experiment_protocol,"$exp_id experiment protocol");
+      }
+      my $extraction_protocol;
+      my $extraction_protocol_filename;
+      if ($$record{extraction_protocol}){
+        $extraction_protocol = $$record{extraction_protocol};
+        $extraction_protocol_filename = &getFilenameFromURL($extraction_protocol,"$exp_id extraction protocol");
+      }
       my %exp_es = (
         accession => $exp_id,
         assayType => $assay_type,
@@ -288,7 +297,7 @@ foreach my $record (@$json_text){
       my %section_info;
       if ($assay_type eq "ATAC-seq"){
         my $transposase_protocol = $$record{transposase_protocol};
-        my $transposase_protocol_filename = &getFilenameFromURL($transposase_protocol);
+        my $transposase_protocol_filename = &getFilenameFromURL($transposase_protocol,"$exp_id ATAC transposase protocol");
         %section_info = (
           transposaseProtocol => {
             url => $transposase_protocol,
@@ -297,10 +306,18 @@ foreach my $record (@$json_text){
         );
         %{$exp_es{"ATAC-seq"}} = %section_info;
       }elsif ($assay_type eq "methylation profiling by high throughput sequencing"){
-        my $conversion_protocol = $$record{bisulfite_protocol};
-        my $conversion_protocol_filename = &getFilenameFromURL($conversion_protocol);
-        my $pcr_isolation_protocol = $$record{pcr_isolation_protocol};
-        my $pcr_isolation_protocol_filename = &getFilenameFromURL($pcr_isolation_protocol);
+        my $conversion_protocol;
+        my $conversion_protocol_filename;
+        my $pcr_isolation_protocol;
+        my $pcr_isolation_protocol_filename;
+        if($$record{bisulfite_protocol}){
+          $conversion_protocol = $$record{bisulfite_protocol};
+          $conversion_protocol_filename = &getFilenameFromURL($conversion_protocol,"$exp_id BS conversion protocol");
+        }
+        if ($$record{pcr_isolation_protocol}){
+          $pcr_isolation_protocol = $$record{pcr_isolation_protocol};
+          $pcr_isolation_protocol_filename = &getFilenameFromURL($pcr_isolation_protocol,"$exp_id BS pcr protocol");
+        }
         %section_info = (
           librarySelection => $$record{faang_library_selection},
           bisulfiteConversionProtocol => {
@@ -317,13 +334,10 @@ foreach my $record (@$json_text){
           #minFragmentSizeSelectionRange => $$record{},
         );
         $section_info{librarySelection} = "RRBS" if ($section_info{librarySelection} eq "RBBS");
-        #$section_info{librarySelection} = "RRBS" if (lc($section_info{librarySelection}) eq "reduced representation");
-        #$section_info{librarySelection} = "RRBS" if (lc($section_info{librarySelection}) eq "size fractionation");
-        #$section_info{librarySelection} = "WGBS" if (lc($section_info{librarySelection}) eq "whole genome");
         %{$exp_es{"BS-seq"}} = %section_info;
       }elsif($assay_type eq "ChIP-seq"){
         my $chip_protocol = $$record{chip_protocol};
-        my $chip_protocol_filename = &getFilenameFromURL($chip_protocol);
+        my $chip_protocol_filename = &getFilenameFromURL($chip_protocol,"$exp_id chip protocol");
         %section_info = (
           chipProtocol => {
             url => $chip_protocol,
@@ -341,8 +355,12 @@ foreach my $record (@$json_text){
           %{$exp_es{"ChiP-seq histone"}} = %section_info;
         }
       }elsif($assay_type eq "DNase-Hypersensitivity seq"){
-        my $dnase_protocol = $$record{dnase_protocol};
-        my $dnase_protocol_filename = &getFilenameFromURL($dnase_protocol);
+        my $dnase_protocol;
+        my $dnase_protocol_filename;
+        if ($$record{dnase_protocol}){
+          $dnase_protocol = $$record{dnase_protocol};
+          $dnase_protocol_filename = &getFilenameFromURL($dnase_protocol,"$exp_id dnase protocol");
+        }
         %section_info = (
           dnaseProtocol => {
             url => $dnase_protocol,
@@ -351,16 +369,26 @@ foreach my $record (@$json_text){
         );
         %{$exp_es{"DNase-seq"}} = %section_info;
       }elsif($assay_type eq "Hi-C"){
+        my $hi_c_protocol;
+        my $hi_c_protocol_filename;
+        if ($$record{hi_c_protocol}){
+          $hi_c_protocol = $$record{hi_c_protocol};
+          $hi_c_protocol_filename = &getFilenameFromURL($hi_c_protocol,"$exp_id hi-c protocol");
+        }
         %section_info = (
           restrictionEnzyme => $$record{restriction_enzyme},
-          restrictionSite => $$record{restriction_site}
+          restrictionSite => $$record{restriction_site},
+          "hi-cProtocol" =>{
+            url => $hi_c_protocol,
+            filename => $hi_c_protocol_filename
+          }
         );
         %{$exp_es{"Hi-C"}} = %section_info;
       }elsif($assay_type eq "whole genome sequencing assay"){
         my $library_pcr_protocol = $$record{library_pcr_isolation_protocol};
-        my $library_pcr_protocol_filename = &getFilenameFromURL($library_pcr_protocol);
+        my $library_pcr_protocol_filename = &getFilenameFromURL($library_pcr_protocol,"$exp_id WGS pcr protocol");
         my $library_generation_protocol = $$record{library_gen_protocol};
-        my $library_generation_protocol_filename = &getFilenameFromURL($library_generation_protocol);
+        my $library_generation_protocol_filename = &getFilenameFromURL($library_generation_protocol,"$exp_id WGS generation protocol");
         %section_info = (
           libraryGenerationPcrProductIsolationProtocol => {
             url => $library_pcr_protocol,
@@ -384,16 +412,36 @@ foreach my $record (@$json_text){
       #in the current ruleset, all unprocessed data should belong to RNA-Seq
       }else{
         #no corresponding column found in ENA
-        my $rna_3_adapter_protocol = $$record{rna_prep_3_protocol};
-        my $rna_3_adapter_protocol_filename = &getFilenameFromURL($rna_3_adapter_protocol);
-        my $rna_5_adapter_protocol = $$record{rna_prep_5_protocol};
-        my $rna_5_adapter_protocol_filename = &getFilenameFromURL($rna_5_adapter_protocol);
-        my $library_pcr_protocol = $$record{library_pcr_isolation_protocol};
-        my $library_pcr_protocol_filename = &getFilenameFromURL($library_pcr_protocol);
-        my $rt_protocol = $$record{rt_prep_protocol};
-        my $rt_protocol_filename = &getFilenameFromURL($rt_protocol);
-        my $library_generation_protocol = $$record{library_gen_protocol};
-        my $library_generation_protocol_filename = &getFilenameFromURL($library_generation_protocol);
+        my $rna_3_adapter_protocol; 
+        my $rna_3_adapter_protocol_filename;
+        my $rna_5_adapter_protocol;
+        my $rna_5_adapter_protocol_filename;
+        my $library_pcr_protocol;
+        my $library_pcr_protocol_filename;
+        my $rt_protocol;
+        my $rt_protocol_filename;
+        my $library_generation_protocol;
+        my $library_generation_protocol_filename;
+        if($$record{rna_prep_3_protocol}){
+          $rna_3_adapter_protocol = $$record{rna_prep_3_protocol};
+          $rna_3_adapter_protocol_filename = &getFilenameFromURL($rna_3_adapter_protocol,"$exp_id RNA 3 protocol");
+        }
+        if ($$record{rna_prep_5_protocol}){
+          $rna_5_adapter_protocol = $$record{rna_prep_5_protocol};
+          $rna_5_adapter_protocol_filename = &getFilenameFromURL($rna_5_adapter_protocol,"$exp_id RNA 5 protocol");
+        }
+        if ($$record{library_pcr_isolation_protocol}){
+          $library_pcr_protocol = $$record{library_pcr_isolation_protocol};
+          $library_pcr_protocol_filename = &getFilenameFromURL($library_pcr_protocol,"$exp_id RNA pcr protocol");
+        }
+        if ($$record{rt_prep_protocol}){
+          $rt_protocol = $$record{rt_prep_protocol};
+          $rt_protocol_filename = &getFilenameFromURL($rt_protocol,"$exp_id RNA prep protocol");
+        }
+        if($$record{library_gen_protocol}){
+          $library_generation_protocol = $$record{library_gen_protocol};
+          $library_generation_protocol_filename = &getFilenameFromURL($library_generation_protocol,"$exp_id RNA generation protocol");
+        }
         %section_info = (
           rnaPreparation3AdapterLigationProtocol => {
             url => $rna_3_adapter_protocol,
