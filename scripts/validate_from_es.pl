@@ -15,7 +15,7 @@ my @rulesets = ("FAANG Samples","FAANG Legacy Samples");
 #the value for standardMet according to the ruleset, keys are expected to include all values in the @rulesets
 my %standards = ("FAANG Samples"=>"FAANG","FAANG Legacy Samples"=>"FAANG Legacy");
 #the elasticsearch server address
-my $es_host = "ves-hx-e4:9200";
+my $es_host = "wp-np3-e2:9200";
 my $es_index;
 
 GetOptions(
@@ -33,7 +33,7 @@ my $ruleset_version = &getRulesetVersion();
 print "Rule set release: $ruleset_version\n";
 
 #initial ES object
-my $es = Search::Elasticsearch->new(nodes => $es_host, client => '1_0::Direct'); #client option to make it compatiable with elasticsearch 1.x APIs
+my $es = Search::Elasticsearch->new(nodes => $es_host, client => '6_0::Direct'); #client option to make it compatiable with elasticsearch 1.x APIs
 
 #define what type of data to validate
 my @types = qw/organism specimen/;
@@ -47,9 +47,8 @@ sub validateOneType(){
   print "\nValidating $type data\n";
   #retrieve all records from elastic search server in the chunk of 500
   my $scroll = $es->scroll_helper(
-    index => $es_index,
-    type => $type,
-    search_type => 'scan',
+    index => $type,
+    type => '_doc',
     size => 500,
   );
   #save the elasticsearch records into a hash which has keys as biosampleIDs
@@ -97,8 +96,8 @@ sub validateOneType(){
         $es_doc{versionLastStandardMet} = $ruleset_version if ($es_doc{standardMet} eq "FAANG");
         eval{
           $es->index(
-            index => $es_index,
-            type => $type,
+            index => $type,
+            type => '_doc',
             id => $biosampleId,
             body => \%es_doc
           );

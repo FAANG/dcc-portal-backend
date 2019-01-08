@@ -35,7 +35,7 @@ my @species = keys %species;
 #exit;
 
 
-my $es_host = 'ves-hx-e4:9200';
+my $es_host = 'wp-np3-e2:9200';
 my $es_index_name = 'faang';
 my $error_log = "import_ena_legacy_error.log";
 
@@ -46,7 +46,7 @@ GetOptions(
 );
 
 croak "Need -es_host" unless ($es_host);
-my $es = Search::Elasticsearch->new(nodes => $es_host, client => '1_0::Direct'); #client option to make it compatiable with elasticsearch 1.x APIs
+my $es = Search::Elasticsearch->new(nodes => $es_host, client => '6_0::Direct'); #client option to make it compatiable with elasticsearch 1.x APIs
 
 #debug purpose to avoid keep commenting the multiple print statements
 my $exitFlag = 0;
@@ -349,8 +349,8 @@ foreach my $exp_id (sort {$a cmp $b} keys %experiments){
       #move the insertion codes out the loop to allow insertion of even invalid experiments
       eval{
         $es->index(
-          index => $es_index_name,
-          type => 'experiment',
+          index => 'experiment',
+          type => '_doc',
           id => $exp_id,
           body => \%exp_es
         );
@@ -372,8 +372,8 @@ foreach my $file_id(keys %files){
 #   print Dumper(\%es_doc);
   eval{
     $es->index(
-      index => $es_index_name,
-      type => 'file',
+      index => 'file',
+      type => '_doc',
       id => $file_id,
       body => \%es_doc
     );
@@ -455,8 +455,8 @@ foreach my $dataset_id (keys %datasets){
   #insert into ES
   eval{
     $es->index(
-      index => $es_index_name,
-      type => 'dataset',
+      index => 'dataset',
+      type => '_doc',
       id => $dataset_id,
       body => \%es_doc_dataset
     );
@@ -684,7 +684,7 @@ sub getFieldsList(){
 sub getFAANGstandardDatasets(){
   my %results;
   #two-step process: first to get how many datasets in the ES as the default size is 20
-  my $esUrl = "http://$es_host/$es_index_name/dataset/_search?_source=standardMet";
+  my $esUrl = "http://$es_host/dataset/_search?_source=standardMet";
   my $browser = WWW::Mechanize->new();
   $browser->get( $esUrl );
   my $content = $browser->content();
@@ -709,9 +709,8 @@ sub getExistingIDs(){
   my ($type) = @_;
 #  my %biosample_ids;
   my $scroll = $es->scroll_helper(
-    index => $es_index_name,
-    type => $type,
-    search_type => 'scan',
+    index => $type,
+    type => '_doc',
     size => 500,
   );
   while (my $loaded_doc = $scroll->next) {
@@ -945,8 +944,8 @@ sub importBioSample(){
     }
     eval{
       $es->index(
-        index => $es_index_name,
-        type => $type,
+        index => $type,
+        type => '_doc',
         id => $accession,
         body => \%es_doc
       );
