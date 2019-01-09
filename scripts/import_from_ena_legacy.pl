@@ -340,7 +340,7 @@ open ERR,">$error_log";
 #no need to validate against FAANG standard as we know information missing
 my @rulesets = ("FAANG Legacy Experiments");
 #the value for standardMet according to the ruleset, keys are expected to include all values in the @rulesets
-my %standards = ("FAANG Experiments"=>"FAANG","FAANG Legacy Experiments"=>"FAANG Legacy");
+my %standards = ("FAANG Experiments"=>"FAANG","FAANG Legacy Experiments"=>"Legacy");
 my %validationResult = &validateTotalExperimentRecords(\%experiments,\@rulesets);
 my %exp_validation;
 
@@ -409,7 +409,7 @@ foreach my $dataset_id (keys %datasets){
   my %tech_type;
   foreach my $exp_id(keys %exps){
     if (exists $exp_validation{$exp_id}){
-      $dataset_standard = "FAANG Legacy" if ($exp_validation{$exp_id} eq "FAANG Legacy");
+      $dataset_standard = "Legacy" if ($exp_validation{$exp_id} eq "FAANG Legacy");
       $only_valid_exps{$exp_id} = $exps{$exp_id};
       my $assay_type = $exps{$exp_id}{assayType};
       #TODO decision needs to be made
