@@ -86,7 +86,7 @@ open ERR,">$error_log";
 #define the rulesets each record needs to be validated against, in the order of 
 my @rulesets = ("FAANG Experiments","FAANG Legacy Experiments");
 #the value for standardMet according to the ruleset, keys are expected to include all values in the @rulesets
-my %standards = ("FAANG Experiments"=>"FAANG","FAANG Legacy Experiments"=>"FAANG Legacy");
+my %standards = ("FAANG Experiments"=>"FAANG","FAANG Legacy Experiments"=>"Legacy");
 my $ruleset_version = &getRulesetVersion();
 
 #used for deleting no longer existant ES records, e.g. record with old id system
@@ -608,7 +608,7 @@ foreach my $dataset_id (keys %datasets){
   my %tech_type;
   foreach my $exp_id(keys %exps){
     if (exists $exp_validation{$exp_id}){
-      $dataset_standard = "FAANG Legacy" if ($exp_validation{$exp_id} eq "FAANG Legacy");
+      $dataset_standard = "Legacy" if ($exp_validation{$exp_id} eq "FAANG Legacy");
       $only_valid_exps{$exp_id} = $exps{$exp_id};
       my $assay_type = $exps{$exp_id}{assayType};
       #TODO decision needs to be made

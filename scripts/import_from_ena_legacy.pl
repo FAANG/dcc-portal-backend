@@ -128,7 +128,8 @@ my %todo;
 my %technologies;
 foreach my $term(@categories){
   my $category = $categories{$term};
-  next if ($category eq "WGS");
+#  next unless ($category eq "Hi-C");
+#  next if ($category eq "WGS");
   next unless (exists $assayTypesToBeImported{$category});
 #  print "$term: assay type $assay_type  target $experiment_target\n";
 #  foreach my $species(@species){
@@ -198,12 +199,18 @@ foreach my $category(keys %todo) {
     my @types = split(";",$$record{submitted_format});
     my @sizes = split(";",$$record{"${source_type}_bytes"});
     my @checksums = split(";",$$record{"${source_type}_md5"});#for ENA, it is fixed to MD5 as the checksum method
-
+    FILE:
     for (my $i=0;$i<scalar @files;$i++){
       my $specimen_biosample_id = $$record{sample_accession};
       #check whether exists in ES, if not import it assuming being specimen from organism
-      &importBioSample($specimen_biosample_id) unless (exists $existingBiosamples{$specimen_biosample_id});
-    
+      my %import_result;
+      unless (exists $existingBiosamples{$specimen_biosample_id}){
+        %import_result = &importBioSample($specimen_biosample_id);
+        #the corresponding sample could not be imported
+        if ($import_result{confirmed} == -1){
+          next FILE;
+        }
+      }
       my $file = $files[$i]; #full path
       my $idx = rindex ($file,"/");
       my $fullname = substr($file,$idx+1);
@@ -723,10 +730,20 @@ sub getExistingIDs(){
 #two hashes according to material type
 sub importBioSample(){
   my ($accession) = @_;
-  return if (exists $existingBiosamples{$accession});
+  my %result;
+  if (exists $existingBiosamples{$accession}){
+    $result{confirmed} = 9999;
+    return %result;
+  }
   #retrieve data
   my $url = "https://www.ebi.ac.uk/biosamples/samples/$accession";
-  my $json_text = &fetch_json_by_url($url);
+  my $json_text = &fetch_json_by_url($url,1);
+  # the record is not available at EBI BioSample API, at least for now, 
+  # which maybe automatically resolved after BioSample update their data
+  if (length $json_text == 0){ 
+    $result{confirmed} = -1;
+    return %result;
+  }
   #default set to be specimen from organism
   my %material = (
     text => "specimen from organism",
@@ -769,7 +786,12 @@ sub importBioSample(){
           if (exists $checkedMaterial{$$ref{target}}){
             %relMaterial = %{$checkedMaterial{$$ref{target}}};
           }else{
-            %relMaterial = &importBioSample($$ref{target}) ;
+            %relMaterial = &importBioSample($$ref{target});
+            #if the referenced record does not exist, this record could also not be imported
+            if ($relMaterial{confirmed} == -1){
+              $result{confirmed} = -1;
+              return %result;
+            }
           }
           if ($relMaterial{confirmed}==1 && $relMaterial{material}{text} eq "organism"){
             $confirmedMaterialFlag = 1; #derive from animal, only could be specimen from organism (the default value)
@@ -893,7 +915,7 @@ sub importBioSample(){
     #according to 
     $es_doc{releaseDate} = &parseDate($$json_text{release});
     $es_doc{updateDate} = &parseDate($$json_text{update});
-    $es_doc{standardMet} = "FAANG Basic";
+    $es_doc{standardMet} = "Legacy (basic)";
     $es_doc{derivedFrom} = $animal if (length $animal > 0);
     @{$es_doc{childOf}} = @parentAnimals if (scalar @parentAnimals > 0);
     my @customs;
@@ -959,7 +981,6 @@ sub importBioSample(){
     $existingBiosamples{$accession} = \%es_doc;
   }
 
-  my %result;
   $result{confirmed} = $confirmedMaterialFlag;
   $result{accession} = $accession;
   %{$result{material}} = %material;

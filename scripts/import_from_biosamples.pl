@@ -124,7 +124,7 @@ open ERR,">$error_log";
 #define the rulesets each record needs to be validated against, in the order of 
 my @rulesets = ("FAANG Samples","FAANG Legacy Samples");
 #the value for standardMet according to the ruleset, keys are expected to include all values in the @rulesets
-my %standards = ("FAANG Samples"=>"FAANG","FAANG Legacy Samples"=>"FAANG Legacy");
+my %standards = ("FAANG Samples"=>"FAANG","FAANG Legacy Samples"=>"Legacy");
 my $ruleset_version = &getRulesetVersion();
 print "Rule set release: $ruleset_version\n";
 
