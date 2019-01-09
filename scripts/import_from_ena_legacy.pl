@@ -128,7 +128,7 @@ my %todo;
 my %technologies;
 foreach my $term(@categories){
   my $category = $categories{$term};
-  next unless ($category eq "WGS");
+  next if ($category eq "WGS");
   next unless (exists $assayTypesToBeImported{$category});
 #  print "$term: assay type $assay_type  target $experiment_target\n";
 #  foreach my $species(@species){
