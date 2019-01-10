@@ -58,9 +58,11 @@ my $exitFlag = 0;
 my %existingBiosamples;
 &getExistingIDs("specimen");
 &getExistingIDs("organism");
+print "There are ".(scalar keys %existingBiosamples)." sample records in ES.\n";
 
 #get the datasets meeting the FAANG standard
 my %existingDatasets = &getFAANGstandardDatasets();
+print "There are ".(scalar keys %existingDatasets)." datasets in ES.\n";
 
 my %assayTypesToBeImported = (
   "ATAC-seq" => "ATAC-seq",
@@ -128,8 +130,9 @@ my %todo;
 my %technologies;
 foreach my $term(@categories){
   my $category = $categories{$term};
+#  next unless ($category eq "ATAC-seq");
 #  next unless ($category eq "Hi-C");
-#  next if ($category eq "WGS");
+#  next unless ($category eq "WGS");
   next unless (exists $assayTypesToBeImported{$category});
 #  print "$term: assay type $assay_type  target $experiment_target\n";
 #  foreach my $species(@species){
@@ -409,7 +412,7 @@ foreach my $dataset_id (keys %datasets){
   my %tech_type;
   foreach my $exp_id(keys %exps){
     if (exists $exp_validation{$exp_id}){
-      $dataset_standard = "Legacy" if ($exp_validation{$exp_id} eq "FAANG Legacy");
+      $dataset_standard = "Legacy" if ($exp_validation{$exp_id} eq "Legacy");
       $only_valid_exps{$exp_id} = $exps{$exp_id};
       my $assay_type = $exps{$exp_id}{assayType};
       #TODO decision needs to be made
