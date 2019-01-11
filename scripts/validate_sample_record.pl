@@ -32,7 +32,15 @@ sub validateRecord(){
   my $pipe;
   open $pipe, "$cmd 2> /dev/null|"; #send the file to the server and receive the response
   my $response = &readHandleIntoString($pipe);
-  my $json = &decode_json($response);
+  my $json;
+  eval {
+    $json = &decode_json($response);
+  };
+  if ($@) {
+    print "Failed to parse the response into JSON:\n$response\n";
+    exit();
+    # handle failure...
+  }
   return &parseValidatationResult($$json{entities},$type);
 }
 
