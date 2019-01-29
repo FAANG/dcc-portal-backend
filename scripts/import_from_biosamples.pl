@@ -67,7 +67,10 @@ my $baseUrl = "https://www.ebi.ac.uk/";
 #my $accession = "SAMEA4448136"; #organism without relationship   
 #my $accession = "SAMEA6215668";
 #my %organism_tmp = &fetch_single_record($accession);
-#$accession = "SAMEA4675134";    
+#my $accession = "SAMEA5262717";    
+#my %cell_specimen_tmp = &fetch_single_record($accession);
+#&process_cell_specimens(\%cell_specimen_tmp);
+#exit;
 #my %specimen_tmp = &fetch_single_record($accession);
 #&process_organisms(\%organism_tmp);
 #&process_specimens(\%specimen_tmp);
@@ -145,6 +148,8 @@ my %organismInfoForSpecimen;
 #keys are organism accession and values are how many specimens related to that organism
 my %organismReferredBySpecimen;
 
+my $total_records_to_update = 0;
+
 print "The program starts at ".localtime."\n";
 my $pastTime = time;
 my $savedTime = time;
@@ -194,10 +199,12 @@ my $current = time;
 #&convertSeconds($current - $pastTime);
 $pastTime = $current;
 
-#Check whether specimens were obtained from BioSamples
-my $number_specimens_check = keys %specimen_from_organism;
-my $number_organism_check = keys %organism;
-croak "Did not obtain any records from BioSamples" unless ( $number_specimens_check > 0 || $number_organism_check > 0);
+##Check whether specimens were obtained from BioSamples
+#my $number_specimens_check = keys %specimen_from_organism;
+#my $number_organism_check = keys %organism;
+#croak "Did not obtain any records from BioSamples" unless ( $number_specimens_check > 0 || $number_organism_check > 0);
+
+croak "Did not obtain any records from BioSamples" unless ( $total_records_to_update > 0);
 #organism needs to be processed first which populates %organismInfoForSpecimen
 print "Indexing organism starts at ".localtime."\n";
 &process_organisms(\%organism);
@@ -471,12 +478,19 @@ sub process_cell_specimens{
     #therefore two steps needed to get organism: specimen from organism(sfo) first, then organism
     my @derivedFrom = keys %{$relationships{derivedFrom}};
     my $specimenFromOrganismAccession = $derivedFrom[0];
-
     my $organismAccession = "";
     if (exists $specimen_organism_relationship{$specimenFromOrganismAccession}){
       $organismAccession = $specimen_organism_relationship{$specimenFromOrganismAccession};
+    }else{
+      my %tmp = &fetch_single_record($specimenFromOrganismAccession);
+      my %relationships = &parse_relationship($tmp{$specimenFromOrganismAccession});
+      if (exists $relationships{derivedFrom}){
+        my @organisms = keys %{$relationships{derivedFrom}};
+        $organismAccession = $organisms[0];
+      }
     }
     $specimen_organism_relationship{$key} = $organismAccession;
+#    print "cell specimen $key specimen <$specimenFromOrganismAccession> organism <$organismAccession>\n";
     my %es_doc = (
       derivedFrom => $specimenFromOrganismAccession,
       cellSpecimen => {
@@ -501,6 +515,7 @@ sub process_cell_specimens{
     @{$es_doc{alternativeId}} = &getAlternative(\%relationships);
 
     unless (exists $organismInfoForSpecimen{$organismAccession}){
+
       my %tmp = &fetch_single_record($organismAccession);
       &addOrganismInfoForSpecimen($organismAccession,$tmp{$organismAccession});
     }
@@ -529,6 +544,13 @@ sub process_cell_cultures{
     my $organismAccession = "";
     if (exists $specimen_organism_relationship{$derivedFromAccession}){
       $organismAccession = $specimen_organism_relationship{$derivedFromAccession};
+    }else{
+      my %tmp = &fetch_single_record($derivedFromAccession);
+      my %relationships = &parse_relationship($tmp{$derivedFromAccession});
+      if (exists $relationships{derivedFrom}){
+        my @organisms = keys %{$relationships{derivedFrom}};
+        $organismAccession = $organisms[0];
+      }
     }
     $specimen_organism_relationship{$key} = $organismAccession;
 
@@ -892,19 +914,19 @@ sub fetch_records_by_project(){
     }
     $hash{$material}++;
   }
-  my $total = 0;
+
   foreach my $type(keys %hash){
-    $total += $hash{$type};
+    $total_records_to_update += $hash{$type};
     print "There are $hash{$type} $type records\n";
   }
-  print "The sum is $total\n";
+  print "The sum is $total_records_to_update\n";
 }
 
 sub fetch_records_by_project_via_etag(){
-  print "etag route\n";
   my ($url) = @_;
   my @biosample_ids = &fetch_biosamples_ids($url);
-  print "Finish getting the list of biosample ids from archive at ".localtime."\n";
+  print "Finish getting the list of biosample ids (total of ".(scalar @biosample_ids)." records) from archive at ".localtime."\n";
+  print "etag route\n";
   my %hash;
   foreach my $biosampleId(@biosample_ids){
     my $changed = 1;
@@ -948,17 +970,22 @@ sub fetch_records_by_project_via_etag(){
     }
     $hash{$material}++;
   }
-  my $total = 0;
   foreach my $type(keys %hash){
-    $total += $hash{$type};
-    print "There are $hash{$type} $type records\n";
+    $total_records_to_update += $hash{$type};
+    print "There are $hash{$type} $type records needing updates\n";
   }
-  if ($total == 0){
+  if ($total_records_to_update == 0){
     print "All records have not been modified since last importation.\n";
     print "Exit program at ".localtime."\n";
     exit;
   }
-  print "The sum is $total\n";
+  if ($total_records_to_update <= 20){
+    foreach my $acc(keys %organism, keys %specimen_from_organism, keys %cell_specimen, keys %cell_culture, keys %cell_line, keys %pool_specimen){
+      print "To be updated: $acc\n";
+    }
+  }
+
+  print "The sum is $total_records_to_update\n";
   print "Finish comparing etags and retrieving necessary records at ".localtime."\n";
 }
 
