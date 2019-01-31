@@ -27,7 +27,7 @@ def main():
     snapshot_name = "snapshot_{}".format(today)
 
     # Do all the job
-    create_snapshot(es_staging, snapshot_name, today, snapshot_name)
+    create_snapshot(es_staging, snapshot_name)
     rsync_snapshot()
     restore_snapshot(es_fallback, es_production)
     change_aliases(es_fallback, es_production, today, yesterday)
@@ -35,7 +35,7 @@ def main():
 
 
 def create_snapshot(es_staging, snapshot_name):
-    parameters = {"indices": "faang1",
+    parameters = {"indices": "file3,organism3,specimen3,dataset3,experiment3",
                   "ignore_unavailable": True,
                   "include_global_state": False
                   }
@@ -48,8 +48,9 @@ def rsync_snapshot():
 
 def restore_snapshot(es_fallback, es_production, today, snapshot_name):
     parameters = {
-        "indices": "file2,organism2,specimen2,dataset2,experiment",
+        "indices": "file3,organism3,specimen3,dataset3,experiment3",
         "ignore_unavailable": True,
+        "include_aliases": False,
         "rename_pattern": "([a-z]+)",
         "rename_replacement": "$1-{}".format(today)
     }
@@ -59,14 +60,16 @@ def restore_snapshot(es_fallback, es_production, today, snapshot_name):
 
 def change_aliases(es_fallback, es_production, today, yesterday):
     actions = {"actions": [
-        {"remove": {"index": "file-{}".format(yesterday), "alias": "file"}},
-        {"add": {"index": "file-{}".format(today), "alias": "file"}},
-        {"remove": {"index": "organism-{}".format(yesterday), "alias": "organism"}},
-        {"add": {"index": "organism-{}".format(today), "alias": "organism"}},
-        {"remove": {"index": "specimen-{}".format(yesterday), "alias": "specimen"}},
-        {"add": {"index": "specimen-{}".format(today), "alias": "specimen"}},
-        {"remove": {"index": "dataset-{}".format(yesterday), "alias": "dataset"}},
-        {"add": {"index": "dataset-{}".format(today), "alias": "dataset"}},
+        {"remove": {"index": "file-{}3".format(yesterday), "alias": "file"}},
+        {"add": {"index": "file-{}3".format(today), "alias": "file"}},
+        {"remove": {"index": "organism-{}3".format(yesterday), "alias": "organism"}},
+        {"add": {"index": "organism-{}3".format(today), "alias": "organism"}},
+        {"remove": {"index": "specimen-{}3".format(yesterday), "alias": "specimen"}},
+        {"add": {"index": "specimen-{}3".format(today), "alias": "specimen"}},
+        {"remove": {"index": "dataset-{}3".format(yesterday), "alias": "dataset"}},
+        {"add": {"index": "dataset-{}3".format(today), "alias": "dataset"}},
+        {"remove": {"index": "experiment-{}3".format(yesterday), "alias": "experiment"}},
+        {"add": {"index": "experiment-{}3".format(today), "alias": "experiment"}},
     ]
     }
     es_fallback.indices.update_aliases(body=actions)
@@ -74,10 +77,16 @@ def change_aliases(es_fallback, es_production, today, yesterday):
 
 
 def delete_old_indices(es_fallback, es_production, yesterday):
-    es_fallback.indices.delete(index="file-{},organism-{},specimen-{},dataset-{}").format(yesterday, yesterday,
-                                                                                          yesterday, yesterday)
-    es_production.indices.delete(index="file-{},organism-{},specimen-{},dataset-{}").format(yesterday, yesterday,
-                                                                                            yesterday, yesterday)
+    es_fallback.indices.delete(index="file-{}3,organism-{}3,specimen-{}3,dataset-{}3,experiment-{}3".format(yesterday,
+                                                                                                            yesterday,
+                                                                                                            yesterday,
+                                                                                                            yesterday,
+                                                                                                            yesterday))
+    es_production.indices.delete(index="file-{}3,organism-{}3,specimen-{}3,dataset-{}3,experiment-{}3".format(yesterday,
+                                                                                                              yesterday,
+                                                                                                              yesterday,
+                                                                                                              yesterday,
+                                                                                                              yesterday))
 
 
 if __name__ == "__main__":
