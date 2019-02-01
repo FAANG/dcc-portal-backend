@@ -1,6 +1,7 @@
 import os
 from elasticsearch import Elasticsearch
 from datetime import date, timedelta
+import time
 
 # Addresses of servers
 STAGING_NODE1 = 'wp-np3-e2:9200'
@@ -29,6 +30,7 @@ def main():
     # Do all the job
     create_snapshot(es_staging, snapshot_name)
     rsync_snapshot()
+    time.sleep(5)
     restore_snapshot(es_fallback, es_production, today, snapshot_name)
     change_aliases(es_fallback, es_production, today, yesterday)
     delete_old_indices(es_fallback, es_production, yesterday)
