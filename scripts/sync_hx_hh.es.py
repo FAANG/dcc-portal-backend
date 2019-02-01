@@ -29,12 +29,13 @@ def main():
     # Do all the job
     create_snapshot(es_staging, snapshot_name)
     rsync_snapshot()
-    restore_snapshot(es_fallback, es_production)
+    restore_snapshot(es_fallback, es_production, today, snapshot_name)
     change_aliases(es_fallback, es_production, today, yesterday)
     delete_old_indices(es_fallback, es_production, yesterday)
 
 
 def create_snapshot(es_staging, snapshot_name):
+    print("Creating snapshot...")
     parameters = {"indices": "file3,organism3,specimen3,dataset3,experiment3",
                   "ignore_unavailable": True,
                   "include_global_state": False
@@ -43,10 +44,12 @@ def create_snapshot(es_staging, snapshot_name):
 
 
 def rsync_snapshot():
+    print("Rsyncing snapshot...")
     os.system("rsync --archive --delete-during {} {}".format(FROM, TO))
 
 
 def restore_snapshot(es_fallback, es_production, today, snapshot_name):
+    print("Restoring snapshot...")
     parameters = {
         "indices": "file3,organism3,specimen3,dataset3,experiment3",
         "ignore_unavailable": True,
@@ -59,6 +62,7 @@ def restore_snapshot(es_fallback, es_production, today, snapshot_name):
 
 
 def change_aliases(es_fallback, es_production, today, yesterday):
+    print("Changing aliases...")
     actions = {"actions": [
         {"remove": {"index": "file-{}3".format(yesterday), "alias": "file"}},
         {"add": {"index": "file-{}3".format(today), "alias": "file"}},
@@ -77,6 +81,7 @@ def change_aliases(es_fallback, es_production, today, yesterday):
 
 
 def delete_old_indices(es_fallback, es_production, yesterday):
+    print("Deleting old indices...")
     es_fallback.indices.delete(index="file-{}3,organism-{}3,specimen-{}3,dataset-{}3,experiment-{}3".format(yesterday,
                                                                                                             yesterday,
                                                                                                             yesterday,
