@@ -29,10 +29,13 @@ def main():
 
     # Do all the job
     create_snapshot(es_staging, snapshot_name)
+    time.sleep(5)
     rsync_snapshot()
     time.sleep(5)
     restore_snapshot(es_fallback, es_production, today, snapshot_name)
+    time.sleep(5)
     change_aliases(es_fallback, es_production, today, yesterday)
+    time.sleep(5)
     delete_old_indices(es_fallback, es_production, yesterday)
 
 
