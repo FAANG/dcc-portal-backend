@@ -162,7 +162,7 @@ print "Finish retrieving existing etags at ".localtime."\n";
 #retrieve all FAANG BioSamples from BioSample database
 
 print "Importing FAANG data\n";
-#  my $url = $baseUrl."biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG";
+
 my $url = $baseUrl."biosamples/accessions?project=FAANG&limit=100000";
 my @biosample_ids = &fetch_biosamples_ids($url);
 my $num_biosamples = scalar @biosample_ids;
@@ -171,7 +171,16 @@ if ($num_etags == 0 || $num_biosamples/$num_etags > 2){
   $url = $baseUrl."biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG";
   &fetch_records_by_project($url);
 }else{
-  &fetch_records_by_project_via_etag($url);
+  #  my $url = $baseUrl."biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG";
+  my $today = &get_today();
+  my $local_etag_file = "etag_list_$today.txt";
+  open CMD, "wc $local_etag_file|";
+  my $info = <CMD>;
+  croak "Wrong etag cache file name, please double check" unless (defined($info));
+  if ($info =~ /^\s*(\d+)\s+/){
+    croak "The number of cached etag $1 does not match the number of BioSample record, quit the script and rerun get_all_etag\n" unless ($1 == $num_biosamples);
+  }
+  &fetch_records_by_project_via_etag($local_etag_file);
 }
 
 
@@ -923,15 +932,21 @@ sub fetch_records_by_project(){
 }
 
 sub fetch_records_by_project_via_etag(){
-  my ($url) = @_;
-  my @biosample_ids = &fetch_biosamples_ids($url);
-  print "Finish getting the list of biosample ids (total of ".(scalar @biosample_ids)." records) from archive at ".localtime."\n";
+  my ($filename) = @_;
+  my %cache;
+  open IN,"$filename";
+  while(my $line=<IN>){
+    chomp($line);
+    my ($biosample, $etag_cache)=split("\t",$line);
+    $cache{$biosample} = $etag_cache;
+  }
   print "etag route\n";
   my %hash;
-  foreach my $biosampleId(@biosample_ids){
+  foreach my $biosampleId(keys %cache){
     my $changed = 1;
     if(exists $etags{$biosampleId}){
-      $changed = &is_etag_changed($biosampleId,$etags{$biosampleId})
+      $changed = 0 if ($cache{$biosampleId} eq $etags{$biosampleId})
+#      $changed = &is_etag_changed($biosampleId,$etags{$biosampleId})
     }
     #same etag, i.e. no change, no need to update/index the sample
     if ($changed == 0){ 
@@ -942,9 +957,9 @@ sub fetch_records_by_project_via_etag(){
     }
 
     my %tmp = &fetch_single_record($biosampleId);
-    my $newEtag = &fetch_etag_biosample_by_accession($biosampleId);
+#    my $newEtag = &fetch_etag_biosample_by_accession($biosampleId);
     my %single = %{$tmp{$biosampleId}};
-    $single{etag} = $newEtag;
+    $single{etag} = $cache{$biosampleId};
     my $isFaangLabelled = &check_is_faang(\%single);
 
     next if ($isFaangLabelled == 0);
