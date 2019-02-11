@@ -1,7 +1,7 @@
 import os
 from elasticsearch import Elasticsearch
 from datetime import date, timedelta
-import time
+import threading
 
 # Addresses of servers
 STAGING_NODE1 = 'wp-np3-e2:9200'
@@ -28,15 +28,25 @@ def main():
     snapshot_name = "snapshot_{}".format(today)
 
     # Do all the job
-    create_snapshot(es_staging, snapshot_name)
-    time.sleep(5)
-    rsync_snapshot()
-    time.sleep(5)
-    restore_snapshot(es_fallback, es_production, today, snapshot_name)
-    time.sleep(5)
-    change_aliases(es_fallback, es_production, today, yesterday)
-    time.sleep(5)
-    delete_old_indices(es_fallback, es_production, yesterday)
+    t1 = threading.Thread(target=create_snapshot, args=(es_staging, snapshot_name,))
+    t1.start()
+    t1.join()
+
+    t2 = threading.Thread(target=rsync_snapshot)
+    t2.start()
+    t2.join()
+
+    t3 = threading.Thread(target=restore_snapshot, args=(es_fallback, es_production, today, snapshot_name,))
+    t3.start()
+    t3.join()
+
+    t4 = threading.Thread(target=change_aliases, args=(es_fallback, es_production, today, yesterday,))
+    t4.start()
+    t4.join()
+
+    t5 = threading.Thread(target=delete_old_indices, args=(es_fallback, es_production, yesterday))
+    t5.start()
+    t5.join()
 
 
 def create_snapshot(es_staging, snapshot_name):
