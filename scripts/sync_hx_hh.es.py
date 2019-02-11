@@ -28,25 +28,22 @@ def main():
     snapshot_name = "snapshot_{}".format(today)
 
     # Do all the job
+    threads = []
+
     t1 = threading.Thread(target=create_snapshot, args=(es_staging, snapshot_name,))
-    t1.start()
-    t1.join()
-
+    threads.append(t1)
     t2 = threading.Thread(target=rsync_snapshot)
-    t2.start()
-    t2.join()
-
+    threads.append(t2)
     t3 = threading.Thread(target=restore_snapshot, args=(es_fallback, es_production, today, snapshot_name,))
-    t3.start()
-    t3.join()
-
+    threads.append(t3)
     t4 = threading.Thread(target=change_aliases, args=(es_fallback, es_production, today, yesterday,))
-    t4.start()
-    t4.join()
-
+    threads.append(t4)
     t5 = threading.Thread(target=delete_old_indices, args=(es_fallback, es_production, yesterday))
-    t5.start()
-    t5.join()
+    threads.append(t5)
+
+    for thread in threads:
+        thread.start()
+        thread.join()
 
 
 def create_snapshot(es_staging, snapshot_name):
