@@ -1,0 +1,36 @@
+{
+  "dynamic": "strict",
+  "properties": {
+    "name": {
+      "type": "keyword"
+    },
+    "experimentTarget": {
+      "type": "keyword"
+    },
+    "assayType": {
+      "type": "keyword"
+    },
+    "key": {
+      "type": "keyword"
+    },
+    "url": {
+      "type": "keyword"
+    },
+    "filename": {
+      "type": "keyword"
+    },
+    "experiments": {
+      "properties": {
+        "accession": {
+          "type": "keyword"
+        },
+        "sampleStorage": {
+          "type": "keyword"
+        },
+        "sampleStorageProcessing": {
+          "type": "keyword"
+        }
+      }
+    }
+  }
+}

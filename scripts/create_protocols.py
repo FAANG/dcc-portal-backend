@@ -58,12 +58,56 @@ def create_sample_protocol():
                 if protocol_type in ["analysis", "assays", "samples"]:
                     entries[key]["protocolType"] = protocol_type
                 entries[key]["url"] = url
-    for item in list(entries):
+    for item in entries:
         es.index(index='protocol_samples', doc_type="_doc", id=item, body=entries[item])
 
 
 def create_experiment_protocol():
-    pass
+    return_results = {}
+    es = Elasticsearch(['wp-np3-e2', 'wp-np3-e3'])
+    results = es.search(index="experiment", size=100000)
+
+    def expand_object(data, assay='', target='', accession='', storage='', processing=''):
+        for key in data:
+            if isinstance(data[key], dict):
+                if 'filename' in data[key]:
+                    if data[key]['filename'] != '' and data[key]['filename'] is not None:
+                        if assay == '' and target == '' and accession == '' and storage == '' and processing == '':
+                            data_key = "{}-{}-{}".format(key, data['assayType'], data['experimentTarget'])
+                            data_experiment = dict()
+                            data_experiment['accession'] = data['accession']
+                            data_experiment['sampleStorage'] = data['sampleStorage']
+                            data_experiment['sampleStorageProcessing'] = data['sampleStorageProcessing']
+                            return_results.setdefault(data_key, {'name': key,
+                                                                 'experimentTarget': data['experimentTarget'],
+                                                                 'assayType': data['assayType'],
+                                                                 'key': data_key,
+                                                                 'url': data[key]['url'],
+                                                                 'filename': data[key]['filename'],
+                                                                 'experiments': []})
+                            return_results[data_key]['experiments'].append(data_experiment)
+                        else:
+                            data_key = "{}-{}-{}".format(key, assay, target)
+                            data_experiment = dict()
+                            data_experiment['accession'] = accession
+                            data_experiment['sampleStorage'] = storage
+                            data_experiment['sampleStorageProcessing'] = processing
+                            return_results.setdefault(data_key, {'name': key,
+                                                                 'experimentTarget': target,
+                                                                 'assayType': assay,
+                                                                 'key': data_key,
+                                                                 'url': data[key]['url'],
+                                                                 'filename': data[key]['filename'],
+                                                                 'experiments': []})
+                            return_results[data_key]['experiments'].append(data_experiment)
+                else:
+                    expand_object(data[key], data['assayType'], data['experimentTarget'], data['accession'],
+                                  data['sampleStorage'], data['sampleStorageProcessing'])
+
+    for item in results['hits']['hits']:
+        expand_object(item['_source'])
+    for item in return_results:
+        es.index(index='protocol_files', doc_type="_doc", id=item, body=return_results[item])
 
 
 if __name__ == "__main__":
