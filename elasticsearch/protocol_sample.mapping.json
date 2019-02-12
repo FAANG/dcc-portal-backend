@@ -1,0 +1,42 @@
+{
+  "dynamic": "strict",
+  "properties": {
+    "universityName": {
+      "type": "keyword"
+    },
+    "protocolDate": {
+      "type": "keyword"
+    },
+    "protocolName": {
+      "type": "keyword"
+    },
+    "key": {
+      "type": "keyword"
+    },
+    "url": {
+      "type": "keyword"
+    },
+    "protocolType": {
+      "type": "keyword"
+    },
+    "specimen": {
+      "properties": {
+        "id": {
+          "type": "keyword"
+        },
+        "organismPartCellType": {
+          "type": "keyword"
+        },
+        "organism": {
+          "type": "keyword"
+        },
+        "breed": {
+          "type": "keyword"
+        },
+        "derivedFrom": {
+          "type": "keyword"
+        }
+      }
+    }
+  }
+}
