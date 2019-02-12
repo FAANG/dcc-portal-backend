@@ -59,7 +59,7 @@ def create_sample_protocol():
                     entries[key]["protocolType"] = protocol_type
                 entries[key]["url"] = url
     for item in list(entries):
-        es.create(index='protocol_samples', doc_type="_doc", id=item, body=entries[item])
+        es.index(index='protocol_samples', doc_type="_doc", id=item, body=entries[item])
 
 
 def create_experiment_protocol():
