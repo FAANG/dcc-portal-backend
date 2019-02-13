@@ -74,6 +74,8 @@ def create_experiment_protocol():
                     if data[key]['filename'] != '' and data[key]['filename'] is not None:
                         if assay == '' and target == '' and accession == '' and storage == '' and processing == '':
                             data_key = "{}-{}-{}".format(key, data['assayType'], data['experimentTarget'])
+                            # remove all spaces to form a key
+                            data_key = "".join(data_key.split())
                             data_experiment = dict()
                             data_experiment['accession'] = data['accession']
                             data_experiment['sampleStorage'] = data['sampleStorage']
@@ -88,6 +90,7 @@ def create_experiment_protocol():
                             return_results[data_key]['experiments'].append(data_experiment)
                         else:
                             data_key = "{}-{}-{}".format(key, assay, target)
+                            data_key = "".join(data_key.split())
                             data_experiment = dict()
                             data_experiment['accession'] = accession
                             data_experiment['sampleStorage'] = storage
