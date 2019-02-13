@@ -1,7 +1,7 @@
 import os
 from elasticsearch import Elasticsearch
 from datetime import date, timedelta
-import threading
+from multiprocessing import Process
 
 # Addresses of servers
 STAGING_NODE1 = 'wp-np3-e2:9200'
@@ -28,22 +28,22 @@ def main():
     snapshot_name = "snapshot_{}".format(today)
 
     # Do all the job
-    threads = []
+    processes = []
 
-    t1 = threading.Thread(target=create_snapshot, args=(es_staging, snapshot_name,))
-    threads.append(t1)
-    t2 = threading.Thread(target=rsync_snapshot)
-    threads.append(t2)
-    t3 = threading.Thread(target=restore_snapshot, args=(es_fallback, es_production, today, snapshot_name,))
-    threads.append(t3)
-    t4 = threading.Thread(target=change_aliases, args=(es_fallback, es_production, today, yesterday,))
-    threads.append(t4)
-    t5 = threading.Thread(target=delete_old_indices, args=(es_fallback, es_production, yesterday))
-    threads.append(t5)
+    p1 = Process(target=create_snapshot, args=(es_staging, snapshot_name,))
+    processes.append(p1)
+    p2 = Process(target=rsync_snapshot)
+    processes.append(p2)
+    p3 = Process(target=restore_snapshot, args=(es_fallback, es_production, today, snapshot_name,))
+    processes.append(p3)
+    p4 = Process(target=change_aliases, args=(es_fallback, es_production, today, yesterday,))
+    processes.append(p4)
+    p5 = Process(target=delete_old_indices, args=(es_fallback, es_production, yesterday))
+    processes.append(p5)
 
-    for thread in threads:
-        thread.start()
-        thread.join()
+    for process in processes:
+        process.start()
+        process.join()
 
 
 def create_snapshot(es_staging, snapshot_name):
