@@ -1,0 +1,92 @@
+{
+  "dynamic": "strict",
+  "properties": {
+    "id": {
+      "type": "keyword"
+    },
+    "source": {
+      "type": "keyword"
+    },
+    "pmid": {
+      "type": "keyword"
+    },
+    "pmcid": {
+      "type": "keyword"
+    },
+    "doi": {
+      "type": "keyword"
+    },
+    "title": {
+      "type": "keyword"
+    },
+    "authorString": {
+      "type": "keyword"
+    },
+    "journalTitle": {
+      "type": "keyword"
+    },
+    "journalVolume": {
+      "type": "keyword"
+    },
+    "pubYear": {
+      "type": "keyword"
+    },
+    "journalIssn": {
+      "type": "keyword"
+    },
+    "pageInfo": {
+      "type": "keyword"
+    },
+    "pubType": {
+      "type": "keyword"
+    },
+    "isOpenAccess": {
+      "type": "keyword"
+    },
+    "inEPMC": {
+      "type": "keyword"
+    },
+    "inPMC": {
+      "type": "keyword"
+    },
+    "hasPDF": {
+      "type": "keyword"
+    },
+    "hasBook": {
+      "type": "keyword"
+    },
+    "hasSuppl": {
+      "type": "keyword"
+    },
+    "citedByCount": {
+      "type": "keyword"
+    },
+    "hasReferences": {
+      "type": "keyword"
+    },
+    "hasTextMinedTerms": {
+      "type": "keyword"
+    },
+    "hasDbCrossReferences": {
+      "type": "keyword"
+    },
+    "hasLabsLinks": {
+      "type": "keyword"
+    },
+    "hasTMAccessionNumbers": {
+      "type": "keyword"
+    },
+    "firstPublicationDate": {
+      "type": "keyword"
+    },
+    "tmAccessionTypeList": {
+      "type": "keyword"
+    },
+    "issue": {
+      "type": "keyword"
+    },
+    "dbCrossReferenceList": {
+      "type": "keyword"
+    }
+  }
+}
