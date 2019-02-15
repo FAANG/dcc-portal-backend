@@ -100,8 +100,8 @@ def change_aliases(es_fallback, es_production, today, yesterday):
 
 def delete_old_indices(es_fallback, es_production, yesterday):
     print("Deleting old indices...")
-    es_fallback.indices.delete(index="file-{}3,organism-{}3,specimen-{}3,dataset-{}3,experiment-{}3,protocol-{}_files-{}3,protocol-{}_samples-{}3".format(yesterday, yesterday, yesterday, yesterday, yesterday))
-    es_production.indices.delete(index="file-{}3,organism-{}3,specimen-{}3,dataset-{}3,experiment-{}3,protocol-{}_files-{}3,protocol-{}_samples-{}3".format(yesterday, yesterday, yesterday, yesterday, yesterday))
+    es_fallback.indices.delete(index="file-{}3,organism-{}3,specimen-{}3,dataset-{}3,experiment-{}3,protocol-{}_files-{}3,protocol-{}_samples-{}3".format(yesterday, yesterday, yesterday, yesterday, yesterday, yesterday, yesterday, yesterday, yesterday))
+    es_production.indices.delete(index="file-{}3,organism-{}3,specimen-{}3,dataset-{}3,experiment-{}3,protocol-{}_files-{}3,protocol-{}_samples-{}3".format(yesterday, yesterday, yesterday, yesterday, yesterday, yesterday, yesterday, yesterday, yesterday))
 
 
 if __name__ == "__main__":
