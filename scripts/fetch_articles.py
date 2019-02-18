@@ -4,6 +4,10 @@ from elasticsearch import Elasticsearch
 # Addresses of servers
 NODE1 = 'wp-np3-e2:9200'
 NODE2 = 'wp-np3-e3:9200'
+ORGANISMS = set()
+SPECIMENS = set()
+DATASETS = set()
+FILES = set()
 
 
 def main():
@@ -13,13 +17,16 @@ def main():
     datasets_id = retrieve_ids('dataset', es)
 
     print("Starting to fetch articles for organisms")
-    fetch_articles(organisms_id, es)
+    fetch_articles(organisms_id, 'organism')
 
     print("Starting to fetch articles for specimens")
-    fetch_articles(specimens_id, es)
+    fetch_articles(specimens_id, 'specimen')
 
     print("Starting to fetch articles for datasets")
-    fetch_articles(datasets_id, es)
+    fetch_articles(datasets_id, 'dataset')
+
+    print("Starting to check specimens for additional organisms")
+    check_specimens()
 
 
 def retrieve_ids(index_name, es):
@@ -32,16 +39,89 @@ def retrieve_ids(index_name, es):
     return ids
 
 
-def fetch_articles(ids, es):
+def fetch_articles(ids, my_type):
     for index, my_id in enumerate(ids):
         if index % 100 == 0:
-            print(index)
+            ratio = round(index / len(ids) * 100)
+            print("{} % is ready...".format(str(ratio)))
         response = requests.get("https://www.ebi.ac.uk/europepmc/webservices/rest/search?query={}&format=json"
                                 .format(my_id))
         results = response.json()['resultList']['result']
         if len(results) != 0:
-            print(results)
+            print("{}\t{}".format(my_type, my_id))
+            if my_type == 'organism':
+                ORGANISMS.add(my_id)
+
+                # Add specimens
+                response = requests.get(
+                    "http://data.faang.org/api/specimen/_search/?q=organism.biosampleId:{}&size=100000".format(my_id)
+                ).json()
+                for item in response['hits']['hits']:
+                    SPECIMENS.add(item['_id'])
+
+                # Add files
+                response = requests.get(
+                    "http://data.faang.org/api/file/_search/?q=organism:{}&size=100000".format(my_id)).json()
+                for item in response['hits']['hits']:
+                    FILES.add(item['_id'])
+
+            elif my_type == 'specimen':
+                SPECIMENS.add(my_id)
+
+                # Add organisms
+                response = requests.get("http://data.faang.org/api/specimen/{}".format(my_id)).json()
+                if 'biosampleId' in response['hits']['hits'][0]['_source']['organism']:
+                    organism_id = response['hits']['hits'][0]['_source']['organism']['biosampleId']
+                    ORGANISMS.add(organism_id)
+
+                # Add datasets
+                response = requests.get(
+                    "http://data.faang.org/api/dataset/_search/?q=specimen.biosampleId:{}&size=100000".format(my_id)
+                ).json()
+                for item in response['hits']['hits']:
+                    DATASETS.add(item['_id'])
+
+                # Add files
+                response = requests.get(
+                    "http://data.faang.org/api/file/_search/?q=specimen:{}&size=100000".format(my_id)).json()
+                for item in response['hits']['hits']:
+                    FILES.add(item['_id'])
+
+            elif my_type == 'dataset':
+                DATASETS.add(my_id)
+
+                # Add specimens
+                response = requests.get("http://data.faang.org/api/dataset/{}".format(my_id)).json()
+                for item in response['hits']['hits'][0]['_source']['specimen']:
+                    SPECIMENS.add(item['biosampleId'])
+
+                # Add files
+                for item in response['hits']['hits'][0]['_source']['file']:
+                    FILES.add(item['fileId'])
+
+
+def check_specimens():
+    for index, my_id in enumerate(SPECIMENS):
+        if index % 100 == 0:
+            ratio = round(index / len(SPECIMENS) * 100)
+            print("{} % is ready...".format(str(ratio)))
+        # Add organisms
+        response = requests.get("http://data.faang.org/api/specimen/{}".format(my_id)).json()
+        if 'biosampleId' in response['hits']['hits'][0]['_source']['organism']:
+            organism_id = response['hits']['hits'][0]['_source']['organism']['biosampleId']
+            ORGANISMS.add(organism_id)
+
+        # Add datasets
+        response = requests.get(
+            "http://data.faang.org/api/dataset/_search/?q=specimen.biosampleId:{}&size=100000".format(my_id)).json()
+        for item in response['hits']['hits']:
+            DATASETS.add(item['_id'])
 
 
 if __name__ == "__main__":
     main()
+    print(SPECIMENS)
+    print(ORGANISMS)
+    print(DATASETS)
+    print(FILES)
+    print("Done!")
