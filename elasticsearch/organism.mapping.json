@@ -254,6 +254,9 @@
         },
         "pedigree": {
             "type": "keyword"
-        }
+        },
+      "paperPublished": {
+        "type": "keyword"
+      }
     }
 }

@@ -214,6 +214,9 @@
     },
     "centerName": {
       "type": "keyword"
-    }
+    },
+    "paperPublished": {
+        "type": "keyword"
+      }
   }
 }

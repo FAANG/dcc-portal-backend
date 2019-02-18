@@ -604,6 +604,9 @@
           "type": "keyword"
         }
       }
-    }
+    },
+    "paperPublished": {
+        "type": "keyword"
+      }
   }
 }
