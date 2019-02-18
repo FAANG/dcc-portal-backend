@@ -130,7 +130,7 @@ def update_records(records_array, array_type):
         try:
             es.update(index=array_type, doc_type="_doc", id=item_id, body=body)
         except ValueError:
-            print(item_id)
+            print("ValueError {}".format(item_id))
             continue
 
 
