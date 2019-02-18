@@ -16,21 +16,21 @@ def main():
     specimens_id = retrieve_ids('specimen', es)
     datasets_id = retrieve_ids('dataset', es)
 
-    print("Starting to fetch articles for organisms")
+    print("Starting to fetch articles for organisms...")
     fetch_articles(organisms_id, 'organism')
 
-    print("Starting to fetch articles for specimens")
+    print("Starting to fetch articles for specimens...")
     fetch_articles(specimens_id, 'specimen')
 
-    print("Starting to fetch articles for datasets")
+    print("Starting to fetch articles for datasets..")
     fetch_articles(datasets_id, 'dataset')
 
-    print("Starting to check specimens for additional organisms")
+    print("Starting to check specimens for additional organisms and datasets...")
     check_specimens()
 
 
 def retrieve_ids(index_name, es):
-    print("Fetching ids from {}".format(index_name))
+    print("Fetching ids from {}...".format(index_name))
     ids = []
     data = es.search(index=index_name, size=100000, _source="_id")
     for hit in data['hits']['hits']:
@@ -118,10 +118,26 @@ def check_specimens():
             DATASETS.add(item['_id'])
 
 
+def update_records(records_array, array_type):
+    es = Elasticsearch(['wp-np3-e2', 'wp-np3-e3'])
+    body = {"doc": {"paperPublished": "true"}}
+
+    print("Starting to update {} records:".format(array_type))
+    for index, item_id in enumerate(records_array):
+        if index % 100 == 0:
+            ratio = index / len(records_array) * 100
+            print("{} % is ready...".format(str(ratio)))
+        try:
+            es.update(index=array_type, doc_type="_doc", id=item_id, body=body)
+        except ValueError:
+            print(item_id)
+            continue
+
+
 if __name__ == "__main__":
     main()
-    print(SPECIMENS)
-    print(ORGANISMS)
-    print(DATASETS)
-    print(FILES)
+    update_records(SPECIMENS, 'specimen')
+    update_records(ORGANISMS, 'organism')
+    update_records(DATASETS, 'dataset')
+    update_records(FILES, 'file')
     print("Done!")
