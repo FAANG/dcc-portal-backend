@@ -1,9 +1,10 @@
 import requests
 from elasticsearch import Elasticsearch
+import asyncio
+import aiohttp
+import time
 
-# Addresses of servers
-NODE1 = 'wp-np3-e2:9200'
-NODE2 = 'wp-np3-e3:9200'
+# Global sets for ids
 ORGANISMS = set()
 SPECIMENS = set()
 DATASETS = set()
@@ -17,16 +18,19 @@ def main():
     datasets_id = retrieve_ids('dataset', es)
 
     print("Starting to fetch articles for organisms...")
-    fetch_articles(organisms_id, 'organism')
+    asyncio.get_event_loop().run_until_complete(fetch_all_articles(organisms_id, 'organism'))
 
     print("Starting to fetch articles for specimens...")
-    fetch_articles(specimens_id, 'specimen')
+    asyncio.get_event_loop().run_until_complete(fetch_all_articles(specimens_id, 'specimen'))
 
     print("Starting to fetch articles for datasets..")
-    fetch_articles(datasets_id, 'dataset')
+    asyncio.get_event_loop().run_until_complete(fetch_all_articles(datasets_id, 'dataset'))
 
-    print("Starting to check specimens for additional organisms and datasets...")
-    check_specimens()
+    print("Starting to check specimens for additional organisms...")
+    asyncio.get_event_loop().run_until_complete(fetch_all_articles(SPECIMENS, 'check_specimen_for_organism'))
+
+    print("Starting to check specimens for additional datasets...")
+    asyncio.get_event_loop().run_until_complete(fetch_all_articles(SPECIMENS, 'check_specimen_for_dataset'))
 
 
 def retrieve_ids(index_name, es):
@@ -35,20 +39,29 @@ def retrieve_ids(index_name, es):
     data = es.search(index=index_name, size=100000, _source="_id")
     for hit in data['hits']['hits']:
         ids.append(hit['_id'])
-    print("Finishing fetch of ids from {}".format(index_name))
     return ids
 
 
-def fetch_articles(ids, my_type):
-    for index, my_id in enumerate(ids):
-        if index % 100 == 0:
-            ratio = round(index / len(ids) * 100)
-            print("{} % is ready...".format(str(ratio)))
-        response = requests.get("https://www.ebi.ac.uk/europepmc/webservices/rest/search?query={}&format=json"
-                                .format(my_id))
-        results = response.json()['resultList']['result']
+async def fetch_all_articles(ids, my_type):
+    async with aiohttp.ClientSession() as session:
+        tasks = []
+        for my_id in ids:
+            if my_type == 'check_specimen_for_organism':
+                task = asyncio.ensure_future(check_specimen_for_organism(session, my_id))
+            elif my_type == 'check_specimen_for_dataset':
+                task = asyncio.ensure_future(check_specimen_for_dataset(session, my_id))
+            else:
+                task = asyncio.ensure_future(fetch_article(session, my_id, my_type))
+            tasks.append(task)
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
+async def fetch_article(session, my_id, my_type):
+    url = "https://www.ebi.ac.uk/europepmc/webservices/rest/search?query={}&format=json".format(my_id)
+    async with session.get(url) as response:
+        results = await response.json()
+        results = results['resultList']['result']
         if len(results) != 0:
-            print("{}\t{}".format(my_type, my_id))
             if my_type == 'organism':
                 ORGANISMS.add(my_id)
 
@@ -100,21 +113,20 @@ def fetch_articles(ids, my_type):
                     FILES.add(item['fileId'])
 
 
-def check_specimens():
-    for index, my_id in enumerate(SPECIMENS):
-        if index % 100 == 0:
-            ratio = round(index / len(SPECIMENS) * 100)
-            print("{} % is ready...".format(str(ratio)))
-        # Add organisms
-        response = requests.get("http://data.faang.org/api/specimen/{}".format(my_id)).json()
-        if 'biosampleId' in response['hits']['hits'][0]['_source']['organism']:
-            organism_id = response['hits']['hits'][0]['_source']['organism']['biosampleId']
+async def check_specimen_for_organism(session, my_id):
+    url = "http://data.faang.org/api/specimen/{}".format(my_id)
+    async with session.get(url) as response:
+        results = await response.json()
+        if 'biosampleId' in results['hits']['hits'][0]['_source']['organism']:
+            organism_id = results['hits']['hits'][0]['_source']['organism']['biosampleId']
             ORGANISMS.add(organism_id)
 
-        # Add datasets
-        response = requests.get(
-            "http://data.faang.org/api/dataset/_search/?q=specimen.biosampleId:{}&size=100000".format(my_id)).json()
-        for item in response['hits']['hits']:
+
+async def check_specimen_for_dataset(session, my_id):
+    url = "http://data.faang.org/api/dataset/_search/?q=specimen.biosampleId:{}&size=100000".format(my_id)
+    async with session.get(url) as response:
+        results = await response.json()
+        for item in results['hits']['hits']:
             DATASETS.add(item['_id'])
 
 
@@ -125,8 +137,8 @@ def update_records(records_array, array_type):
     print("Starting to update {} records:".format(array_type))
     for index, item_id in enumerate(records_array):
         if index % 100 == 0:
-            ratio = index / len(records_array) * 100
-            print("{} % is ready...".format(str(ratio)))
+            ratio = round(index / len(records_array) * 100)
+            print(f"{ratio} % is ready...")
         try:
             es.update(index=array_type, doc_type="_doc", id=item_id, body=body)
         except ValueError:
@@ -135,9 +147,13 @@ def update_records(records_array, array_type):
 
 
 if __name__ == "__main__":
+    start_time = time.time()
+
     main()
     update_records(SPECIMENS, 'specimen')
     update_records(ORGANISMS, 'organism')
     update_records(DATASETS, 'dataset')
     update_records(FILES, 'file')
-    print("Done!")
+
+    duration = time.time() - start_time
+    print(f"Done in {round(duration / 60)} minutes")
