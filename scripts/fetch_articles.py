@@ -9,6 +9,7 @@ ORGANISMS = set()
 SPECIMENS = set()
 DATASETS = set()
 FILES = set()
+ARTICLES = []
 
 
 def main():

@@ -217,6 +217,13 @@
     },
     "paperPublished": {
         "type": "keyword"
-      }
+      },
+    "publishedArticles": {
+            "properties": {
+                "pubmedId": {
+                    "type": "keyword"
+                }
+            }
+        }
   }
 }
