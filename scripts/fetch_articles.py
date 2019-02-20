@@ -3,6 +3,7 @@ from elasticsearch import Elasticsearch
 import asyncio
 import aiohttp
 import time
+import sys
 
 # Global sets for ids
 ORGANISMS = {}
@@ -63,6 +64,8 @@ async def fetch_article(session, my_id, my_type):
         results = results['resultList']['result']
         if len(results) != 0:
             articles_list = [result['pmcid'] for result in results]
+            for result in results:
+                ARTICLES[result['id']] = result
             if my_type == 'organism':
                 add_new_pair(ORGANISMS, my_id, articles_list)
 
@@ -133,12 +136,11 @@ async def check_specimen_for_dataset(session, my_id, articles_list):
 
 
 def update_records(records_dict, array_type, es):
-
     print("Starting to update {} records:".format(array_type))
     for index, item_id in enumerate(records_dict):
         if index % 100 == 0:
             ratio = round(index / len(records_dict) * 100)
-            print(f"{ratio} % is ready...")
+            sys.stdout.write(f"{ratio} %\r")
         body = {"doc": {"paperPublished": "true", "publishedArticles": [
             {'pubmedId': pubmedId} for pubmedId in records_dict[item_id]]}}
 
@@ -147,6 +149,17 @@ def update_records(records_dict, array_type, es):
         except ValueError:
             print("ValueError {}".format(item_id))
             continue
+    sys.stdout.flush()
+
+
+def update_articles(es):
+    print("Starting to update articles...")
+    for index, article_id in enumerate(ARTICLES):
+        if index % 100 == 0:
+            ratio = round(index / len(ARTICLES) * 100)
+            sys.stdout.write(f"{ratio} %\r")
+        es.index(index='article', doc_type="_doc", id=article_id, body=ARTICLES[article_id])
+    sys.stdout.flush()
 
 
 def add_new_pair(target_dict, id_to_check, target_list):
@@ -165,6 +178,7 @@ if __name__ == "__main__":
     update_records(ORGANISMS, 'organism', es)
     update_records(DATASETS, 'dataset', es)
     update_records(FILES, 'file', es)
+    update_articles(es)
 
     duration = time.time() - start_time
     print(f"Done in {round(duration / 60)} minutes")

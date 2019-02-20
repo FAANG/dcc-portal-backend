@@ -80,13 +80,21 @@
       "type": "keyword"
     },
     "tmAccessionTypeList": {
-      "type": "keyword"
+      "properties": {
+        "accessionType": {
+          "type": "keyword"
+        }
+      }
     },
     "issue": {
       "type": "keyword"
     },
     "dbCrossReferenceList": {
-      "type": "keyword"
+      "properties": {
+        "dbName": {
+          "type": "keyword"
+        }
+      }
     }
   }
 }
