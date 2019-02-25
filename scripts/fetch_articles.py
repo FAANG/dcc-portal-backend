@@ -1,5 +1,6 @@
 import requests
 from elasticsearch import Elasticsearch
+from decouple import config
 import asyncio
 import aiohttp
 import time
@@ -12,30 +13,33 @@ DATASETS = {}
 FILES = {}
 ARTICLES = {}
 
+# Print progress or not
+PRINT_PROGRESS = config('PRINT', cast=bool, default=False)
+
 
 def main(es):
     organisms_id = retrieve_ids('organism', es)
     specimens_id = retrieve_ids('specimen', es)
     datasets_id = retrieve_ids('dataset', es)
 
-    print("Starting to fetch articles for organisms...")
+    print_statement("Starting to fetch articles for organisms...")
     asyncio.get_event_loop().run_until_complete(fetch_all_articles(organisms_id, 'organism'))
 
-    print("Starting to fetch articles for specimens...")
+    print_statement("Starting to fetch articles for specimens...")
     asyncio.get_event_loop().run_until_complete(fetch_all_articles(specimens_id, 'specimen'))
 
-    print("Starting to fetch articles for datasets..")
+    print_statement("Starting to fetch articles for datasets..")
     asyncio.get_event_loop().run_until_complete(fetch_all_articles(datasets_id, 'dataset'))
 
-    print("Starting to check specimens for additional organisms...")
+    print_statement("Starting to check specimens for additional organisms...")
     asyncio.get_event_loop().run_until_complete(fetch_all_articles(SPECIMENS, 'check_specimen_for_organism'))
 
-    print("Starting to check specimens for additional datasets...")
+    print_statement("Starting to check specimens for additional datasets...")
     asyncio.get_event_loop().run_until_complete(fetch_all_articles(SPECIMENS, 'check_specimen_for_dataset'))
 
 
 def retrieve_ids(index_name, es):
-    print("Fetching ids from {}...".format(index_name))
+    print_statement("Fetching ids from {}...".format(index_name))
     ids = []
     data = es.search(index=index_name, size=100000, _source="_id")
     for hit in data['hits']['hits']:
@@ -63,7 +67,8 @@ async def fetch_article(session, my_id, my_type):
         results = await response.json()
         results = results['resultList']['result']
         if len(results) != 0:
-            articles_list = [result['pmcid'] for result in results]
+            articles_list = [{'pmcid': result['pmcid'], 'doi': result['doi'], 'title': result['title']} for result in
+                             results]
             for result in results:
                 ARTICLES[result['id']] = result
             if my_type == 'organism':
@@ -136,13 +141,13 @@ async def check_specimen_for_dataset(session, my_id, articles_list):
 
 
 def update_records(records_dict, array_type, es):
-    print("Starting to update {} records:".format(array_type))
+    print_statement("Starting to update {} records:".format(array_type))
     for index, item_id in enumerate(records_dict):
         if index % 100 == 0:
             ratio = round(index / len(records_dict) * 100)
             sys.stdout.write(f"{ratio} %\r")
         body = {"doc": {"paperPublished": "true", "publishedArticles": [
-            {'pubmedId': pubmedId} for pubmedId in records_dict[item_id]]}}
+            {'pubmedId': item['pmcid'], 'doi': item['doi'], 'title': item['title']} for item in records_dict[item_id]]}}
 
         try:
             es.update(index=array_type, doc_type="_doc", id=item_id, body=body)
@@ -152,21 +157,18 @@ def update_records(records_dict, array_type, es):
     sys.stdout.flush()
 
 
-def update_articles(es):
-    print("Starting to update articles...")
-    for index, article_id in enumerate(ARTICLES):
-        if index % 100 == 0:
-            ratio = round(index / len(ARTICLES) * 100)
-            sys.stdout.write(f"{ratio} %\r")
-        es.index(index='article', doc_type="_doc", id=article_id, body=ARTICLES[article_id])
-    sys.stdout.flush()
-
-
 def add_new_pair(target_dict, id_to_check, target_list):
     if id_to_check not in target_dict:
-        target_dict[id_to_check] = set(target_list)
+        target_dict[id_to_check] = target_list
     else:
-        target_dict[id_to_check].update(target_list)
+        for item in target_list:
+            if item not in target_dict[id_to_check]:
+                target_dict[id_to_check].append(item)
+
+
+def print_statement(print_string):
+    if PRINT_PROGRESS:
+        print(print_string)
 
 
 if __name__ == "__main__":
@@ -178,7 +180,6 @@ if __name__ == "__main__":
     update_records(ORGANISMS, 'organism', es)
     update_records(DATASETS, 'dataset', es)
     update_records(FILES, 'file', es)
-    update_articles(es)
 
     duration = time.time() - start_time
-    print(f"Done in {round(duration / 60)} minutes")
+    print_statement(f"Done in {round(duration / 60)} minutes")
