@@ -268,7 +268,10 @@
               },
               "doi": {
                 "type": "keyword"
-              }
+              },
+              "year": {
+                    "type": "keyword"
+                }
             }
         }
     }
