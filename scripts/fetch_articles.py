@@ -68,7 +68,7 @@ async def fetch_article(session, my_id, my_type):
         results = results['resultList']['result']
         if len(results) != 0:
             articles_list = [{'pmcid': result['pmcid'], 'doi': result['doi'], 'title': result['title'],
-                              'year': result['pubYear']} for result in results]
+                              'year': result['pubYear'], 'journal': result['journalTitle']} for result in results]
             for result in results:
                 ARTICLES[result['id']] = result
             if my_type == 'organism':
@@ -147,8 +147,8 @@ def update_records(records_dict, array_type, es):
             ratio = round(index / len(records_dict) * 100)
             sys.stdout.write(f"{ratio} %\r")
         body = {"doc": {"paperPublished": "true", "publishedArticles": [
-            {'pubmedId': item['pmcid'], 'doi': item['doi'], 'title': item['title'], 'year': item['year']} for item in
-            records_dict[item_id]]}}
+            {'pubmedId': item['pmcid'], 'doi': item['doi'], 'title': item['title'], 'year': item['year'],
+             'journal': item['journal']} for item in records_dict[item_id]]}}
 
         try:
             es.update(index=array_type, doc_type="_doc", id=item_id, body=body)

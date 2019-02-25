@@ -231,7 +231,10 @@
               },
               "year": {
                     "type": "keyword"
-                }
+                },
+              "journal": {
+                "type": "keyword"
+              }
             }
         }
   }
