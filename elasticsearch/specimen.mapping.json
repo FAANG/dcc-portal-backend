@@ -612,7 +612,13 @@
             "properties": {
                 "pubmedId": {
                     "type": "keyword"
-                }
+                },
+              "title": {
+                "type": "keyword"
+              },
+              "doi": {
+                "type": "keyword"
+              }
             }
         }
   }
