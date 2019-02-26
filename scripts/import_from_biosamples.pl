@@ -67,7 +67,10 @@ my $baseUrl = "https://www.ebi.ac.uk/";
 #my $accession = "SAMEA4448136"; #organism without relationship   
 #my $accession = "SAMEA6215668";
 #my %organism_tmp = &fetch_single_record($accession);
-#$accession = "SAMEA4675134";    
+#my $accession = "SAMEA5262717";    
+#my %cell_specimen_tmp = &fetch_single_record($accession);
+#&process_cell_specimens(\%cell_specimen_tmp);
+#exit;
 #my %specimen_tmp = &fetch_single_record($accession);
 #&process_organisms(\%organism_tmp);
 #&process_specimens(\%specimen_tmp);
@@ -88,7 +91,7 @@ my $baseUrl = "https://www.ebi.ac.uk/";
 
 #the parameters expected to be retrieved from the command line
 #my ($project, $es_host, $es_index_name, $error_log);
-my ($es_host, $es_index_name, $error_log, $legacy_flag);
+my ($es_host, $es_index_name, $error_log);
 $error_log = "import_biosample_error.log";
 #Parse the command line options
 #Example: perl import_from_biosamples.pl -project faang -es_host <elasticsearch server> -es_index_name faang
@@ -97,10 +100,9 @@ GetOptions(
   'es_host=s' =>\$es_host,
   'es_index_name=s' =>\$es_index_name,
   'error_log=s' =>\$error_log,
-  'legacy' =>\$legacy_flag
 );
 #croak "Need -project e.g. faang" unless ( $project);
-croak "Need -es_host e.g. ves-hx-e4:9200" unless ( $es_host);
+croak "Need -es_host e.g. wp-np3-e2:9200" unless ( $es_host);
 croak "Need -es_index_name e.g. faang, faang_build_1" unless ( $es_index_name);
 
 #legacy API
@@ -111,11 +113,8 @@ croak "Need -es_index_name e.g. faang, faang_build_1" unless ( $es_index_name);
 #my $url = "https://www.ebi.ac.uk/biosamples/samples?filter=attr%3Aproject%3AFAANG";
 #my $url = "https://www.ebi.ac.uk/biosamples/samples?size=1000&sort=id,asc&filter=attr%3Aproject%3AFAANG";
 
-my @legacy_animals = ("Gallus gallus","Ovis aries","Sus scrofa","Bos taurus","Capra hircus","Equus caballus");
-
 print "The information of invalid records will be stored in $error_log\n\n";
 open ERR,">$error_log";
-
 
 #the curl commands are mainly called in two places
 #one is here to get ruleset version
@@ -149,36 +148,41 @@ my %organismInfoForSpecimen;
 #keys are organism accession and values are how many specimens related to that organism
 my %organismReferredBySpecimen;
 
+my $total_records_to_update = 0;
+
 print "The program starts at ".localtime."\n";
 my $pastTime = time;
 my $savedTime = time;
 
 my %etags = &get_existing_etags();
-print "There are ".(scalar keys %etags)." records with etag in ES\n";
+my $num_etags = scalar keys %etags;
+print "There are $num_etags records with etag in ES\n";
 print "Finish retrieving existing etags at ".localtime."\n";
 
 #retrieve all FAANG BioSamples from BioSample database
 
-if($legacy_flag){
-  print "Importing legacy data\n";
+print "Importing FAANG data\n";
 
-  my $url = $baseUrl."biosamples/samples?size=1000&filter=attr%3AOrganism%3A";
-  &fetch_records_by_species($url);
-  print "There are ".(scalar keys %organism)." organisms for Legacy data\n";
-  print "There are ".(scalar keys %specimen_from_organism)." specimens for Legacy data\n";
-  print "There are ".(scalar keys %cell_specimen)." cell specimens for Legacy data\n";
-  print "There are ".(scalar keys %cell_culture)." cell cultures for Legacy data\n";
-  print "There are ".(scalar keys %cell_line)." cell lines for Legacy data\n";
-  print "There are ".(scalar keys %pool_specimen)." pools of specimens for Legacy data\n";
-
+my $url = $baseUrl."biosamples/accessions?project=FAANG&limit=100000";
+my @biosample_ids = &fetch_biosamples_ids($url);
+my $num_biosamples = scalar @biosample_ids;
+print "$num_biosamples in BioSamples archive\n";
+if ($num_etags == 0 || $num_biosamples/$num_etags > 2){
+  $url = $baseUrl."biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG";
+  &fetch_records_by_project($url);
 }else{
-  print "Importing FAANG data\n";
-#  my $url = $baseUrl."biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG";
-  my $url = $baseUrl."biosamples/accessions?project=FAANG&limit=100000";
-  #&fetch_records_by_project($url);
-  &fetch_records_by_project_via_etag($url);
-
+  #  my $url = $baseUrl."biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG";
+  my $today = &get_today();
+  my $local_etag_file = "etag_list_$today.txt";
+  open CMD, "wc $local_etag_file|";
+  my $info = <CMD>;
+  croak "Wrong etag cache file name, please double check" unless (defined($info));
+  if ($info =~ /^\s*(\d+)\s+/){
+    croak "The number of cached etag $1 does not match the number of BioSample record, quit the script and rerun get_all_etag\n" unless ($1 == $num_biosamples);
+  }
+  &fetch_records_by_project_via_etag($local_etag_file);
 }
+
 
 #print "Finish retrieving data from BioSample at ".localtime."\n";
 ################################################################
@@ -204,10 +208,12 @@ my $current = time;
 #&convertSeconds($current - $pastTime);
 $pastTime = $current;
 
-#Check whether specimens were obtained from BioSamples
-my $number_specimens_check = keys %specimen_from_organism;
-my $number_organism_check = keys %organism;
-croak "Did not obtain any specimens from BioSamples" unless ( $number_specimens_check > 0 || $number_organism_check > 0);
+##Check whether specimens were obtained from BioSamples
+#my $number_specimens_check = keys %specimen_from_organism;
+#my $number_organism_check = keys %organism;
+#croak "Did not obtain any records from BioSamples" unless ( $number_specimens_check > 0 || $number_organism_check > 0);
+
+croak "Did not obtain any records from BioSamples" unless ( $total_records_to_update > 0);
 #organism needs to be processed first which populates %organismInfoForSpecimen
 print "Indexing organism starts at ".localtime."\n";
 &process_organisms(\%organism);
@@ -266,14 +272,6 @@ foreach my $acc(@organismReferredList){
 foreach my $acc(keys %union){
   print ERR "$acc only in source @{$union{$acc}{source}}\n" if ($union{$acc}{count}==1);
 }
-
-#List::Compare - Compare elements of two or more lists
-#my $lc = List::Compare->new(\@allOrganismList, \@organismReferredList);
-#my @organismsNotImported = $lc->get_unique;
-#unless ( scalar(@organismsNotImported) < 1){
-#  print Dumper(@organismsNotImported);
-#  croak "Have Organisms that have not been imported \@organismsNotImported";
-#}
 
 #Delete removed samples
 clean_elasticsearch('specimen');
@@ -489,12 +487,19 @@ sub process_cell_specimens{
     #therefore two steps needed to get organism: specimen from organism(sfo) first, then organism
     my @derivedFrom = keys %{$relationships{derivedFrom}};
     my $specimenFromOrganismAccession = $derivedFrom[0];
-
     my $organismAccession = "";
     if (exists $specimen_organism_relationship{$specimenFromOrganismAccession}){
       $organismAccession = $specimen_organism_relationship{$specimenFromOrganismAccession};
+    }else{
+      my %tmp = &fetch_single_record($specimenFromOrganismAccession);
+      my %relationships = &parse_relationship($tmp{$specimenFromOrganismAccession});
+      if (exists $relationships{derivedFrom}){
+        my @organisms = keys %{$relationships{derivedFrom}};
+        $organismAccession = $organisms[0];
+      }
     }
     $specimen_organism_relationship{$key} = $organismAccession;
+#    print "cell specimen $key specimen <$specimenFromOrganismAccession> organism <$organismAccession>\n";
     my %es_doc = (
       derivedFrom => $specimenFromOrganismAccession,
       cellSpecimen => {
@@ -519,6 +524,7 @@ sub process_cell_specimens{
     @{$es_doc{alternativeId}} = &getAlternative(\%relationships);
 
     unless (exists $organismInfoForSpecimen{$organismAccession}){
+
       my %tmp = &fetch_single_record($organismAccession);
       &addOrganismInfoForSpecimen($organismAccession,$tmp{$organismAccession});
     }
@@ -547,6 +553,13 @@ sub process_cell_cultures{
     my $organismAccession = "";
     if (exists $specimen_organism_relationship{$derivedFromAccession}){
       $organismAccession = $specimen_organism_relationship{$derivedFromAccession};
+    }else{
+      my %tmp = &fetch_single_record($derivedFromAccession);
+      my %relationships = &parse_relationship($tmp{$derivedFromAccession});
+      if (exists $relationships{derivedFrom}){
+        my @organisms = keys %{$relationships{derivedFrom}};
+        $organismAccession = $organisms[0];
+      }
     }
     $specimen_organism_relationship{$key} = $organismAccession;
 
@@ -877,7 +890,9 @@ sub extractCustomField(){
   return \%result;
 }
 #fetch specimen data from BioSample and populate six hashes according to their material type
+#old way without using etag, more efficient for initializing index
 sub fetch_records_by_project(){
+  print "project route\n";
   my $url = $_[0];
   my %hash;
   my @samples = &fetch_biosamples_json($url);
@@ -908,23 +923,30 @@ sub fetch_records_by_project(){
     }
     $hash{$material}++;
   }
-  my $total = 0;
+
   foreach my $type(keys %hash){
-    $total += $hash{$type};
+    $total_records_to_update += $hash{$type};
     print "There are $hash{$type} $type records\n";
   }
-  print "The sum is $total\n";
+  print "The sum is $total_records_to_update\n";
 }
 
 sub fetch_records_by_project_via_etag(){
-  my ($url) = @_;
-  my @biosample_ids = &fetch_biosamples_ids($url);
-  print "Finish getting the list of biosample ids from archive at ".localtime."\n";
+  my ($filename) = @_;
+  my %cache;
+  open IN,"$filename";
+  while(my $line=<IN>){
+    chomp($line);
+    my ($biosample, $etag_cache)=split("\t",$line);
+    $cache{$biosample} = $etag_cache;
+  }
+  print "etag route\n";
   my %hash;
-  foreach my $biosampleId(@biosample_ids){
+  foreach my $biosampleId(keys %cache){
     my $changed = 1;
     if(exists $etags{$biosampleId}){
-      $changed = &is_etag_changed($biosampleId,$etags{$biosampleId})
+      $changed = 0 if ($cache{$biosampleId} eq $etags{$biosampleId})
+#      $changed = &is_etag_changed($biosampleId,$etags{$biosampleId})
     }
     #same etag, i.e. no change, no need to update/index the sample
     if ($changed == 0){ 
@@ -935,9 +957,9 @@ sub fetch_records_by_project_via_etag(){
     }
 
     my %tmp = &fetch_single_record($biosampleId);
-    my $newEtag = &fetch_etag_biosample_by_accession($biosampleId);
+#    my $newEtag = &fetch_etag_biosample_by_accession($biosampleId);
     my %single = %{$tmp{$biosampleId}};
-    $single{etag} = $newEtag;
+    $single{etag} = $cache{$biosampleId};
     my $isFaangLabelled = &check_is_faang(\%single);
 
     next if ($isFaangLabelled == 0);
@@ -963,62 +985,25 @@ sub fetch_records_by_project_via_etag(){
     }
     $hash{$material}++;
   }
-  my $total = 0;
   foreach my $type(keys %hash){
-    $total += $hash{$type};
-    print "There are $hash{$type} $type records\n";
+    $total_records_to_update += $hash{$type};
+    print "There are $hash{$type} $type records needing updates\n";
   }
-  if ($total == 0){
+  if ($total_records_to_update == 0){
     print "All records have not been modified since last importation.\n";
     print "Exit program at ".localtime."\n";
     exit;
   }
-  print "The sum is $total\n";
+  if ($total_records_to_update <= 20){
+    foreach my $acc(keys %organism, keys %specimen_from_organism, keys %cell_specimen, keys %cell_culture, keys %cell_line, keys %pool_specimen){
+      print "To be updated: $acc\n";
+    }
+  }
+
+  print "The sum is $total_records_to_update\n";
   print "Finish comparing etags and retrieving necessary records at ".localtime."\n";
 }
 
-
-sub fetch_records_by_species {
-  my $url = $_[0];
-  foreach my $species(@legacy_animals){
-    my %hash;
-    my $finishedUrl = $url.$species;
-    $finishedUrl =~s/ /+/;
-    print "$finishedUrl\n";
-    my @samples = &fetch_biosamples_json($finishedUrl);
-    my $numSamples = scalar @samples;
-    print "there are $numSamples records for $species\n";
-    my $countFaang = 0;
-    foreach my $sample (@samples){
-      my $isFaangLabelled = &check_is_faang($sample);
-      if ($isFaangLabelled == 1){#if is FAANG, should be dealt with without -legacy option
-        $countFaang++;
-#        print "$$sample{accession} is a FAANG record\n";
-        next;
-      }
-#      print "Checking material information for non-FAANG record $$sample{accession}\n";
-      next unless (exists $$sample{characteristics});
-      next unless (exists $$sample{characteristics}{Material});
-      my $material = $$sample{characteristics}{Material}[0]{text};
-      next unless (defined($material));
-      if($material eq "organism"){
-        $organism{$$sample{accession}} = $sample;
-      }elsif($material eq "specimen from organism"){
-        $specimen_from_organism{$$sample{accession}} = $sample;
-      }elsif($material eq "cell specimen"){
-        $cell_specimen{$$sample{accession}} = $sample;
-      }elsif($material eq "cell culture"){
-        $cell_culture{$$sample{accession}} = $sample;
-      }elsif($material eq "cell line"){
-        $cell_line{$$sample{accession}} = $sample;
-      }elsif($material eq "pool of specimens"){
-        $pool_specimen{$$sample{accession}} = $sample;
-      }
-      $hash{$material}++;
-    }
-    print "$countFaang FAANG records skipped here\n";
-  }
-}
 #fetch data from BioSample and populate six hashes according to their material type
 
 #use BioSample API to retrieve BioSample records using pagination when the search function does not work properly
@@ -1035,7 +1020,6 @@ sub fetch_biosamples_json_by_page{
   # Store each additional page
   for (my $i = 1;$i<$pageNum;$i++){
     my $pageUrl = $json_url."&page=$i";
-    print "$pageUrl\n" if (($i%10)==0);
     $json_text = &fetch_json_by_url($pageUrl);# Get next page
     foreach my $item (@{$json_text->{_embedded}{samples}}){
       push(@biosamples, $item);  
@@ -1048,6 +1032,7 @@ sub fetch_biosamples_json{
   my ($json_url) = @_;
   my @biosamples;
   while ($json_url && length($json_url)>0){
+    print "$json_url\n";
     my $json_text = &fetch_json_by_url($json_url);
     #print Dumper($$json_text{page}); #contains total number, page size and page count
     foreach my $item (@{$json_text->{_embedded}{samples}}){
@@ -1083,20 +1068,8 @@ sub dealWithDecimalDegrees(){
 
 sub fetch_biosamples_ids(){
   my ($url) = @_;
-  my @ids;
-#  while ($url && length($url)>0){
-#    my $json_text = &fetch_json_by_url($url);
-#    foreach my $item (@{$json_text->{_embedded}{samples}}){
-#      push (@ids, $$item{accession});
-#    }
-#    $url = $$json_text{_links}{next}{href};
-#  }
   my $json_text = &fetch_json_by_url($url);
-  @ids = @{$json_text};
-  print scalar @ids."\n";
-#print Dumper(@ids);
-#exit;
-
+  my @ids = @{$json_text};
   return @ids;
 }
 
@@ -1125,7 +1098,7 @@ sub clean_elasticsearch{
   # scroll: keeps track of which results have already been returned and so is able to return sorted results more efficiently than with deep pagination
   # scan search: disables any scoring or sorting and to return results in the most efficient way possibl
   my $scroll = $es->scroll_helper(
-    index => $type,
+    index => "${es_index_name}_$type",
     type => "_doc",
     size => 500,
   );
@@ -1133,7 +1106,7 @@ sub clean_elasticsearch{
   while (my $loaded_doc = $scroll->next) {
     next SCROLL if $indexed_samples{$loaded_doc->{_id}};
     $es->delete(
-      index => $type,
+      index => "${es_index_name}_$type",
       type => "_doc",
       id => $loaded_doc->{_id},
     );
@@ -1180,7 +1153,7 @@ sub insert_into_es(){
     #trapping error: the code can continue to run even after the die or errors, and it also captures the errors or dieing words.
     eval{
       $es->index(
-        index => $type,
+        index => "${es_index_name}_$type",
         type => "_doc",
         id => $biosampleId,
         body => \%es_doc
@@ -1191,7 +1164,7 @@ sub insert_into_es(){
     }
   }
 }
-
+# check whether BioSample record is FAANG labelled, accepting various cases
 sub check_is_faang(){
   my $sample = $_[0];
   if (exists $$sample{characteristics} && exists $$sample{characteristics}{project}){
@@ -1253,7 +1226,7 @@ sub get_existing_etags(){
   #BioSample splits into organism specimen
   my @types = qw/organism specimen/;
   foreach my $type(@types){
-    my $url = "$urlPrefix$type$urlSuffix";
+    my $url = $urlPrefix.$es_index_name."_".$type.$urlSuffix;
     my $json_text = fetch_json_by_url($url);
     my $total = $$json_text{hits}{total};
     my $numPartition = ($total - $total%$size)/$size;

@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
-#version: 1.2.3
-#last update: 06/11/2018
+#version: 1.3
+#last update: 01/02/2019
 #1.1 add parseCSVline
 #1.1.1 improve trim function
 #1.1.2 add getFilenameFromURL
@@ -8,6 +8,7 @@
 #1.2.1 change getFilenameFromURL logic to return original URL if not a PDF file
 #1.2.2 add 2nd parameter to fetch_json_by_url which allows the program continue even the url does not exists
 #1.2.3 improve getFilenameFromURL by more checks on provided url value
+#1.3  add get_today function which returns a string meeting ISO8601 (YYYY-MM-DD)
 
 use strict;
 use warnings;
@@ -15,6 +16,7 @@ use JSON;
 use LWP::UserAgent;
 use WWW::Mechanize;
 use HTTP::Headers;
+use POSIX qw(strftime);
 
 #####Testing codes for parseCSVline
 #my @strs;
@@ -298,6 +300,15 @@ sub capitalizationFirstLetter(){
     my $remaining = substr($in,1);
     return uc($first).$remaining;
   }
+}
+
+sub get_today(){
+  my $datestring = strftime "%F", localtime;
+  return $datestring
+#  my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime();
+#  $mon = $mon+1; #month starts from 0
+#  $year = 1900+$year;  
+#  return "$year-$mon-$mday";
 }
 
 1;
