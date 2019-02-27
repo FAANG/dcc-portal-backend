@@ -51,8 +51,7 @@ def fetch_records_by_project_via_etag(etags):
             else:
                 single = fetch_single_record(data[0])
                 single['etag'] = data[1]
-                is_faang_labeled = check_is_faang(single)
-                if not is_faang_labeled:
+                if not check_is_faang(single):
                     continue
                 material =single['characteristics']['Material'][0]['text']
                 if material == 'organism':
@@ -84,7 +83,41 @@ def fetch_records_by_project_via_etag(etags):
     print(f"Finish comparing etags and retrieving necessary records at {datetime.datetime.now()}")
 
 def fetch_records_by_project():
-    pass
+    global TOTAL_RECORDS_TO_UPDATE
+    biosamples = list()
+    hash = dict()
+    url = 'https://www.ebi.ac.uk/biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG'
+    while url:
+        response = requests.get(url).json()
+        if 'next' in response['_links']:
+            url = response['_links']['next']['href']
+            for biosample in response['_embedded']['samples']:
+                biosamples.append(biosample)
+        else:
+            url = ''
+    for biosample in biosamples:
+        if not check_is_faang(biosample):
+            continue
+        material = biosample['characteristics']['Material'][0]['text']
+        if material == 'organism':
+            ORGANISM[biosample['accession']] = biosample
+        elif material == 'specimen from organism':
+            SPECIMEN_FROM_ORGANISM[biosample['accession']] = biosample
+        elif material == 'cell specimen':
+            CELL_SPECIMEN[biosample['accession']] = biosample
+        elif material == 'cell culture':
+            CELL_CULTURE[biosample['accession']] = biosample
+        elif material == 'cell line':
+            CELL_LINE[biosample['accession']] = biosample
+        elif material == 'pool of specimens':
+            POOL_SPECIMEN[biosample['accession']] = biosample
+        hash.setdefault(material, 0)
+        hash[material] += 1
+    for k, v in hash.items():
+        TOTAL_RECORDS_TO_UPDATE += v
+        print(f"There are {v} {k} records needing update")
+    print(f"The sum is {TOTAL_RECORDS_TO_UPDATE}")
+
 
 def fetch_single_record(biosampleId):
     url_schema = 'https://www.ebi.ac.uk/biosamples/samples/{}.json?curationdomain=self.FAANG_DCC_curation'
