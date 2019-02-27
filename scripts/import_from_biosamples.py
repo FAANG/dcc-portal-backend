@@ -92,6 +92,7 @@ def fetch_records_by_project():
         if 'next' in response['_links']:
             url = response['_links']['next']['href']
             for biosample in response['_embedded']['samples']:
+                biosample = deal_with_decimal_degrees(biosample)
                 biosamples.append(biosample)
         else:
             url = ''
@@ -130,6 +131,19 @@ def check_is_faang(item):
             if 'text' in project and project['text'].lower() == 'faang':
                 return True
     return False
+
+def deal_with_decimal_degrees(item):
+    if item['characteristics']['Material'][0]['text'] == 'organism':
+        try:
+            if item['characteristics']['birth location latitude'][0]['unit'] == 'decimal degree' or \
+                    item['characteristics']['birth location longitude'][0]['unit'] == 'decimal degree':
+                url = "https://www.ebi.ac.uk/biosamples/samples/{}.json?curationdomain=self.FAANG_DCC_curation".format(
+                    item['accession'])
+                return requests.get(url).json()
+        except KeyError:
+            pass
+    else:
+        return item
 
 if __name__ == "__main__":
     main()
