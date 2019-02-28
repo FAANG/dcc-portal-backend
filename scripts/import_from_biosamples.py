@@ -3,6 +3,7 @@ import datetime
 import requests
 import sys
 from validate_sample_record import *
+from get_all_etags import fetch_biosample_ids
 
 INDEXED_SAMPLES = dict()
 ORGANISM = dict()
@@ -22,10 +23,11 @@ def main():
     print(f"There are {len(etags)} records with etags in ES")
     print(f"Finish retrieving existing etags at {datetime.datetime.now()}")
     print("Importing FAANG data")
-    if len(etags) > 0:
-        fetch_records_by_project_via_etag(etags)
-    else:
+    biosamples = fetch_biosample_ids()
+    if len(etags) == 0 or len(biosamples)/len(etags) > 2:
         fetch_records_by_project()
+    else:
+        fetch_records_by_project_via_etag(etags)
 
 def get_existing_etags():
     url_schema = 'http://wp-np3-e2.ebi.ac.uk:9200/{}/_search?_source=biosampleId,etag&sort=biosampleId&size=100000'
