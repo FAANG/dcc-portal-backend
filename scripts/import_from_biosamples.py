@@ -5,6 +5,8 @@ import sys
 import re
 from validate_sample_record import *
 from get_all_etags import fetch_biosample_ids
+from columns import *
+from misc import *
 
 INDEXED_SAMPLES = dict()
 ORGANISM = dict()
@@ -13,6 +15,7 @@ CELL_SPECIMEN = dict()
 CELL_CULTURE = dict()
 CELL_LINE = dict()
 POOL_SPECIMEN = dict()
+ORGANISM_FOR_SPECIMEN = dict()
 TOTAL_RECORDS_TO_UPDATE = 0
 
 # TODO check single or double quotes
@@ -176,8 +179,9 @@ def deal_with_decimal_degrees(item):
         return item
 
 def process_organisms():
-    doc_for_update = dict()
+    converted = dict()
     for accession, item in ORGANISM.items():
+        doc_for_update = dict()
         doc_for_update['organism'] = {
             "text": check_existence(item, 'Organism', 'text'),
             "ontologyTerms": check_existence(item, 'Organism', 'ontologyTerms')
@@ -219,8 +223,26 @@ def process_organisms():
         doc_for_update['deliveryEase'] = check_existence(item, 'delivery ease', 'text')
         doc_for_update['pedigree'] = check_existence(item, 'pedigree', 'text')
         doc_for_update = populate_basic_biosample_info(doc_for_update, item)
-        print(doc_for_update)
-        sys.exit(0)
+        doc_for_update = extract_custom_field(doc_for_update, item, 'organism')
+        doc_for_update['healthStatus'] = get_health_status(item)
+        relationships = parse_relationship(item)
+        if 'childOf' in relationships:
+            doc_for_update['childOf'] = relationships.keys()
+        doc_for_update['alternativeId'] = get_alternative_id(relationships)
+        add_organism_info_for_specimen(accession, item)
+        if 'strain' in item['characteristics']:
+            doc_for_update['breed'] = {
+                'text': check_existence(item, 'strain', 'text'),
+                'ontologyTerms': check_existence(item, 'strain', 'ontologyTerms')
+            }
+            ORGANISM_FOR_SPECIMEN[accession]['breed'] = {
+                'text': check_existence(item, 'strain', 'text'),
+                'ontologyTerms': check_existence(item, 'strain', 'ontologyTerms')
+            }
+
+        converted[accession] = doc_for_update
+    insert_into_es(converted, 'organism')
+
 
 def process_specimens():
     pass
@@ -274,12 +296,106 @@ def populate_basic_biosample_info(doc, item):
         )
     return doc
 
+def extract_custom_field(doc, item, type):
+    characteristics = item['characteristics'].copy()
+    if type not in known_columns:
+        # TODO logging to error
+        sys.exit(0)
+    for column in common_columns + known_columns[type]:
+        if column in characteristics:
+            characteristics.pop(column)
+    customs = list()
+    for k, v in characteristics.items():
+        if isinstance(v, list):
+            to_parse = v[0]
+        else:
+            to_parse = v
+        tmp = dict()
+        tmp['name'] = k
+        if isinstance(to_parse, dict):
+            if 'text' in to_parse:
+                tmp['value'] = to_parse['text']
+            if 'value' in to_parse:
+                tmp['value'] = to_parse['value']
+            if 'unit' in to_parse:
+                tmp['unit'] = to_parse['unit']
+            if 'ontologyTerms' in to_parse:
+                tmp['ontologyTerms'] = to_parse['ontologyTerms']
+        else:
+            tmp['value'] = to_parse
+        customs.append(tmp)
+    doc['customField'] = customs
+    return doc
+
+def get_health_status(item):
+    health_status = list()
+    for status in item['characteristics']['health status']:
+        health_status.append(
+            {
+                'text': status['text'],
+                'ontologyTerms': status['ontologyTerms'][0]
+            }
+        )
+    return health_status
+
+def parse_relationship(item):
+    results = dict()
+    if 'relationships' not in item:
+        return results
+    accession = item['accession']
+    for relation in item['relationships']:
+        type = relation['type']
+        if type == 'EBI equivalent BioSample' or type == 'same as':
+            target = relation['target'] if relation['source'] == item['accession'] else relation['source']
+            results[type].setdefault(target, 0)
+            results[to_lower_camel_case(type)].setdefault(target, 0)
+            results[type][target] += 1
+            results[to_lower_camel_case(type)][target] += 1
+        else:
+            if relation['target'] != accession:
+                target = relation['target']
+                results[type].setdefault(target, 0)
+                results[to_lower_camel_case(type)].setdefault(target, 0)
+                results[type][target] += 1
+                results[to_lower_camel_case(type)][rarget] += 1
+    return results
+
+def get_alternative_id(relationships):
+    results = list()
+    if 'sameAs' in relationships:
+        for acc in relationships['sameAs']:
+            results.append(acc)
+    if 'EBI equivalent BioSample' in relationships:
+        for acc in relationships['EBI equivalent BioSample']:
+            results.append(acc)
+    return results
+
+def add_organism_info_for_specimen(accession, item):
+    ORGANISM_FOR_SPECIMEN.setdefault(accession, {})
+    ORGANISM_FOR_SPECIMEN[accession]['biosampleId'] = item['accession']
+    ORGANISM_FOR_SPECIMEN[accession]['organism'] = {
+        'text': check_existence(item, 'Organism', 'text'),
+        'ontologyTerms': check_existence(item, 'Organism', 'ontologyTerms')
+    }
+    ORGANISM_FOR_SPECIMEN[accession]['sex'] = {
+        'text': check_existence(item, 'Sex', 'text'),
+        'ontologyTerms': check_existence(item, 'Sex', 'ontologyTerms')
+    }
+    ORGANISM_FOR_SPECIMEN[accession]['breed'] = {
+        'text': check_existence(item, 'breed', 'text'),
+        'ontologyTerms': check_existence(item, 'breed', 'ontologyTerms')
+    }
+    ORGANISM_FOR_SPECIMEN[accession]['healthStatus'] = get_health_status(item)
+
 def parse_date(date):
     # TODO logging to error if date doesn't exist
     parsed_date = re.search("(\d+-\d+-\d+)T", date)
     if parsed_date:
         date = parsed_date.groups()[0]
     return date
+
+def insert_into_es(data, type):
+    pass
 
 if __name__ == "__main__":
     main()
