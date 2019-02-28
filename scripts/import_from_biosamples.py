@@ -23,8 +23,7 @@ def main():
     print(f"There are {len(etags)} records with etags in ES")
     print(f"Finish retrieving existing etags at {datetime.datetime.now()}")
     print("Importing FAANG data")
-    biosamples = fetch_biosample_ids()
-    if len(etags) == 0 or len(biosamples)/len(etags) > 2:
+    if len(etags) == 0 or len(fetch_biosample_ids())/len(etags) > 2:
         fetch_records_by_project()
     else:
         fetch_records_by_project_via_etag(etags)
@@ -98,7 +97,7 @@ def fetch_records_by_project():
                 biosamples.append(biosample)
         else:
             url = ''
-    for biosample in biosamples:
+    for i,biosample in enumerate(biosamples):
         if not check_is_faang(biosample):
             continue
         material = biosample['characteristics']['Material'][0]['text']
@@ -142,8 +141,10 @@ def deal_with_decimal_degrees(item):
                 url = "https://www.ebi.ac.uk/biosamples/samples/{}.json?curationdomain=self.FAANG_DCC_curation".format(
                     item['accession'])
                 return requests.get(url).json()
+            else:
+                return item
         except KeyError:
-            pass
+            return item
     else:
         return item
 
