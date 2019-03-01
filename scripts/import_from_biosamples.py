@@ -509,10 +509,63 @@ def process_pool_specimen():
 
 def process_cell_lines():
     converted = dict()
-    for access, item in CELL_LINE.items():
+    for accession, item in CELL_LINE.items():
+        doc_for_update = dict()
         relationships = parse_relationship(item)
-        url = ''
-        filename = ''
+        url = check_existence(item, 'culture protocol', 'text')
+        filename = get_filename_from_url(url, accession)
+        doc_for_update.setdefault('cellLine', {})
+        doc_for_update['cellLine']['organism'] = {
+            'text': check_existence(item, 'Organism', 'text'),
+            'ontologyTerms': check_existence(item, 'Organism', 'ontologyTerms')
+        }
+        doc_for_update['cellLine']['sex'] = {
+            'text': check_existence(item, 'Sex', 'text'),
+            'ontologyTerms': check_existence(item, 'Sex', 'ontologyTerms')
+        }
+        doc_for_update['cellLine']['cellLine'] = check_existence(item, 'cell line', 'text')
+        doc_for_update['cellLine']['biomaterialProvider'] = check_existence(item, 'biomaterial provider', 'text')
+        doc_for_update['cellLine']['catalogueNumber'] = check_existence(item, 'catalogue number', 'text')
+        doc_for_update['cellLine']['numberOfPassages'] = check_existence(item, 'number of passages', 'text')
+        doc_for_update['cellLine']['dateEstablished'] = {
+            'text': check_existence(item, 'date established', 'text'),
+            'unit': check_existence(item, 'date established', 'unit')
+        }
+        doc_for_update['cellLine']['publication'] = check_existence(item, 'publication', 'text')
+        doc_for_update['cellLine']['breed'] = {
+            'text': check_existence(item, 'breed', 'text'),
+            'ontologyTerms': check_existence(item, 'breed', 'ontologyTerms')
+        }
+        doc_for_update['cellLine']['cellType'] = {
+            'text': check_existence(item, 'cell type', 'text'),
+            'ontologyTerms': check_existence(item, 'cell type', 'ontologyTerms')
+        }
+        doc_for_update['cellLine']['cultureConditions'] = check_existence(item, 'culture conditions', 'text')
+        doc_for_update['cellLine']['cultureProtocol'] = {
+            'url': url,
+            'filename': filename
+        }
+        doc_for_update['cellLine']['disease'] = {
+            'text': check_existence(item, 'disease', 'text'),
+            'ontologyTerms': check_existence(item, 'disease', 'ontologyTerms')
+        }
+        doc_for_update['cellLine']['karyotype'] = check_existence(item, 'karyotype', 'text')
+        doc_for_update = populate_basic_biosample_info(doc_for_update, item)
+        doc_for_update = extract_custom_field(doc_for_update, item, 'cell line')
+        doc_for_update['cellType'] = {
+            'text': check_existence(item, 'cell type', 'text'),
+            'ontologyTerms': check_existence(item, 'cell type', 'ontologyTerms')
+        }
+        if 'derivedFrom' in relationships:
+            doc_for_update['derivedFrom'] = relationships['derivedFrom'][0]
+        doc_for_update['alternativeId'] = get_alternative_id(relationships)
+        doc_for_update.setdefault('organism', {})
+        for type in ['organism', 'sex', 'breed']:
+            doc_for_update['organism'][type] = doc_for_update['cellLine'][type]
+        converted[accession] = doc_for_update
+    insert_into_es(converted, 'specimen')
+
+
 
 def check_existence(item, field_name, subfield):
     try:
@@ -661,8 +714,7 @@ def parse_date(date):
     return date
 
 def insert_into_es(data, type):
-    if type == 'specimen':
-        print(data)
+    pass
 
 if __name__ == "__main__":
     main()

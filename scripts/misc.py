@@ -17,7 +17,7 @@ def get_filename_from_url(url, accession):
     :param accession: accession number
     :return: file name
     """
-    if len(url) == 0:
+    if (not url) or (url and len(url) == 0):
         # TODO add logging
         print(f"{accession} url is empty")
         return ""
