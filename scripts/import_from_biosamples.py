@@ -51,14 +51,14 @@ def main():
     # print(f"Indexing cell specimens starts at {datetime.datetime.now()}")
     # process_cell_specimens()
 
-    print(f"Indexing cell culture starts at {datetime.datetime.now()}")
-    process_cell_cultures()
+    # print(f"Indexing cell culture starts at {datetime.datetime.now()}")
+    # process_cell_cultures()
     #
     # print(f"Indexing pool of specimen starts at {datetime.datetime.now()}")
     # process_pool_specimen()
     #
-    # print(f"Indexing cell line starts at {datetime.datetime.now()}")
-    # process_cell_lines()
+    print(f"Indexing cell line starts at {datetime.datetime.now()}")
+    process_cell_lines()
 
 
 def get_existing_etags():
@@ -373,8 +373,6 @@ def process_cell_specimens():
         converted[accession] = doc_for_update
     insert_into_es(converted, 'specimen')
 
-
-
 def process_cell_cultures():
     converted = dict()
     for accession, item in CELL_CULTURE.items():
@@ -425,10 +423,96 @@ def process_cell_cultures():
 
 
 def process_pool_specimen():
-    pass
+    converted = dict()
+    for accession, item in POOL_SPECIMEN.items():
+        doc_for_update = dict()
+        relationships = parse_relationship(item)
+        url = check_existence(item, 'pool creation protocol', 'text')
+        filename = get_filename_from_url(url, accession)
+        doc_for_update.setdefault('poolOfSpecimens', {})
+        doc_for_update['poolOfSpecimens']['poolCreationDate'] = {
+            'text': check_existence(item, 'pool creation date', 'text'),
+            'unit': check_existence(item, 'pool creation date', 'unit')
+        }
+        doc_for_update['poolOfSpecimens']['poolCreationProtocol'] = {
+            'ulr': url,
+            'filename': filename
+        }
+        doc_for_update['poolOfSpecimens']['specimenVolume'] = {
+            'text': check_existence(item, 'specimen volume', 'text'),
+            'unit': check_existence(item, 'specimen volume', 'unit')
+        }
+        doc_for_update['poolOfSpecimens']['specimenSize'] = {
+            'text': check_existence(item, 'specimen size', 'text'),
+            'unit': check_existence(item, 'specimen size', 'unit')
+        }
+        doc_for_update['poolOfSpecimens']['specimenWeight'] = {
+            'text': check_existence(item, 'specimen weight', 'text'),
+            'unit': check_existence(item, 'specimen weight', 'unit')
+        }
+        doc_for_update = populate_basic_biosample_info(doc_for_update, item)
+        doc_for_update = extract_custom_field(doc_for_update, item, 'pool of specimens')
+        doc_for_update.setdefault('cellType', {})
+        doc_for_update['cellType']['text'] = 'Not Applicable'
+        doc_for_update['poolOfSpecimens'].setdefault('specimenPictureUrl', [])
+        if 'specimen picture url' in item['characteristics']:
+            for spu in item['characteristics']['specimen picture url']:
+                doc_for_update['poolOfSpecimens']['specimenPictureUrl'].append(spu['text'])
+        tmp = dict()
+        if 'derivedFrom' in relationships:
+            derived_from = list(relationships['derivedFrom'].keys())
+            doc_for_update['derivedFrom'] = derived_from
+            for acc in derived_from:
+                if acc in SPECIMEN_ORGANISM_RELATIONSHIP:
+                    organism_accession = SPECIMEN_ORGANISM_RELATIONSHIP[acc]
+                    ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
+                    ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
+                    if organism_accession not in ORGANISM_FOR_SPECIMEN:
+                        add_organism_info_for_specimen(organism_accession, fetch_single_record(organism_accession))
+                    tmp['organism'] = {
+                        ORGANISM_FOR_SPECIMEN[organism_accession] : {
+                            'organism': {
+                                'text': ORGANISM_FOR_SPECIMEN[organism_accession]['organism']['ontologyTerms']
+                            }
+                        }
+                    }
+                    tmp['sex'] = {
+                        ORGANISM_FOR_SPECIMEN[organism_accession]: {
+                            'sex': {
+                                'text': ORGANISM_FOR_SPECIMEN[organism_accession]['sex']['ontologyTerms']
+                            }
+                        }
+                    }
+                    tpm['breed'] = {
+                        ORGANISM_FOR_SPECIMEN[organism_accession]: {
+                            'breed': {
+                                'text': ORGANISM_FOR_SPECIMEN[organism_accession]['breed']['ontologyTerms']
+                            }
+                        }
+                    }
+                else:
+                    # TODO error logging
+                    print(f"No organism found for specimen {acc}")
+        doc_for_update['alternativeId'] = get_alternative_id(relationships)
+        for type in ['organism', 'sex', 'breed']:
+            values = list(tmp[type].keys())
+            if len(values) == 1:
+                doc_for_update['organism'].setdefault(type, {})
+                doc_for_update['organism'][type]['text'] = values[0]
+                doc_for_update['organism'][type]['ontologyTerms'] = tmp[type][values[0]]
+            else:
+                doc_for_update['organism'].setdefault(type, {})
+                doc_for_update['organism'][type]['text'] = ";".join(values)
+        converted[accession] = doc_for_update
+    insert_into_es(converted, 'specimen')
+
 
 def process_cell_lines():
-    pass
+    converted = dict()
+    for access, item in CELL_LINE.items():
+        relationships = parse_relationship(item)
+        url = ''
+        filename = ''
 
 def check_existence(item, field_name, subfield):
     try:
