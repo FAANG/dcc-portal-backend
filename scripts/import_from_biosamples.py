@@ -42,23 +42,45 @@ def main():
         print("Did not obtain any records from BioSamples")
         sys.exit(0)
 
-    # print(f"Indexing organism starts at {datetime.datetime.now()}")
-    # process_organisms()
+    print(f"Indexing organism starts at {datetime.datetime.now()}")
+    process_organisms()
 
-    # print(f"Indexing specimen from organism starts at {datetime.datetime.now()}")
-    # process_specimens()
+    print(f"Indexing specimen from organism starts at {datetime.datetime.now()}")
+    process_specimens()
 
-    # print(f"Indexing cell specimens starts at {datetime.datetime.now()}")
-    # process_cell_specimens()
+    print(f"Indexing cell specimens starts at {datetime.datetime.now()}")
+    process_cell_specimens()
 
-    # print(f"Indexing cell culture starts at {datetime.datetime.now()}")
-    # process_cell_cultures()
-    #
-    # print(f"Indexing pool of specimen starts at {datetime.datetime.now()}")
-    # process_pool_specimen()
-    #
+    print(f"Indexing cell culture starts at {datetime.datetime.now()}")
+    process_cell_cultures()
+
+    print(f"Indexing pool of specimen starts at {datetime.datetime.now()}")
+    process_pool_specimen()
+
     print(f"Indexing cell line starts at {datetime.datetime.now()}")
     process_cell_lines()
+
+    all_organism_list = list(ORGANISM.keys())
+    organism_referred_list = list(ORGANISM_REFERRED_BY_SPECIMEN.keys())
+    union = dict()
+    for acc in all_organism_list:
+        union.setdefault(acc, {})
+        union[acc].setdefault('count', 0)
+        union[acc].setdefault('source', [])
+        union[acc]['count'] += 1
+        union[acc]['source'].append('organism')
+    for acc in organism_referred_list:
+        union[acc].setdefault('count', 0)
+        union[acc].setdefault('source', [])
+        union[acc]['count'] += 1
+        union[acc]['source'].append('specimen')
+    for acc in union:
+        # TODO add logging
+        if union[acc]['count'] == 1:
+            print(f"{acc} only in source {union[acc]['source']}")
+    clean_elasticsearch('specimen')
+    clean_elasticsearch('organism')
+    print(f"Program ends at {datetime.datetime.now()}")
 
 
 def get_existing_etags():
@@ -714,6 +736,9 @@ def parse_date(date):
     return date
 
 def insert_into_es(data, type):
+    pass
+
+def clean_elasticsearch(type):
     pass
 
 if __name__ == "__main__":
