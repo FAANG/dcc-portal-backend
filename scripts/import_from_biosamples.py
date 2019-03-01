@@ -45,20 +45,20 @@ def main():
     # print(f"Indexing organism starts at {datetime.datetime.now()}")
     # process_organisms()
 
-    print(f"Indexing specimen from organism starts at {datetime.datetime.now()}")
-    process_specimens()
+    # print(f"Indexing specimen from organism starts at {datetime.datetime.now()}")
+    # process_specimens()
 
-    print(f"Indexing cell specimens starts at {datetime.datetime.now()}")
-    process_cell_specimens()
+    # print(f"Indexing cell specimens starts at {datetime.datetime.now()}")
+    # process_cell_specimens()
 
     print(f"Indexing cell culture starts at {datetime.datetime.now()}")
     process_cell_cultures()
-
-    print(f"Indexing pool of specimen starts at {datetime.datetime.now()}")
-    process_pool_specimen()
-
-    print(f"Indexing cell line starts at {datetime.datetime.now()}")
-    process_cell_lines()
+    #
+    # print(f"Indexing pool of specimen starts at {datetime.datetime.now()}")
+    # process_pool_specimen()
+    #
+    # print(f"Indexing cell line starts at {datetime.datetime.now()}")
+    # process_cell_lines()
 
 
 def get_existing_etags():
@@ -332,7 +332,48 @@ def process_specimens():
 
 
 def process_cell_specimens():
-    pass
+    converted = dict()
+    for accession, item in CELL_SPECIMEN.items():
+        doc_for_update = dict()
+        relatioships = parse_relationship(item)
+        url = check_existence(item, 'purification protocol', 'text')
+        filename = get_filename_from_url(url, accession)
+        specimen_from_organism_accession = list(relatioships['derivedFrom'].keys())[0]
+        organism_accession = ''
+        if specimen_from_organism_accession in SPECIMEN_ORGANISM_RELATIONSHIP:
+            organism_accession = SPECIMEN_ORGANISM_RELATIONSHIP[specimen_from_organism_accession]
+        else:
+            relatioships = parse_relationship(fetch_single_record(specimen_from_organism_accession))
+            if 'derivedFrom' in relatioships:
+                organism_accession = list(relatioships['derivedFrom'].keys())[0]
+        SPECIMEN_ORGANISM_RELATIONSHIP[accession] = organism_accession
+        doc_for_update['derivedFrom'] = specimen_from_organism_accession
+        doc_for_update.setdefault('cellSpecimen', {})
+        doc_for_update['cellSpecimen']['markers'] = check_existence(item, 'markers', 'text')
+        doc_for_update['cellSpecimen']['purificationProtocol'] = {
+            'url': url,
+            'filename': filename
+        }
+        doc_for_update = populate_basic_biosample_info(doc_for_update, item)
+        doc_for_update = extract_custom_field(doc_for_update, item, 'cell specimen')
+        doc_for_update['cellType'] = {
+            'text': check_existence(item, 'cell type', 'text'),
+            'ontologyTerms': check_existence(item, 'cell type', 'ontologyTerms')
+        }
+        doc_for_update['cellSpecimen'].setdefault('cellType', [])
+        if 'cell type' in item['characteristics']:
+            for cell_type in item['characteristics']['cell type']:
+                doc_for_update['cellSpecimen']['cellType'].append(cell_type)
+        doc_for_update['alternativeId'] = get_alternative_id(relatioships)
+        if organism_accession not in ORGANISM_FOR_SPECIMEN:
+            add_organism_info_for_specimen(organism_accession, fetch_single_record(organism_accession))
+        doc_for_update['organism'] = ORGANISM_FOR_SPECIMEN[organism_accession]
+        ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
+        ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
+        converted[accession] = doc_for_update
+    insert_into_es(converted, 'specimen')
+
+
 
 def process_cell_cultures():
     pass
