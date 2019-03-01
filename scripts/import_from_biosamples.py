@@ -16,6 +16,8 @@ CELL_CULTURE = dict()
 CELL_LINE = dict()
 POOL_SPECIMEN = dict()
 ORGANISM_FOR_SPECIMEN = dict()
+SPECIMEN_ORGANISM_RELATIONSHIP = dict()
+ORGANISM_REFERRED_BY_SPECIMEN = dict()
 TOTAL_RECORDS_TO_UPDATE = 0
 
 # TODO check single or double quotes
@@ -40,8 +42,8 @@ def main():
         print("Did not obtain any records from BioSamples")
         sys.exit(0)
 
-    print(f"Indexing organism starts at {datetime.datetime.now()}")
-    process_organisms()
+    # print(f"Indexing organism starts at {datetime.datetime.now()}")
+    # process_organisms()
 
     print(f"Indexing specimen from organism starts at {datetime.datetime.now()}")
     process_specimens()
@@ -245,7 +247,89 @@ def process_organisms():
 
 
 def process_specimens():
-    pass
+    converted = dict()
+    for accession, item in SPECIMEN_FROM_ORGANISM.items():
+        doc_for_update = dict()
+        relationships = parse_relationship(item)
+        url = check_existence(item, 'specimen collection protocol', 'text')
+        organism_accession = None
+        filename = get_filename_from_url(url, accession)
+        if 'derivedFrom' in relationships:
+            organism_accession = list(relationships['derivedFrom'].keys())[0]
+        SPECIMEN_ORGANISM_RELATIONSHIP[accession] = organism_accession
+        doc_for_update['derivedFrom'] = organism_accession
+        doc_for_update.setdefault('specimenFromOrganism', {})
+        doc_for_update['specimenFromOrganism']['specimenCollectionDate'] = {
+            'text': check_existence(item, 'specimen collection date', 'text'),
+            'unit': check_existence(item, 'specimen collection date', 'unit')
+        }
+        doc_for_update['specimenFromOrganism']['animalAgeAtCollection'] = {
+            'text': check_existence(item, 'animal age at collection', 'text'),
+            'unit': check_existence(item, 'animal age at collection', 'unit')
+        }
+        doc_for_update['specimenFromOrganism']['developmentalStage'] = {
+            'text': check_existence(item, 'developmental stage', 'text'),
+            'ontologyTerms': check_existence(item, 'developmental stage', 'ontologyTerms')
+        }
+        doc_for_update['specimenFromOrganism']['organismPart'] = {
+            'text': check_existence(item, 'organism part', 'text'),
+            'ontologyTerms': check_existence(item, 'organism part', 'ontologyTerms')
+        }
+        doc_for_update['specimenFromOrganism']['specimenCollectionProtocol'] = {
+            'url': url,
+            'filename': filename
+        }
+        doc_for_update['specimenFromOrganism']['fastedStatus'] = check_existence(item, 'fasted status', 'text')
+        doc_for_update['specimenFromOrganism']['numberOfPieces'] = {
+            'text': check_existence(item, 'number of pieces', 'text'),
+            'unit': check_existence(item, 'number of pieces', 'unit')
+        }
+        doc_for_update['specimenFromOrganism']['specimenVolume'] = {
+            'text': check_existence(item, 'specimen volume', 'text'),
+            'unit': check_existence(item, 'specimen volume', 'unit')
+        }
+        doc_for_update['specimenFromOrganism']['specimenSize'] = {
+            'text': check_existence(item, 'specimen size', 'text'),
+            'unit': check_existence(item, 'specimen size', 'unit')
+        }
+        doc_for_update['specimenFromOrganism']['specimenWeight'] = {
+            'text': check_existence(item, 'specimen weight', 'text'),
+            'unit': check_existence(item, 'specimen weight', 'unit')
+        }
+        doc_for_update['specimenFromOrganism']['gestationalAgeAtSampleCollection'] = {
+            'text': check_existence(item, 'gestational age at sample collection', 'text'),
+            'unit': check_existence(item, 'gestational age at sample collection', 'unit')
+        }
+        doc_for_update = populate_basic_biosample_info(doc_for_update, item)
+        doc_for_update = extract_custom_field(doc_for_update, item, 'specimen from organism')
+        doc_for_update['cellType'] = {
+            'text': check_existence(item, 'organism part', 'text'),
+            'ontologyTerms': check_existence(item, 'organism part', 'ontologyTerms')
+        }
+        doc_for_update['specimenFromOrganism'].setdefault('specimenPictureUrl', [])
+        if 'specimen picture url' in item['characteristics']:
+            for picture_url in item['characteristics']['specimen picture url']:
+                doc_for_update['specimenFromOrganism']['specimenPictureUrl'].append(picture_url['text'])
+        doc_for_update['specimenFromOrganism'].setdefault('healthStatusAtCollection', [])
+        if 'health status at collection' in item['characteristics']:
+            for health_status in item['characteristics']['health status at collection']:
+                doc_for_update['specimenFromOrganism']['healthStatusAtCollection'].append(
+                    {
+                        'text': health_status['text'],
+                        'ontologyTerms': health_status['ontologyTerms'][0]
+                    }
+                )
+        if organism_accession not in ORGANISM_FOR_SPECIMEN:
+            add_organism_info_for_specimen(organism_accession, fetch_single_record(organism_accession))
+
+        doc_for_update['organism'] = ORGANISM_FOR_SPECIMEN[organism_accession]
+        doc_for_update['alternativeId'] = get_alternative_id(relationships)
+        ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
+        ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
+        converted[accession] = doc_for_update
+    insert_into_es(converted, 'specimen')
+
+
 
 def process_cell_specimens():
     pass
@@ -345,6 +429,8 @@ def parse_relationship(item):
     accession = item['accession']
     for relation in item['relationships']:
         type = relation['type']
+        results.setdefault(type, {})
+        results.setdefault(to_lower_camel_case(type), {})
         if type == 'EBI equivalent BioSample' or type == 'same as':
             target = relation['target'] if relation['source'] == item['accession'] else relation['source']
             results[type].setdefault(target, 0)
@@ -357,7 +443,7 @@ def parse_relationship(item):
                 results[type].setdefault(target, 0)
                 results[to_lower_camel_case(type)].setdefault(target, 0)
                 results[type][target] += 1
-                results[to_lower_camel_case(type)][rarget] += 1
+                results[to_lower_camel_case(type)][target] += 1
     return results
 
 def get_alternative_id(relationships):
@@ -395,7 +481,8 @@ def parse_date(date):
     return date
 
 def insert_into_es(data, type):
-    pass
+    if type == 'specimen':
+        print(data)
 
 if __name__ == "__main__":
     main()
