@@ -84,6 +84,10 @@ def main():
 
 
 def get_existing_etags():
+    """
+    Function gets etags from organisms and specimens in elastisearch
+    :return: list of etags
+    """
     url_schema = 'http://wp-np3-e2.ebi.ac.uk:9200/{}/_search?_source=biosampleId,etag&sort=biosampleId&size=100000'
     results = dict()
     for item in ("organism", "specimen"):
@@ -176,11 +180,21 @@ def fetch_records_by_project():
 
 
 def fetch_single_record(biosampleId):
+    """
+    Function returns json file of single record from biosamples
+    :param biosampleId: accession id or record to return
+    :return: json file of sample with biosampleId
+    """
     url_schema = 'https://www.ebi.ac.uk/biosamples/samples/{}.json?curationdomain=self.FAANG_DCC_curation'
     url = url_schema.format(biosampleId)
     return requests.get(url).json()
 
 def check_is_faang(item):
+    """
+    Function checks that item has faang project
+    :param item: item to check
+    :return: True if item has faang project and False otherwise
+    """
     if 'characteristics' in item and 'project' in item['characteristics']:
         for project in item['characteristics']['project']:
             if 'text' in project and project['text'].lower() == 'faang':
@@ -203,6 +217,10 @@ def deal_with_decimal_degrees(item):
         return item
 
 def process_organisms():
+    """
+    Function prepares json file that should be inserted inside elasticsearch
+    :return: dictionary with data that should be inserted inside elasticsearch
+    """
     converted = dict()
     for accession, item in ORGANISM.items():
         doc_for_update = dict()
@@ -590,6 +608,13 @@ def process_cell_lines():
 
 
 def check_existence(item, field_name, subfield):
+    """
+    Check that item has particular field_name and subfield
+    :param item: item to check
+    :param field_name: main field_name
+    :param subfield: subfield of field_name
+    :return: return value of this field if it exists and None otherwise
+    """
     try:
         if subfield == 'text':
             return item['characteristics'][field_name][0]['text']
@@ -601,6 +626,12 @@ def check_existence(item, field_name, subfield):
         return None
 
 def populate_basic_biosample_info(doc, item):
+    """
+    This function add common field to document
+    :param doc: documen to update with common fields
+    :param item: source of information
+    :return: updated document
+    """
     doc['name'] = item['name']
     doc['biosampleId'] = item['accession']
     doc['etag'] = item['etag']
@@ -627,6 +658,13 @@ def populate_basic_biosample_info(doc, item):
     return doc
 
 def extract_custom_field(doc, item, type):
+    """
+    This function adds custom fields to document from item
+    :param doc: document to update
+    :param item: source of information
+    :param type: type of document
+    :return: updated document
+    """
     characteristics = item['characteristics'].copy()
     if type not in known_columns:
         # TODO logging to error
@@ -658,6 +696,11 @@ def extract_custom_field(doc, item, type):
     return doc
 
 def get_health_status(item):
+    """
+    extract health status for documen
+    :param item: source of information
+    :return: list with health statuses
+    """
     health_status = list()
     if 'health status' in item['characteristics']:
         key = 'health status'
@@ -702,6 +745,11 @@ def parse_relationship(item):
     return results
 
 def get_alternative_id(relationships):
+    """
+    This function gets alternative is
+    :param relationships: source of information
+    :return: list of alternative ids
+    """
     results = list()
     if 'sameAs' in relationships:
         for acc in relationships['sameAs']:
@@ -712,6 +760,11 @@ def get_alternative_id(relationships):
     return results
 
 def add_organism_info_for_specimen(accession, item):
+    """
+    This function adds organism information to specimen
+    :param accession: accession
+    :param item: source of information
+    """
     ORGANISM_FOR_SPECIMEN.setdefault(accession, {})
     ORGANISM_FOR_SPECIMEN[accession]['biosampleId'] = item['accession']
     ORGANISM_FOR_SPECIMEN[accession]['organism'] = {
@@ -729,6 +782,11 @@ def add_organism_info_for_specimen(accession, item):
     ORGANISM_FOR_SPECIMEN[accession]['healthStatus'] = get_health_status(item)
 
 def parse_date(date):
+    """
+    This function parses date
+    :param date: date to parse
+    :return: parsed date
+    """
     # TODO logging to error if date doesn't exist
     parsed_date = re.search("(\d+-\d+-\d+)T", date)
     if parsed_date:
