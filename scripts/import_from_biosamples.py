@@ -343,9 +343,9 @@ def process_cell_specimens():
         if specimen_from_organism_accession in SPECIMEN_ORGANISM_RELATIONSHIP:
             organism_accession = SPECIMEN_ORGANISM_RELATIONSHIP[specimen_from_organism_accession]
         else:
-            relatioships = parse_relationship(fetch_single_record(specimen_from_organism_accession))
-            if 'derivedFrom' in relatioships:
-                organism_accession = list(relatioships['derivedFrom'].keys())[0]
+            tmp = parse_relationship(fetch_single_record(specimen_from_organism_accession))
+            if 'derivedFrom' in tmp:
+                organism_accession = list(tmp['derivedFrom'].keys())[0]
         SPECIMEN_ORGANISM_RELATIONSHIP[accession] = organism_accession
         doc_for_update['derivedFrom'] = specimen_from_organism_accession
         doc_for_update.setdefault('cellSpecimen', {})
@@ -376,7 +376,53 @@ def process_cell_specimens():
 
 
 def process_cell_cultures():
-    pass
+    converted = dict()
+    for accession, item in CELL_CULTURE.items():
+        doc_for_update = dict()
+        relationships = parse_relationship(item)
+        url = check_existence(item, 'cell culture protocol', 'text')
+        filename = get_filename_from_url(url, accession)
+        derived_from_accession = list(relationships['derivedFrom'].keys())[0]
+        organism_accession = ''
+        if derived_from_accession in SPECIMEN_ORGANISM_RELATIONSHIP:
+            organism_accession = SPECIMEN_ORGANISM_RELATIONSHIP[derived_from_accession]
+        else:
+            tmp = parse_relationship(fetch_single_record(derived_from_accession))
+            if 'derivedFrom' in tmp:
+                organism_accession = list(tmp['derivedFrom'].keys())[0]
+        SPECIMEN_ORGANISM_RELATIONSHIP[accession] = organism_accession
+        doc_for_update['derivedFrom'] = derived_from_accession
+        doc_for_update.setdefault('cellCulture', {})
+        doc_for_update['cellCulture']['cultureType'] = {
+            'text': check_existence(item, 'culture type', 'text'),
+            'ontologyTerms': check_existence(item, 'culture type', 'ontologyTerms')
+        }
+        doc_for_update['cellCulture']['cellType'] = {
+            'text': check_existence(item, 'cell type', 'text'),
+            'ontologyTerms': check_existence(item, 'cell type', 'ontologyTerms')
+        }
+        doc_for_update['cellCulture']['cellCultureProtocol'] = {
+            'url': url,
+            'filename': filename
+        }
+        doc_for_update['cellCulture']['cultureConditions'] = check_existence(item, 'culture conditions', 'text')
+        doc_for_update['cellCulture']['numberOfPassages'] = check_existence(item, 'number of passages', 'text')
+        doc_for_update = populate_basic_biosample_info(doc_for_update, item)
+        doc_for_update = extract_custom_field(doc_for_update, item, 'cell culture')
+        doc_for_update['cellType'] = {
+            'text': check_existence(item, 'cell type', 'text'),
+            'ontologyTerms': check_existence(item, 'cell type', 'ontologyTerms')
+        }
+        doc_for_update['alternativeId'] = get_alternative_id(relationships)
+        if organism_accession not in ORGANISM_FOR_SPECIMEN:
+            add_organism_info_for_specimen(organism_accession, fetch_single_record(organism_accession))
+        doc_for_update['organism'] = ORGANISM_FOR_SPECIMEN[organism_accession]
+        ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
+        ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
+        converted[accession] = doc_for_update
+    insert_into_es(converted, 'specimen')
+
+
 
 def process_pool_specimen():
     pass
@@ -454,7 +500,16 @@ def extract_custom_field(doc, item, type):
 
 def get_health_status(item):
     health_status = list()
-    for status in item['characteristics']['health status']:
+    if 'health status' in item['characteristics']:
+        key = 'health status'
+    elif 'health status at collection' in item['characteristics']:
+        key = 'health status at collection'
+    else:
+        # TODO logging
+        print("Health status was not provided")
+        print(item['characteristics'])
+        return health_status
+    for status in item['characteristics'][key]:
         health_status.append(
             {
                 'text': status['text'],
