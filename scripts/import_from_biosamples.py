@@ -18,6 +18,7 @@ POOL_SPECIMEN = dict()
 ORGANISM_FOR_SPECIMEN = dict()
 SPECIMEN_ORGANISM_RELATIONSHIP = dict()
 ORGANISM_REFERRED_BY_SPECIMEN = dict()
+RULESETS = ["FAANG Samples", "FAANG Legacy Samples"]
 TOTAL_RECORDS_TO_UPDATE = 0
 
 # TODO check single or double quotes
@@ -794,7 +795,7 @@ def parse_date(date):
     return date
 
 def insert_into_es(data, type):
-    pass
+    validation_results = validate_total_sample_records(data, type, RULESETS)
 
 def clean_elasticsearch(type):
     pass

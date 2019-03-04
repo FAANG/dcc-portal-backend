@@ -1,5 +1,6 @@
 import re
 
+
 def to_lower_camel_case(str_to_convert):
     """
     This function will convert any string with spaces or underscores to lower camel case string
@@ -9,6 +10,21 @@ def to_lower_camel_case(str_to_convert):
     tmp = re.split(r'\s|-', str_to_convert)
     return "".join([item.lower() for i,item in enumerate(tmp) if i == 0] +
                    [item.capitalize() for i,item in enumerate(tmp) if i != 0])
+
+
+def from_lower_camel_case(str_to_convert):
+    """
+    This function will convert 'lowerCamelCase' to 'lower camel case'
+    :param str_to_convert: string to convert
+    :return: return converted string
+    """
+    tmp = re.split(r'([A-Z])', str_to_convert)
+    tmp2 = list()
+    tmp2.append(tmp[0])
+    for i in range(1, len(tmp), 2):
+        tmp2.append(tmp[i] + tmp[i+1])
+    return " ".join([item.lower() for item in tmp2])
+
 
 def get_filename_from_url(url, accession):
     """
