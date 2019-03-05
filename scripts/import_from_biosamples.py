@@ -21,6 +21,7 @@ ORGANISM_REFERRED_BY_SPECIMEN = dict()
 RULESETS = ["FAANG Samples", "FAANG Legacy Samples"]
 TOTAL_RECORDS_TO_UPDATE = 0
 
+
 # TODO check single or double quotes
 def main():
     ruleset_version = get_ruleset_version()
@@ -71,6 +72,7 @@ def main():
         union[acc]['count'] += 1
         union[acc]['source'].append('organism')
     for acc in organism_referred_list:
+        union.setdefault(acc, {})
         union[acc].setdefault('count', 0)
         union[acc].setdefault('source', [])
         union[acc]['count'] += 1
@@ -99,10 +101,11 @@ def get_existing_etags():
                 results[result['_source']['biosampleId']] = result['_source']['etag']
     return results
 
+
 def fetch_records_by_project_via_etag(etags):
     global TOTAL_RECORDS_TO_UPDATE
     hash = dict()
-    with open("etag_list_2019-03-04.txt", 'r') as f:
+    with open("etag_list_2019-03-05.txt", 'r') as f:
         for line in f:
             line = line.rstrip()
             data = line.split("\t")
@@ -142,6 +145,7 @@ def fetch_records_by_project_via_etag(etags):
                 print(f"To be updated: {k}")
     print(f"The sum is {TOTAL_RECORDS_TO_UPDATE}")
     print(f"Finish comparing etags and retrieving necessary records at {datetime.datetime.now()}")
+
 
 def fetch_records_by_project():
     global TOTAL_RECORDS_TO_UPDATE
@@ -190,6 +194,7 @@ def fetch_single_record(biosampleId):
     url = url_schema.format(biosampleId)
     return requests.get(url).json()
 
+
 def check_is_faang(item):
     """
     Function checks that item has faang project
@@ -201,6 +206,7 @@ def check_is_faang(item):
             if 'text' in project and project['text'].lower() == 'faang':
                 return True
     return False
+
 
 def deal_with_decimal_degrees(item):
     if item['characteristics']['Material'][0]['text'] == 'organism':
@@ -216,6 +222,7 @@ def deal_with_decimal_degrees(item):
             return item
     else:
         return item
+
 
 def process_organisms():
     """
@@ -554,7 +561,10 @@ def process_cell_lines():
         doc_for_update = dict()
         relationships = parse_relationship(item)
         url = check_existence(item, 'culture protocol', 'text')
-        filename = get_filename_from_url(url, accession)
+        if url:
+            filename = get_filename_from_url(url, accession)
+        else:
+            filename = None
         doc_for_update.setdefault('cellLine', {})
         doc_for_update['cellLine']['organism'] = {
             'text': check_existence(item, 'Organism', 'text'),
@@ -607,7 +617,6 @@ def process_cell_lines():
     insert_into_es(converted, 'specimen')
 
 
-
 def check_existence(item, field_name, subfield):
     """
     Check that item has particular field_name and subfield
@@ -625,6 +634,7 @@ def check_existence(item, field_name, subfield):
             return item['characteristics'][field_name][0]['ontologyTerms'][0]
     except KeyError:
         return None
+
 
 def populate_basic_biosample_info(doc, item):
     """
@@ -657,6 +667,7 @@ def populate_basic_biosample_info(doc, item):
             }
         )
     return doc
+
 
 def extract_custom_field(doc, item, type):
     """
@@ -696,6 +707,7 @@ def extract_custom_field(doc, item, type):
     doc['customField'] = customs
     return doc
 
+
 def get_health_status(item):
     """
     extract health status for documen
@@ -721,6 +733,7 @@ def get_health_status(item):
         )
     return health_status
 
+
 def parse_relationship(item):
     results = dict()
     if 'relationships' not in item:
@@ -745,6 +758,7 @@ def parse_relationship(item):
                 results[to_lower_camel_case(type)][target] += 1
     return results
 
+
 def get_alternative_id(relationships):
     """
     This function gets alternative is
@@ -759,6 +773,7 @@ def get_alternative_id(relationships):
         for acc in relationships['EBI equivalent BioSample']:
             results.append(acc)
     return results
+
 
 def add_organism_info_for_specimen(accession, item):
     """
@@ -782,6 +797,7 @@ def add_organism_info_for_specimen(accession, item):
     }
     ORGANISM_FOR_SPECIMEN[accession]['healthStatus'] = get_health_status(item)
 
+
 def parse_date(date):
     """
     This function parses date
@@ -794,11 +810,14 @@ def parse_date(date):
         date = parsed_date.groups()[0]
     return date
 
+
 def insert_into_es(data, type):
     validation_results = validate_total_sample_records(data, type, RULESETS)
 
+
 def clean_elasticsearch(type):
     pass
+
 
 if __name__ == "__main__":
     main()

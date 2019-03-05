@@ -126,7 +126,7 @@ def parse_hash(element, matched):
     :return:
     """
     tmp = dict()
-    if 'ontologyTerms' in element and len(element['ontologyTerms']) > 0:
+    if 'ontologyTerms' in element and element['ontologyTerms'] and len(element['ontologyTerms']) > 0:
         ontology_term = element['ontologyTerms']
         if isinstance(ontology_term, list):
             ontology_term = ontology_term[0]
