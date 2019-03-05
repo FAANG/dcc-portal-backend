@@ -74,7 +74,7 @@ def convert(item, my_type):
     else:
         del item_to_test['cellType']
         del item_to_test['organism']
-        type_specific = from_lower_camel_case(material)
+        type_specific = to_lower_camel_case(material)
         if type_specific in item_to_test:
             type_specific_dict = item_to_test[type_specific]
             del item_to_test[type_specific]
