@@ -102,7 +102,7 @@ def get_existing_etags():
 def fetch_records_by_project_via_etag(etags):
     global TOTAL_RECORDS_TO_UPDATE
     hash = dict()
-    with open("etag_list_2019-02-26.txt", 'r') as f:
+    with open("etag_list_2019-03-04.txt", 'r') as f:
         for line in f:
             line = line.rstrip()
             data = line.split("\t")

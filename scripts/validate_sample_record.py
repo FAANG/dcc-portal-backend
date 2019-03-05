@@ -1,5 +1,6 @@
 import requests
 import sys
+import json
 from misc import *
 
 
@@ -44,11 +45,12 @@ def get_validation_results(part, my_type, rulesets):
 
 
 def validate_record(data, my_type, ruleset):
-    tmp_out_file = f"{my_type}_records.json"
+    tmp_out_file = f"{my_type}_records_python.json"
     with open(tmp_out_file, 'w') as w:
         w.write("[\n")
         for index, item in enumerate(data):
             converted_data = convert(item, my_type)
+            converted_data = json.dumps(converted_data)
             if index != 0:
                 w.write(",\n")
             w.write(f"{converted_data}\n")
@@ -57,20 +59,36 @@ def validate_record(data, my_type, ruleset):
 
 
 def convert(item, my_type):
+    attr = list()
+    item_to_test = dict(item)
+    for field_name in ['releaseDate', 'updateDate', 'organization', 'biosampleId', 'name', 'standardMet',
+                       'versionLastStandardMet']:
+        if field_name in item_to_test:
+            del item_to_test[field_name]
     result = dict()
     result['entity_type'] = 'sample'
     result['id'] = item['biosampleId']
     material = item['material']['text']
     if my_type == 'organism':
-        attr = parse(item, my_type)
+        attr = parse(attr, item_to_test)
     else:
-        sys.exit(0)
+        del item_to_test['cellType']
+        del item_to_test['organism']
+        type_specific = from_lower_camel_case(material)
+        if type_specific in item_to_test:
+            type_specific_dict = item_to_test[type_specific]
+            del item_to_test[type_specific]
+        else:
+            # TODO logging to error
+            print(f"Error: type specific data not found for {result['id']} (type {material})")
+            return
+        attr = parse(attr, item_to_test)
+        attr = parse(attr, type_specific_dict)
     result['attributes'] = attr
     return result
 
 
-def parse(item, my_type):
-    attr = list()
+def parse(attr, item):
     for key, value in item.items():
         if isinstance(value, list):
             matched = from_lower_camel_case(key)
@@ -114,7 +132,7 @@ def parse_hash(element, matched):
             ontology_term = ontology_term[0]
         tmp = parse_ontology_term(ontology_term)
     if 'unit' in element:
-        tmp['unit'] = element['unit']
+        tmp['units'] = element['unit']
     if 'url' in element:
         tmp['value'] = element['url']
         tmp['uri'] = element['url']
@@ -125,11 +143,13 @@ def parse_hash(element, matched):
         matched = from_lower_camel_case(matched)
     else:
         if matched == 'material':
-            key = 'Material'
+            matched = 'Material'
         else:
             matched = from_lower_camel_case(matched)
         if 'text' in element:
             tmp['value'] = element['text']
+        else:
+            tmp['value'] = None
     tmp['name'] = matched
     return tmp
 
