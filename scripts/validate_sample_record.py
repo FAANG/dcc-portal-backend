@@ -1,6 +1,7 @@
 import requests
 import sys
 import json
+import os
 from misc import *
 
 
@@ -55,7 +56,17 @@ def validate_record(data, my_type, ruleset):
                 w.write(",\n")
             w.write(f"{converted_data}\n")
         w.write("]\n")
-    return ''
+    try:
+        command = f'curl -F "format=json" -F "rule_set_name={ruleset}" -F "file_format=JSON"' + \
+                  f' -F "metadata_file=@{tmp_out_file}" "https://www.ebi.ac.uk/vg/faang/validate" > validation.json'
+        os.system(command)
+    except:
+        # TODO log to error
+        print("Validation Error!!!")
+        sys.exit(0)
+    with open('validation.json', 'r') as f:
+        data = json.load(f)
+    return parse_validation_results(data['entities'], my_type)
 
 
 def convert(item, my_type):
@@ -167,4 +178,66 @@ def parse_ontology_term(ontology_term):
         'id': id,
         'source_ref': id.split("_")[0]
     }
+    return result
+
+
+def parse_validation_results(data, my_type):
+    """
+    This function will parse results that were returned by validation tool
+    :param data: results to parse in json format
+    :param my_type: type of index
+    :return: parsing results
+    """
+    summary = dict()
+    errors = dict()
+    result = dict()
+    for entity in data:
+        status = entity['_outcome']['status']
+        summary.setdefault(status, 0)
+        summary[status] += 1
+        id = entity['id']
+        result.setdefault('detail', {})
+        result['detail'].setdefault(id, {})
+        result['detail'][id]['status'] = status
+        result['detail'][id]['type'] = my_type
+        backup_msg = ''
+        tag = status + 's'
+        outcome_msgs = list()
+        if tag in entity['_outcome']:
+            for message in entity['_outcome'][tag]:
+                outcome_msgs.append(f"({status}){message}")
+        backup_msg = ";".join(outcome_msgs)
+        msgs = list()
+        attributes = entity['attributes']
+        both_type_flag = 0
+        contain_error_flag = 0
+        for attr in attributes:
+            field_status = attr['_outcome']['status']
+            if field_status.upper() == 'PASS':
+                continue
+            if field_status != status:
+                both_type_flag = 1
+            if field_status.upper() == 'ERROR':
+                contain_error_flag = 1
+            tag = field_status + 's'
+            msg = f"{attr['name']}:{att['_outcome'][tag][0]}"
+            if field_status.upper() == 'ERROR':
+                errors.setdefault(msg, 0)
+                errors[msg] += 1
+            msg = f"({field_status}){msg}"
+            msgs.append(msg)
+        msgs = sorted(msgs)
+        total_msg = ";".join(msgs)
+        if len(msgs) == 0:
+            total_msg = backup_msg
+            if status == 'error':
+                errors.setdefault(backup_msg, 0)
+                errors[backup_msg] += 1
+        elif both_type_flag == 1 and contain_error_flag == 0:
+            total_msg += f";{backup_msg}"
+        result['detail'].setdefault(entity['id'], {})
+        result['detail'][entity['id']]['message'] = total_msg
+
+    result['summary'] = summary
+    result['errors'] = errors
     return result
