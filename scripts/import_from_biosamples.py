@@ -3,6 +3,7 @@ import datetime
 import requests
 import sys
 import re
+import json
 from validate_sample_record import *
 from get_all_etags import fetch_biosample_ids
 from columns import *
@@ -19,6 +20,10 @@ ORGANISM_FOR_SPECIMEN = dict()
 SPECIMEN_ORGANISM_RELATIONSHIP = dict()
 ORGANISM_REFERRED_BY_SPECIMEN = dict()
 RULESETS = ["FAANG Samples", "FAANG Legacy Samples"]
+STANDARDS = {
+    'FAANG Samples': 'FAANG',
+    'FAANG Legacy Samples': 'Legacy'
+}
 TOTAL_RECORDS_TO_UPDATE = 0
 
 
@@ -45,22 +50,22 @@ def main():
         sys.exit(0)
 
     print(f"Indexing organism starts at {datetime.datetime.now()}")
-    process_organisms()
+    process_organisms(es)
 
     print(f"Indexing specimen from organism starts at {datetime.datetime.now()}")
-    process_specimens()
+    process_specimens(es)
 
     print(f"Indexing cell specimens starts at {datetime.datetime.now()}")
-    process_cell_specimens()
+    process_cell_specimens(es)
 
     print(f"Indexing cell culture starts at {datetime.datetime.now()}")
-    process_cell_cultures()
+    process_cell_cultures(es)
 
     print(f"Indexing pool of specimen starts at {datetime.datetime.now()}")
-    process_pool_specimen()
+    process_pool_specimen(es)
 
     print(f"Indexing cell line starts at {datetime.datetime.now()}")
-    process_cell_lines()
+    process_cell_lines(es)
 
     all_organism_list = list(ORGANISM.keys())
     organism_referred_list = list(ORGANISM_REFERRED_BY_SPECIMEN.keys())
@@ -224,7 +229,7 @@ def deal_with_decimal_degrees(item):
         return item
 
 
-def process_organisms():
+def process_organisms(es):
     """
     Function prepares json file that should be inserted inside elasticsearch
     :return: dictionary with data that should be inserted inside elasticsearch
@@ -291,10 +296,10 @@ def process_organisms():
             }
 
         converted[accession] = doc_for_update
-    insert_into_es(converted, 'organism')
+    insert_into_es(converted, 'organism', es)
 
 
-def process_specimens():
+def process_specimens(es):
     converted = dict()
     for accession, item in SPECIMEN_FROM_ORGANISM.items():
         doc_for_update = dict()
@@ -375,11 +380,10 @@ def process_specimens():
         ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
         ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
         converted[accession] = doc_for_update
-    insert_into_es(converted, 'specimen')
+    insert_into_es(converted, 'specimen', es)
 
 
-
-def process_cell_specimens():
+def process_cell_specimens(es):
     converted = dict()
     for accession, item in CELL_SPECIMEN.items():
         doc_for_update = dict()
@@ -419,9 +423,10 @@ def process_cell_specimens():
         ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
         ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
         converted[accession] = doc_for_update
-    insert_into_es(converted, 'specimen')
+    insert_into_es(converted, 'specimen', es)
 
-def process_cell_cultures():
+
+def process_cell_cultures(es):
     converted = dict()
     for accession, item in CELL_CULTURE.items():
         doc_for_update = dict()
@@ -466,11 +471,10 @@ def process_cell_cultures():
         ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
         ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
         converted[accession] = doc_for_update
-    insert_into_es(converted, 'specimen')
+    insert_into_es(converted, 'specimen', es)
 
 
-
-def process_pool_specimen():
+def process_pool_specimen(es):
     converted = dict()
     for accession, item in POOL_SPECIMEN.items():
         doc_for_update = dict()
@@ -552,10 +556,10 @@ def process_pool_specimen():
                 doc_for_update['organism'].setdefault(type, {})
                 doc_for_update['organism'][type]['text'] = ";".join(values)
         converted[accession] = doc_for_update
-    insert_into_es(converted, 'specimen')
+    insert_into_es(converted, 'specimen', es)
 
 
-def process_cell_lines():
+def process_cell_lines(es):
     converted = dict()
     for accession, item in CELL_LINE.items():
         doc_for_update = dict()
@@ -614,7 +618,7 @@ def process_cell_lines():
         for type in ['organism', 'sex', 'breed']:
             doc_for_update['organism'][type] = doc_for_update['cellLine'][type]
         converted[accession] = doc_for_update
-    insert_into_es(converted, 'specimen')
+    insert_into_es(converted, 'specimen', es)
 
 
 def check_existence(item, field_name, subfield):
@@ -811,10 +815,34 @@ def parse_date(date):
     return date
 
 
-def insert_into_es(data, my_type):
+def insert_into_es(data, my_type, es):
+    """
+    This function will update current index with new data
+    :param data: data to update elasticsearch with
+    :param my_type: name of index to update
+    :param es: elasticsearch object
+    :return: updates index or return error it it was impossible ot sample didn't go through validation
+    """
     validation_results = validate_total_sample_records(data, my_type, RULESETS)
-    print(validation_results)
-    sys.exit(0)
+    for biosample_id in sorted(list(data.keys())):
+        INDEXED_SAMPLES[biosample_id] = 1
+        es_doc = data[biosample_id]
+        for ruleset in RULESETS:
+            if validation_results[ruleset]['detail'][biosample_id]['status'] == 'error':
+                # TODO logging to error
+                print(f"{biosample_id}\t{validation_results[ruleset]['detail'][biosample_id]['type']}\t{'error'}\t"
+                      f"{validation_results[ruleset]['detail'][biosample_id]['message']}")
+            else:
+                es_doc['standardMet'] = STANDARDS[ruleset]
+                break
+        body = {
+            "doc": json.dumps(es_doc)
+        }
+        try:
+            es.update(index=my_type, doc_type="_doc", id=biosample_id, body=body)
+        except:
+            # TODO logging error
+            print("Error when try to update elasticsearch index")
 
 
 def clean_elasticsearch(type):
