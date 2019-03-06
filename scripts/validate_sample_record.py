@@ -41,7 +41,7 @@ def validate_total_sample_records(target_dict, my_type, rulesets):
 def get_validation_results(part, my_type, rulesets):
     for ruleset in rulesets:
         validation_results = validate_record(part, my_type, ruleset)
-        total_results = ''
+        total_results = merge_results(total_results, validation_results, ruleset)
     return total_results
 
 
@@ -241,3 +241,31 @@ def parse_validation_results(data, my_type):
     result['summary'] = summary
     result['errors'] = errors
     return result
+
+
+def merge_results(total_results, validation_results, ruleset):
+    subresults = dict()
+    if ruleset in total_results:
+        subresults = total_results[ruleset]
+    if 'summary' in subresults:
+        for status in ['pass', 'warning', 'error']:
+            if status in subresults['summary'] and status in validation_results['summary']:
+                # TODO check this code
+                # subresults['summary'].setdefault(status, [])
+                subresults['summary'][status] += validation_results['summary'][status]
+            elif status in validation_results['summary']:
+                subresults['summary'][status] = validation_results['summary'][status]
+            else:
+                subresults['summary'][status] = 0
+        for tmp in list(validation_results['detail'].keys()):
+            subresults['detail'][tmp] = validation_results['detail'][tmp]
+        new_error_messages = validation_results['errors']
+        for msg in list(new_error_messages.keys()):
+            if msg in subresults['errors']:
+                subresults['errors'][msg] += new_error_messages[msg]
+            else:
+                subresults['errors'][msg] = new_error_messages[msg]
+    else:
+        subresults = validation_results
+    total_results[ruleset] = subresults
+    return total_results
