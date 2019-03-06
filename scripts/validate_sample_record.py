@@ -39,6 +39,7 @@ def validate_total_sample_records(target_dict, my_type, rulesets):
 
 
 def get_validation_results(part, my_type, rulesets):
+    total_results = dict()
     for ruleset in rulesets:
         validation_results = validate_record(part, my_type, ruleset)
         total_results = merge_results(total_results, validation_results, ruleset)
@@ -220,7 +221,7 @@ def parse_validation_results(data, my_type):
             if field_status.upper() == 'ERROR':
                 contain_error_flag = 1
             tag = field_status + 's'
-            msg = f"{attr['name']}:{att['_outcome'][tag][0]}"
+            msg = f"{attr['name']}:{attr['_outcome'][tag][0]}"
             if field_status.upper() == 'ERROR':
                 errors.setdefault(msg, 0)
                 errors[msg] += 1

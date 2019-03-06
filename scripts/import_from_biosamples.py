@@ -811,8 +811,10 @@ def parse_date(date):
     return date
 
 
-def insert_into_es(data, type):
-    validation_results = validate_total_sample_records(data, type, RULESETS)
+def insert_into_es(data, my_type):
+    validation_results = validate_total_sample_records(data, my_type, RULESETS)
+    print(validation_results)
+    sys.exit(0)
 
 
 def clean_elasticsearch(type):
