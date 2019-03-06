@@ -86,8 +86,8 @@ def main():
         # TODO add logging
         if union[acc]['count'] == 1:
             print(f"{acc} only in source {union[acc]['source']}")
-    clean_elasticsearch('specimen')
-    clean_elasticsearch('organism')
+    clean_elasticsearch('specimen', es)
+    clean_elasticsearch('organism', es)
     print(f"Program ends at {datetime.datetime.now()}")
 
 
@@ -845,9 +845,21 @@ def insert_into_es(data, my_type, es):
             print("Error when try to update elasticsearch index")
 
 
-def clean_elasticsearch(type):
-    pass
+def clean_elasticsearch(my_type, es):
+    """
+    This function will delete all records that do not exist in biosamples anymore
+    :param my_type: type of index to check
+    :param es: elasticsearch object
+    """
+    data = es.search(index=my_type, size=100000, _source="_id")
+    for hit in data['hits']['hits']:
+        if hit['_id'] not in INDEXED_SAMPLES:
+            es.delete(index=my_type, doc_type='_doc', id=hit['_id'])
 
 
 if __name__ == "__main__":
     main()
+    # for k, v in INDEXED_SAMPLES.items():
+    #     if v == 0:
+    #         print(k)
+    print(INDEXED_SAMPLES)
