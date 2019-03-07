@@ -196,8 +196,181 @@ def main():
                         'unit': record['sequencing_date_format']
                     }
                 }
-
-
+                if 'library_prep_longitude' in record and len(record['library_prep_longitude']) > 0:
+                    exp_es['libraryPreparationLocationLongitude'] = {
+                        'text': record['library_prep_longitude'],
+                        'unit': 'decimal degrees'
+                    }
+                if 'library_prep_latitude' in record and len(record['library_prep_latitude']) > 0:
+                    exp_es['libraryPreparationLocationLatitude'] = {
+                        'text': record['library_prep_latitude'],
+                        'unit': 'decimal degrees'
+                    }
+                if 'sequencing_longitude' in record and len(record['sequencing_longitude']) > 0:
+                    exp_es['sequencingLocationLongitude'] = {
+                        'text': record['sequencing_longitude'],
+                        'unit': 'decimal degrees'
+                    }
+                if 'sequencing_latitude' in record and len(record['sequencing_latitude']) > 0:
+                    exp_es['sequencingLocationLatitude'] = {
+                        'text': record['sequencing_latitude'],
+                        'unit': 'decimal degrees'
+                    }
+                section_info = dict()
+                if assay_type == 'ATAC-seq':
+                    transposase_protocol = record['transposase_protocol']
+                    transposase_protocol_filename = get_filename_from_url(transposase_protocol,
+                                                                          f"{exp_id} ATAC transposase protocol")
+                    exp_es['ATAC-seq'] = {
+                        'transposaseProtocol': {
+                            'url': transposase_protocol,
+                            'filename': transposase_protocol_filename
+                        }
+                    }
+                elif assay_type == 'methylation profiling by high throughput sequencing':
+                    conversion_protocol = None
+                    conversion_protocol_filename = None
+                    pcr_isolation_protocol = None
+                    pcr_isolation_protocol_filename = None
+                    if 'bisulfite_protocol' in record:
+                        conversion_protocol = record['bisulfite_protocol']
+                        conversion_protocol_filename = get_filename_from_url(conversion_protocol,
+                                                                             f"{exp_id} BS conversion protocol")
+                    if 'pcr_isolation_protocol' in record:
+                        pcr_isolation_protocol = record['pcr_isolation_protocol']
+                        pcr_isolation_protocol_filename = get_filename_from_url(pcr_isolation_protocol,
+                                                                                f"{exp_id} BS pcr protocol")
+                    exp_es['BS-seq'] = {
+                        'librarySelection': record['faang_library_selection'],
+                        'bisulfiteConversionProtocol': {
+                            'url': conversion_protocol,
+                            'filename': conversion_protocol_filename
+                        },
+                        'pcrProductIsolationProtocol': {
+                            'url': pcr_isolation_protocol,
+                            'filanem': pcr_isolation_protocol_filename
+                        },
+                        'bisulfiteConversionPercent': record['bisulfite_percent'],
+                        'restrictionEnzyme': record['restriction_enzyme']
+                    }
+                    if exp_es['BS-seq']['librarySelection'] == 'RBBS':
+                        exp_es['BS-seq']['librarySelection'] = 'RRBS'
+                elif assay_type == 'ChIP-seq':
+                    chip_protocol = record['chip_protocol']
+                    chip_protocol_filename = get_filename_from_url(chip_protocol, f"{exp_id} chip protocol")
+                    section_info = {
+                        'chipProtocol': {
+                            'url': chip_protocol,
+                            'filanem': chip_protocol_filename
+                        },
+                        'libraryGenerationMaxFragmentSizeRange': record['library_max_fragment_size'],
+                        'libraryGenerationMinFragmentSizeRange': record['library_min_fragment_size']
+                    }
+                    if experiment_target.lower() == 'input dna':
+                        exp_es['ChiP-seq input DNA'] = section_info
+                    else:
+                        section_info['chipAntibodyProvider'] = record['chip_ab_provider']
+                        section_info['chipAntibodyCatalog'] = record['chip_ab_catalog']
+                        section_info['chipAntibodyLot'] = record['chip_ab_lot']
+                        exp_es['ChiP-seq histone'] = section_info
+                elif assay_type == 'DNase-Hypersensitivity seq"':
+                    dnase_protocol = None
+                    dnase_protocol_filename = None
+                    if 'dnase_protocol' in record:
+                        dnase_protocol = record['dnase_protocol']
+                        dnase_protocol_filename = get_filename_from_url(dnase_protocol, f"{exp_id} dnase protocol")
+                    exp_es['DNase-seq'] = {
+                        'dnaseProtocol': {
+                            'url': dnase_protocol,
+                            'filename': dnase_protocol_filename
+                        }
+                    }
+                elif assay_type == 'Hi-C':
+                    hi_c_protocol = None
+                    hi_c_protocol_filename = None
+                    if 'hi_c_protocol' in record:
+                        hi_c_protocol = record['hi_c_protocol']
+                        hi_c_protocol_filename = get_filename_from_url(hi_c_protocol, f"{exp_id} hi-c protocol")
+                    exp_es['Hi-C'] = {
+                        'restrictionEnzyme': record['restriction_enzyme'],
+                        'restrictionSite': record['restriction_site'],
+                        'hi-cProtocol': {
+                            'url': hi_c_protocol,
+                            'filename': hi_c_protocol_filename
+                        }
+                    }
+                elif assay_type == 'whole genome sequencing assay':
+                    library_pcr_protocol = record['library_pcr_isolation_protocol']
+                    library_pcr_protocol_filename = get_filename_from_url(library_pcr_protocol,
+                                                                          f"{exp_id} WGS pcr protocol")
+                    library_generation_protocol = record['library_gen_protocol']
+                    library_generation_protocol_filename = get_filename_from_url(library_generation_protocol,
+                                                                                 f"{exp_id} WGS generation protocol")
+                    exp_es['WGS'] = {
+                        'libraryGenerationPcrProductIsolationProtocol': {
+                            'url': library_pcr_protocol,
+                            'filename': library_pcr_protocol_filename
+                        },
+                        'libraryGenerationProtocol': {
+                            'url': library_generation_protocol,
+                            'filename': library_generation_protocol_filename
+                        },
+                        'librarySelection': record['faang_library_selection']
+                    }
+                else:
+                    rna_3_adapter_protocol = None
+                    rna_3_adapter_protocol_filename = None
+                    rna_5_adapter_protocol = None
+                    rna_5_adapter_protocol_filename = None
+                    library_pcr_protocol = None
+                    library_pcr_protocol_filename = None
+                    rt_protocol = None
+                    rt_protocol_filename = None
+                    library_generation_protocol = None
+                    library_generation_protocol_filename = None
+                    if 'rna_prep_3_protocol' in record:
+                        rna_3_adapter_protocol = record['rna_prep_3_protocol']
+                        rna_3_adapter_protocol_filename = get_filename_from_url(rna_3_adapter_protocol,
+                                                                                f"{exp_id} RNA 3 protocol")
+                    if 'rna_prep_5_protocol' in record:
+                        rna_5_adapter_protocol = record['rna_prep_5_protocol']
+                        rna_5_adapter_protocol_filename = get_filename_from_url(rna_5_adapter_protocol,
+                                                                                f"{exp_id} RNA 5 protocol")
+                    if 'library_pcr_isolation_protocol' in record:
+                        library_pcr_protocol = record['library_pcr_isolation_protocol']
+                        library_pcr_protocol_filename = get_filename_from_url(library_pcr_protocol,
+                                                                              f"{exp_id} RNA pcr protocol")
+                    if 'rt_prep_protocol' in record:
+                        rt_protocol = record['rt_prep_protocol']
+                        rt_protocol_filename = get_filename_from_url(rt_protocol, f"{exp_id} RNA prep protocol")
+                    if 'library_gen_protocol' in record:
+                        library_generation_protocol = record['library_gen_protocol']
+                        library_generation_protocol_filename = get_filename_from_url(library_generation_protocol,
+                                                                                     f"{exp_id} RNA generation protocol")
+                    exp_es['RNA-seq'] = {
+                        'rnaPreparation3AdapterLigationProtocol': {
+                            'url': rna_3_adapter_protocol,
+                            'filename': rna_3_adapter_protocol_filename
+                        },
+                        'rnaPreparation5AdapterLigationProtocol': {
+                            'url': rna_5_adapter_protocol,
+                            'filename': rna_5_adapter_protocol_filename
+                        },
+                        'libraryGenerationPcrProductIsolationProtocol': {
+                            'url': library_pcr_protocol,
+                            'filename': library_pcr_protocol_filename
+                        },
+                        'preparationReverseTranscriptionProtocol': {
+                            'url': rt_protocol,
+                            'filename': rt_protocol_filename
+                        },
+                        'libraryGenerationProtocol': {
+                            'url': library_generation_protocol,
+                            'filename': library_generation_protocol_filename
+                        }
+                    }
+                experiments[exp_id] = exp_es
+            pass
 
 
 
