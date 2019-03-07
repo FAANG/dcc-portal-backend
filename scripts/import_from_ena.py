@@ -45,7 +45,7 @@ def main():
     indexed_files = dict()
     datasets = dict()
     experiments = dict()
-    files = dict()
+    files_dict = dict()
     studies_from_api = dict()
     exps_in_dataset = dict()
     for record in data:
@@ -150,6 +150,55 @@ def main():
                     'secondaryAccession': record['secondary_study_accession']
                 }
             }
+            files_dict[filename] = es_doc
+            exp_id = record['experiment_accession']
+            if exp_id not in experiments:
+                experiment_protocol = None
+                experiment_protocol_filename = None
+                if 'experimental_protocol' in record and record['experimental_protocol']:
+                    experiment_protocol = record['experimental_protocol']
+                    experiment_protocol_filename = get_filename_from_url(experiment_protocol,
+                                                                         f"{exp_id} experiment protocol")
+
+                extraction_protocol = None
+                extraction_protocol_filename = None
+                if 'extraction_protocol' in record and record['extraction_protocol']:
+                    extraction_protocol = record['extraction_protocol']
+                    extraction_protocol_filename = get_filename_from_url(extraction_protocol,
+                                                                         f"{exp_id} extraction protocol")
+
+                exp_es = {
+                    'accession': exp_id,
+                    'assayType': assay_type,
+                    'experimentTarget': experiment_target,
+                    'sampleStorage': record['sample_storage'],
+                    'sampleStorageProcessing': record['sample_storage_processing'],
+                    'samplingToPreparationInterval': {
+                        'text': record['sample_prep_interval'],
+                        'unit': record['sample_prep_interval_units']
+                    },
+                    'experimentalProtocol': {
+                        'url': experiment_protocol,
+                        'filename': experiment_protocol_filename
+                    },
+                    'extractionProtocol': {
+                        'url': extraction_protocol,
+                        'filename': extraction_protocol_filename
+                    },
+                    'libraryPreparationLocation': record['library_prep_location'],
+                    'libraryPreparationDate': {
+                        'text': record['library_prep_date'],
+                        'unit': record['library_prep_date_format']
+                    },
+                    'sequencingLocation': record['sequencing_location'],
+                    'sequencingDate': {
+                        'text': record['sequencing_date'],
+                        'unit': record['sequencing_date_format']
+                    }
+                }
+
+
+
 
 
 
