@@ -3,6 +3,7 @@ import requests
 import sys
 
 from validate_sample_record import *
+from misc import *
 
 TECHNOLOGIES = {
     'ATAC-seq': 'ATAC-seq',
@@ -39,6 +40,7 @@ def main():
         print('BioSample IDs were not imported')
         sys.exit(0)
     known_errors = get_known_errors()
+    new_errors = dict()
     ruleset_version = get_ruleset_version()
     indexed_files = dict()
     datasets = dict()
@@ -99,7 +101,56 @@ def main():
         sizes = record[f"{source_type}_bytes"].split(";")
         checksums = record[f"{source_type}_md5"].split(";")
         for index, file in enumerate(files):
-            pass
+            specimen_biosample_id = record['sample_accession']
+            if specimen_biosample_id not in biosample_ids:
+                if specimen_biosample_id not in known_errors[record['study_accession']]:
+                    new_errors.setdefault(record['study_accession'], {})
+                    new_errors[record['study_accession']][specimen_biosample_id] = 1
+                continue
+            fullname = file.split("/")[-1]
+            filename = fullname.split(".")[0]
+            es_doc = {
+                'specimen': specimen_biosample_id,
+                'organism': biosample_ids[record['sample_accession']]['organism']['biosampleId'],
+                'species': biosample_ids[record['sample_accession']]['organism']['organism'],
+                'url': file,
+                'name': fullname,
+                'type': types[index],
+                'size': sizes[index],
+                'readableSize': convert_readable(sizes[index]),
+                'checksumMethod': 'md5',
+                'checksum': checksums[index],
+                'archive': archive,
+                'baseCount': record['base_count'],
+                'readCount': record['read_count'],
+                'releaseDate': record['first_public'],
+                'updateDate': record['last_updated'],
+                'submission': record['submission_accession'],
+                'experiment': {
+                    'accession': record['experiment_accession'],
+                    'assayType': assay_type,
+                    'target': experiment_target
+                },
+                'run': {
+                    'accession': record['run_accession'],
+                    'alias': record['run_alias'],
+                    'platform': record['instrument_platform'],
+                    'instrument': record['instrument_model'],
+                    'centerName': record['center_name'],
+                    'sequencingDate': record['sequencing_date'],
+                    'sequencingLocation': record['sequencing_location'],
+                    'sequencingLatitude': record['sequencing_latitude'],
+                    'sequencingLongitude': record['sequencing_longitude']
+                },
+                'study': {
+                    'accession': record['study_accession'],
+                    'alias': record['study_alias'],
+                    'title': record['study_title'],
+                    'type': record['study_type'],
+                    'secondaryAccession': record['secondary_study_accession']
+                }
+            }
+
 
 
 def get_ena_data():
