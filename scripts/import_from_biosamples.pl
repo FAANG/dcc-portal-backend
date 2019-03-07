@@ -65,13 +65,15 @@ my $baseUrl = "https://www.ebi.ac.uk/";
 #my $accession = "SAMEA4451620"; #specimen from organism, physiological conditions which contains lactation duration information
 #my $accession = "SAMEA104496890";#spcimen from organism, EBI equivalent sample
 #my $accession = "SAMEA4448136"; #organism without relationship   
-#my $accession = "SAMEA6215668";
+#my $accession = "SAMEA5428985"; #cell culture having full derived from levels
 #my %organism_tmp = &fetch_single_record($accession);
 #my $accession = "SAMEA5262717";    
 #my %cell_specimen_tmp = &fetch_single_record($accession);
 #&process_cell_specimens(\%cell_specimen_tmp);
 #exit;
-#my %specimen_tmp = &fetch_single_record($accession);
+#my %tmp = &fetch_single_record($accession);
+#print Dumper(\%tmp);
+#exit;
 #&process_organisms(\%organism_tmp);
 #&process_specimens(\%specimen_tmp);
 
@@ -178,7 +180,7 @@ if ($num_etags == 0 || $num_biosamples/$num_etags > 2){
   my $info = <CMD>;
   croak "Wrong etag cache file name, please double check" unless (defined($info));
   if ($info =~ /^\s*(\d+)\s+/){
-    croak "The number of cached etag $1 does not match the number of BioSample record, quit the script and rerun get_all_etag\n" unless ($1 == $num_biosamples);
+    croak "The number of cached etag $1 does not match the number of BioSample record ($num_biosamples), quit the script and rerun get_all_etag\n" unless ($1 == $num_biosamples);
   }
   &fetch_records_by_project_via_etag($local_etag_file);
 }
@@ -378,8 +380,6 @@ sub process_specimens{
     #therefore it needs to be converted first using the codes above, and save into %converted
     #it should be more efficient to validate multiple records than one record at a time
     %{$converted{$key}} = %es_doc;
-#    print Dumper(\%es_doc);
-#    exit;
   }
   #only insert validated entries
   &insert_into_es(\%converted,"specimen");
@@ -541,7 +541,6 @@ sub process_cell_cultures{
   foreach my $key (keys %cell_culture){
     my $specimen = $cell_culture{$key};
     my %relationships = &parse_relationship($specimen);
-
     my $url = $$specimen{characteristics}{"cell culture protocol"}[0]{text};
     my $filename = &getFilenameFromURL($url,$key);
 
@@ -559,6 +558,19 @@ sub process_cell_cultures{
       if (exists $relationships{derivedFrom}){
         my @organisms = keys %{$relationships{derivedFrom}};
         $organismAccession = $organisms[0];
+
+        my %candidate_organism = &fetch_single_record($organismAccession);
+        # cell culture could derive from either specimen from organism or cell specimen
+        # cell specimen could derive from specimen from organism
+        # therefore it is necessary to check whether it is an organism
+        my $material_type = $candidate_organism{$organismAccession}{characteristics}{Material}[0]{text};
+        if (lc($material_type) eq "specimen from organism"){
+          %relationships = &parse_relationship($candidate_organism{$organismAccession});
+          if (exists $relationships{derivedFrom}){
+            @organisms = keys %{$relationships{derivedFrom}};
+            $organismAccession = $organisms[0];
+          }
+        }
       }
     }
     $specimen_organism_relationship{$key} = $organismAccession;
@@ -778,7 +790,9 @@ sub getAlternative(){
   }
   return @result;
 }
-
+# this function only applies to organisms
+# the reason to refactor as a function is that it is being used in two places: process_organism and addOrganismInfoForSpecimen
+# the health status at collection is for specimen from organism only, no need to be extracted into a separate function
 sub getHealthStatus(){
   my ($organism) = @_;
   my @healthStatus;
