@@ -2,6 +2,8 @@ from elasticsearch import Elasticsearch
 import requests
 import sys
 
+from validate_sample_record import *
+
 TECHNOLOGIES = {
     'ATAC-seq': 'ATAC-seq',
     'methylation profiling by high throughput sequencing': 'BS-seq',
@@ -14,6 +16,14 @@ TECHNOLOGIES = {
     'transcription profiling by high throughput sequencing': 'RNA-seq',
     'whole genome sequencing assay': 'WGS'
 }
+
+RULESETS = ["FAANG Experiments", "FAANG Legacy Experiments"]
+STANDARDS = {
+    'FAANG Experiments': 'FAANG',
+    'FAANG Legacy Experiments': 'Legacy'
+}
+DATA_SOURCES = ['fastq', 'sra', 'cram_index']
+DATA_TYPES = ['ftp', 'galaxy', 'aspera']
 
 
 def main():
@@ -29,7 +39,67 @@ def main():
         print('BioSample IDs were not imported')
         sys.exit(0)
     known_errors = get_known_errors()
-    print(known_errors)
+    ruleset_version = get_ruleset_version()
+    indexed_files = dict()
+    datasets = dict()
+    experiments = dict()
+    files = dict()
+    studies_from_api = dict()
+    exps_in_dataset = dict()
+    for record in data:
+        studies_from_api.setdefault(record['study_accession'], 0)
+        studies_from_api[record['study_accession']] += 1
+        library_strategy = record['library_strategy']
+        assay_type = record['assay_type']
+        experiment_target = record['experiment_target']
+        if assay_type == '':
+            if library_strategy == 'Bisulfite-Seq':
+                assay_type = 'methylation profiling by high throughput sequencing'
+            elif library_strategy == 'DNase-Hypersensitivity':
+                assay_type = 'DNase-Hypersensitivity seq'
+        if assay_type == 'whole genome sequencing':
+            assay_type == 'whole genome sequencing assay'
+        if assay_type == 'ATAC-seq':
+            if not len(experiment_target) > 0:
+                experiment_target = 'open_chromatin_region'
+        elif assay_type == '"methylation profiling by high throughput sequencing':
+            if not len(experiment_target) > 0:
+                experiment_target = 'DNA methylation'
+        elif assay_type == 'DNase-Hypersensitivity seq':
+            if not len(experiment_target) > 0:
+                experiment_target = 'open_chromatin_region'
+        elif assay_type == 'Hi-C':
+            if not len(experiment_target) > 0:
+                experiment_target = 'chromatin'
+        elif assay_type == 'whole genome sequencing assay':
+            if not len(experiment_target) > 0:
+                experiment_target = 'input DNA'
+        file_type = ''
+        source_type = ''
+        try:
+            for data_source in DATA_SOURCES:
+                for my_type in DATA_TYPES:
+                    key_to_check = f"{data_source}_{my_type}"
+                    if key_to_check in record and record[key_to_check] != '':
+                        file_type = my_type
+                        source_type = data_source
+                        raise BreakIt
+        except:
+            pass
+        if file_type == '':
+            continue
+        if source_type == 'fastq':
+            archive = 'ENA'
+        elif source_type == 'cram_index':
+            archive = 'CRAM'
+        else:
+            archive = 'SRA'
+        files = record[f"{source_type}_{file_type}"].split(";")
+        types = record['submitted_format'].split(";")
+        sizes = record[f"{source_type}_bytes"].split(";")
+        checksums = record[f"{source_type}_md5"].split(";")
+        for index, file in enumerate(files):
+            pass
 
 
 def get_ena_data():
