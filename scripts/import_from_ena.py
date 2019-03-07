@@ -370,9 +370,53 @@ def main():
                         }
                     }
                 experiments[exp_id] = exp_es
-            pass
+            dataset_id = record['study_accession']
+            exps_in_dataset[exp_id] = dataset_id
+            es_doc_dataset = dict()
+            if dataset_id in datasets:
+                es_doc_dataset = datasets[dataset_id]
+            else:
+                es_doc_dataset['accession'] = dataset_id
+                es_doc_dataset['alias'] = record['study_alias']
+                es_doc_dataset['title'] = record['study_title']
+                es_doc_dataset['secondaryAccession'] = record['secondary_study_accession']
+            datasets.setdefault('tmp', {})
+            datasets['tmp'].setdefault(dataset_id, {})
+            datasets['tmp'][dataset_id].setdefault('specimen', {})
+            datasets['tmp'][dataset_id]['specimen'][specimen_biosample_id] = 1
 
+            datasets['tmp'][dataset_id].setdefault('instrument', {})
+            datasets['tmp'][dataset_id]['instrument'][record['instrument_model']] = 1
 
+            datasets['tmp'][dataset_id].setdefault('center_name', {})
+            datasets['tmp'][dataset_id]['center_name'][record['center_name']] = 1
+
+            datasets['tmp'][dataset_id].setdefault('archive', {})
+            datasets['tmp'][dataset_id]['archive'][archive] = 1
+
+            tmp_file = {
+                'url': file,
+                'name': fullname,
+                'fileId': filename,
+                'experiment': record['experiment_accession'],
+                'type': types[index],
+                'size': sizes[index],
+                'readableSize': convert_readable(sizes[index]),
+                'archive': archive,
+                'baseCount': record['base_count'],
+                'readCount': record['read_count']
+            }
+            datasets['tmp'][dataset_id].setdefault('file', {})
+            datasets['tmp'][dataset_id]['file'][fullname] = tmp_file
+            tmp_exp = {
+                'accession': record['experiment_accession'],
+                'assayType': assay_type,
+                'target': experiment_target
+            }
+            datasets['tmp'][dataset_id].setdefault('experiment', {})
+            datasets['tmp'][dataset_id]['experiment'][record['experiment_accession']] = tmp_exp
+            datasets[dataset_id] = es_doc_dataset
+    pass
 
 
 def get_ena_data():
