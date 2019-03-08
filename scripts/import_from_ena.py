@@ -3,6 +3,7 @@ import requests
 import sys
 
 from validate_sample_record import *
+from validate_experiment_record import *
 from misc import *
 
 TECHNOLOGIES = {
@@ -416,7 +417,16 @@ def main():
             datasets['tmp'][dataset_id].setdefault('experiment', {})
             datasets['tmp'][dataset_id]['experiment'][record['experiment_accession']] = tmp_exp
             datasets[dataset_id] = es_doc_dataset
-    pass
+    print("The dataset list:")
+    dataset_ids = sorted(list(studies_from_api.keys()))
+    for index, dataset_id in enumerate(dataset_ids):
+        num_exps = 0
+        if 'experiment' in datasets['tmp'][dataset_id]:
+            num_exps = len(list(datasets['tmp'][dataset_id]['experiment'].keys()))
+        print(f"{index} {dataset_id} has {studies_from_api[dataset_id]} runs from api and {num_exps} "
+              f"experiments to be processed")
+    print(f"There are {len(list(datasets.keys())) -  1} datasets to be processed")
+    validation_results = validate_total_experiment_records(experiments, RULESETS)
 
 
 def get_ena_data():
