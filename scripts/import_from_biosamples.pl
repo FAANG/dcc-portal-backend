@@ -57,7 +57,7 @@ my $baseUrl = "https://www.ebi.ac.uk/";
 #my $accession = "SAMEA6641668"; #cell specimen
 #my $accession = "SAMEA4447551"; #cell culture
 #my $accession = "SAMEA104626885";
-#my $accession = "SAMEA104618854";
+#my $accession = "SAMEA104728862";
 #test case for custom column
 #my $accession = "SAMEA4447799"; #orgamism, parturition trait and lactation duration
 #my $accession = "SAMEA4451615"; #organism, environmental conditions and physiological conditions
@@ -67,7 +67,7 @@ my $baseUrl = "https://www.ebi.ac.uk/";
 #my $accession = "SAMEA4448136"; #organism without relationship   
 #my $accession = "SAMEA5428985"; #cell culture having full derived from levels
 #my %organism_tmp = &fetch_single_record($accession);
-#my $accession = "SAMEA5262717";    
+#my $accession = "SAMEA5421418";    
 #my %cell_specimen_tmp = &fetch_single_record($accession);
 #&process_cell_specimens(\%cell_specimen_tmp);
 #exit;
@@ -501,7 +501,7 @@ sub process_cell_specimens{
     $specimen_organism_relationship{$key} = $organismAccession;
 #    print "cell specimen $key specimen <$specimenFromOrganismAccession> organism <$organismAccession>\n";
     my %es_doc = (
-      derivedFrom => $specimenFromOrganismAccession,
+#      derivedFrom => $specimenFromOrganismAccession,
       cellSpecimen => {
         markers => $$specimen{characteristics}{markers}[0]{text},
         purificationProtocol => {
@@ -512,6 +512,7 @@ sub process_cell_specimens{
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
     %es_doc = %{&extractCustomField(\%es_doc,$specimen,"cell specimen")};
+    @{$es_doc{derivedFrom}} = @derivedFrom;
 
     $es_doc{cellType} = {
       text => $$specimen{characteristics}{"cell type"}[0]{text}, 
@@ -576,7 +577,7 @@ sub process_cell_cultures{
     $specimen_organism_relationship{$key} = $organismAccession;
 
     my %es_doc = (
-      derivedFrom => $derivedFromAccession,
+#      derivedFrom => $derivedFromAccession,
       cellCulture => {
         cultureType => {
           text => $$specimen{characteristics}{"culture type"}[0]{text},
@@ -596,6 +597,7 @@ sub process_cell_cultures{
     );
     %es_doc = %{&populateBasicBiosampleInfo(\%es_doc,$specimen)};
     %es_doc = %{&extractCustomField(\%es_doc,$specimen,"cell culture")};
+    @{$es_doc{derivedFrom}} = @derivedFrom;
 
     $es_doc{cellType} = {
       text => $$specimen{characteristics}{"cell type"}[0]{text}, 
@@ -675,7 +677,9 @@ sub process_cell_lines{
       ontologyTerms => $$specimen{characteristics}{"cell type"}[0]{ontologyTerms}[0]
     };
 
-    $es_doc{derivedFrom} = $relationships{derivedFrom}[0] if (exists $relationships{derivedFrom});
+    # $es_doc{derivedFrom} = $relationships{derivedFrom}[0] if (exists $relationships{derivedFrom});
+    @{$es_doc{derivedFrom}} = @{$relationships{derivedFrom}} if (exists $relationships{derivedFrom});
+
     @{$es_doc{alternativeId}} = &getAlternative(\%relationships);
 
      #print Dumper(\%relationships);exit;
@@ -1119,6 +1123,8 @@ sub clean_elasticsearch{
   SCROLL:
   while (my $loaded_doc = $scroll->next) {
     next SCROLL if $indexed_samples{$loaded_doc->{_id}};
+    # Legacy (basic) data imported in import_from_ena_legacy, not here, so not cleaned
+    next SCROLL if ($loaded_doc->{_source}->{standardMet} && $loaded_doc->{_source}->{standardMet} eq "Legacy (basic)");
     $es->delete(
       index => "${es_index_name}_$type",
       type => "_doc",
@@ -1195,7 +1201,7 @@ sub check_is_faang(){
 sub parse_relationship(){
   my %result;
   #relationships could be optional though in SampleTab submission way (current way) at least one group member/group relationship
-  #check the existance, not exist, return an empty hash
+  #check the existance, if not exist, return an empty hash
   unless (exists $_[0]{relationships}){
     return %result;
   }
@@ -1203,11 +1209,12 @@ sub parse_relationship(){
   my @relations = @{$_[0]{relationships}};
   my $accession = $_[0]{accession};
   foreach my $ref(@relations){
-#      push(@{$result{$$ref{type}}},$$ref{target}) unless ($$ref{target} eq $accession);
-#      push(@{$result{toLowerCamelCase($$ref{type})}},$$ref{target}) unless ($$ref{target} eq $accession);
-      #in a animal-sample relationship target will be the animal
-      #in a membership relationship target will be this record while source will be the group
-      #therefore relationship having the accession as target should be ignored
+      # in a animal-sample relationship target will be the animal
+      # in a membership relationship target will be this record while source will be the group
+      # therefore relationship having the accession as target should be ignored
+      # this will end up that directional relationship 
+      # 1 for animal only child of will be kept in the result
+      # 2 for specimen only derivd from will be kept
       my $type = $$ref{type};
       if ($type eq "EBI equivalent BioSample" || $type eq "same as"){#the relationship does not have direction
         my $target = $$ref{source};
