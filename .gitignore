@@ -24,3 +24,17 @@ nytprof.out
 
 ena_not_in_biosample.txt
 scripts/ena_not_in_biosample.txt
+scripts/predict*.txt
+scripts/etag*.txt
+
+# middle file
+scripts/*.log
+scripts/*.txt
+scripts/*.xlsx
+scripts/*.json
+
+# PyCharm files
+.idea/
+
+# initialize ES commands
+elasticsearch/initialze_test_es_server.sh

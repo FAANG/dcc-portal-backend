@@ -1,6 +1,6 @@
 use strict;
 
-my $copy_cache = 2;
+my $copy_cache = 5;
 open CMD, "ls -tl etag_list_*.txt|";
 my @records = <CMD>;
 for (my $i = $copy_cache; $i < scalar @records; $i++){
