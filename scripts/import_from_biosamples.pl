@@ -962,9 +962,12 @@ sub fetch_records_by_project_via_etag(){
   my %hash;
   foreach my $biosampleId(keys %cache){
     my $changed = 1;
-    if(exists $etags{$biosampleId}){
+    # it is necessary to use defined function
+    # as using the current indexing (ES insertion) method, null value will be held for empty field e.g. etag
+    # then exists will return true (as having null value) and the value actually is not defined which would cause warning
+    # in the if ($cache{$biosampleId} eq $etags{$biosampleId}). Logically null empty value means the etag value has been changed
+    if(exists $etags{$biosampleId} && defined $etags{$biosampleId}){
       $changed = 0 if ($cache{$biosampleId} eq $etags{$biosampleId})
-#      $changed = &is_etag_changed($biosampleId,$etags{$biosampleId})
     }
     #same etag, i.e. no change, no need to update/index the sample
     if ($changed == 0){ 
