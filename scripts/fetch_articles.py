@@ -76,14 +76,14 @@ async def fetch_article(session, my_id, my_type):
 
                 # Add specimens
                 response = requests.get(
-                    "http://data.faang.org/api/specimen/_search/?q=organism.biosampleId:{}&size=100000".format(my_id)
+                    "http://test.faang.org/api/specimen/_search/?q=organism.biosampleId:{}&size=100000".format(my_id)
                 ).json()
                 for item in response['hits']['hits']:
                     add_new_pair(SPECIMENS, item['_id'], articles_list)
 
                 # Add files
                 response = requests.get(
-                    "http://data.faang.org/api/file/_search/?q=organism:{}&size=100000".format(my_id)).json()
+                    "http://test.faang.org/api/file/_search/?q=organism:{}&size=100000".format(my_id)).json()
                 for item in response['hits']['hits']:
                     # FILES.add(item['_id'])
                     add_new_pair(FILES, item['_id'], articles_list)
@@ -92,21 +92,21 @@ async def fetch_article(session, my_id, my_type):
                 add_new_pair(SPECIMENS, my_id, articles_list)
 
                 # Add organisms
-                response = requests.get("http://data.faang.org/api/specimen/{}".format(my_id)).json()
+                response = requests.get("http://test.faang.org/api/specimen/{}".format(my_id)).json()
                 if 'biosampleId' in response['hits']['hits'][0]['_source']['organism']:
                     organism_id = response['hits']['hits'][0]['_source']['organism']['biosampleId']
                     add_new_pair(ORGANISMS, organism_id, articles_list)
 
                 # Add datasets
                 response = requests.get(
-                    "http://data.faang.org/api/dataset/_search/?q=specimen.biosampleId:{}&size=100000".format(my_id)
+                    "http://test.faang.org/api/dataset/_search/?q=specimen.biosampleId:{}&size=100000".format(my_id)
                 ).json()
                 for item in response['hits']['hits']:
                     add_new_pair(DATASETS, item['_id'], articles_list)
 
                 # Add files
                 response = requests.get(
-                    "http://data.faang.org/api/file/_search/?q=specimen:{}&size=100000".format(my_id)).json()
+                    "http://test.faang.org/api/file/_search/?q=specimen:{}&size=100000".format(my_id)).json()
                 for item in response['hits']['hits']:
                     add_new_pair(FILES, item['_id'], articles_list)
 
@@ -114,7 +114,7 @@ async def fetch_article(session, my_id, my_type):
                 add_new_pair(DATASETS, my_id, articles_list)
 
                 # Add specimens
-                response = requests.get("http://data.faang.org/api/dataset/{}".format(my_id)).json()
+                response = requests.get("http://test.faang.org/api/dataset/{}".format(my_id)).json()
                 for item in response['hits']['hits'][0]['_source']['specimen']:
                     add_new_pair(SPECIMENS, item['biosampleId'], articles_list)
 
@@ -124,7 +124,7 @@ async def fetch_article(session, my_id, my_type):
 
 
 async def check_specimen_for_organism(session, my_id, articles_list):
-    url = "http://data.faang.org/api/specimen/{}".format(my_id)
+    url = "http://test.faang.org/api/specimen/{}".format(my_id)
     async with session.get(url) as response:
         results = await response.json()
         if 'biosampleId' in results['hits']['hits'][0]['_source']['organism']:
@@ -133,7 +133,7 @@ async def check_specimen_for_organism(session, my_id, articles_list):
 
 
 async def check_specimen_for_dataset(session, my_id, articles_list):
-    url = "http://data.faang.org/api/dataset/_search/?q=specimen.biosampleId:{}&size=100000".format(my_id)
+    url = "http://test.faang.org/api/dataset/_search/?q=specimen.biosampleId:{}&size=100000".format(my_id)
     async with session.get(url) as response:
         results = await response.json()
         for item in results['hits']['hits']:
