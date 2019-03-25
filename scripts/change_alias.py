@@ -88,7 +88,8 @@ for line in lines:
             add_action = {"index": curr, "alias": alias}
             actions.append({"add": add_action})
             indices_to_match.pop(curr)
-            if alias in current_alias:
+            # add remove action only when the new alias has been found
+            if actions and alias in current_alias:
                 # print("Remove old alias "+current_alias[alias]+ " from "+alias)
                 remove_action = {"index": current_alias[alias], "alias": alias}
                 actions.append({"remove": remove_action})
@@ -102,6 +103,7 @@ headers = {'Content-type': 'application/json'}
 url = host + "/_aliases"
 # print(payload)
 r = requests.post(url, data = payload, headers = headers)
+
 print(r.status_code, r.reason)
 print(r.text)
 

@@ -702,6 +702,8 @@ sub clean_elasticsearch{
   SCROLL:
   while (my $loaded_doc = $filescroll->next) {
     next SCROLL if $indexed_files{$loaded_doc->{_id}};
+    # some Legacy files imported in import_from_ena_legacy, not here, so not cleaned
+    next SCROLL if ($loaded_doc->{_source}->{standardMet} && $loaded_doc->{_source}->{standardMet} eq "Legacy");
     $es->delete(
       index => $es_index_name.'_file',
       type => '_doc',
