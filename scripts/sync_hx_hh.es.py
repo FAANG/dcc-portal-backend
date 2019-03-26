@@ -50,7 +50,7 @@ def main():
 
 def create_snapshot(es_staging, snapshot_name):
     print("Creating snapshot...")
-    parameters = {"indices": "file3,organism3,specimen3,dataset3,experiment3,protocol_files3,protocol_samples3",
+    parameters = {"indices": "file,organism,specimen,dataset,experiment,protocol_files,protocol_samples",
                   "ignore_unavailable": True,
                   "include_global_state": False
                   }
@@ -65,11 +65,10 @@ def rsync_snapshot():
 def restore_snapshot(es_fallback, es_production, today, snapshot_name):
     print("Restoring snapshot...")
     parameters = {
-        "indices": "file3,organism3,specimen3,dataset3,experiment3,protocol_files3,protocol_samples3",
         "ignore_unavailable": True,
         "include_aliases": False,
-        "rename_pattern": "([a-z]+)",
-        "rename_replacement": "$1-{}".format(today)
+        "rename_pattern": ".*((protocol_)?file(s)?|protocol_samples|organism|specimen|dataset|experiment).*",
+        "rename_replacement": "{}_$1".format(today)
     }
     es_fallback.snapshot.restore(repository='es6_faang_repo', snapshot=snapshot_name, body=parameters)
     es_production.snapshot.restore(repository='es6_faang_repo', snapshot=snapshot_name, body=parameters)
@@ -78,20 +77,20 @@ def restore_snapshot(es_fallback, es_production, today, snapshot_name):
 def change_aliases(es_fallback, es_production, today, yesterday):
     print("Changing aliases...")
     actions = {"actions": [
-        {"remove": {"index": "file-{}3".format(yesterday), "alias": "file"}},
-        {"add": {"index": "file-{}3".format(today), "alias": "file"}},
-        {"remove": {"index": "organism-{}3".format(yesterday), "alias": "organism"}},
-        {"add": {"index": "organism-{}3".format(today), "alias": "organism"}},
-        {"remove": {"index": "specimen-{}3".format(yesterday), "alias": "specimen"}},
-        {"add": {"index": "specimen-{}3".format(today), "alias": "specimen"}},
-        {"remove": {"index": "dataset-{}3".format(yesterday), "alias": "dataset"}},
-        {"add": {"index": "dataset-{}3".format(today), "alias": "dataset"}},
-        {"remove": {"index": "experiment-{}3".format(yesterday), "alias": "experiment"}},
-        {"add": {"index": "experiment-{}3".format(today), "alias": "experiment"}},
-        {"remove": {"index": "protocol-{}_files-{}3".format(yesterday, yesterday), "alias": "protocol_files"}},
-        {"add": {"index": "protocol-{}_files-{}3".format(today, today), "alias": "protocol_files"}},
-        {"remove": {"index": "protocol-{}_samples-{}3".format(yesterday, yesterday), "alias": "protocol_samples"}},
-        {"add": {"index": "protocol-{}_samples-{}3".format(today, today), "alias": "protocol_samples"}}
+        {"remove": {"index": "{}_file".format(yesterday), "alias": "file"}},
+        {"add": {"index": "{}_file".format(today), "alias": "file"}},
+        {"remove": {"index": "{}_organism".format(yesterday), "alias": "organism"}},
+        {"add": {"index": "{}_organism".format(today), "alias": "organism"}},
+        {"remove": {"index": "{}_specimen".format(yesterday), "alias": "specimen"}},
+        {"add": {"index": "{}_specimen".format(today), "alias": "specimen"}},
+        {"remove": {"index": "{}_dataset".format(yesterday), "alias": "dataset"}},
+        {"add": {"index": "{}_dataset".format(today), "alias": "dataset"}},
+        {"remove": {"index": "{}_experiment".format(yesterday), "alias": "experiment"}},
+        {"add": {"index": "{}_experiment".format(today), "alias": "experiment"}},
+        {"remove": {"index": "{}_files".format(yesterday), "alias": "protocol_files"}},
+        {"add": {"index": "{}_files".format(today), "alias": "protocol_files"}},
+        {"remove": {"index": "{}_protocol_samples".format(yesterday), "alias": "protocol_samples"}},
+        {"add": {"index": "{}_protocol_samples".format(today), "alias": "protocol_samples"}}
     ]
     }
     es_fallback.indices.update_aliases(body=actions)
@@ -100,18 +99,13 @@ def change_aliases(es_fallback, es_production, today, yesterday):
 
 def delete_old_indices(es_fallback, es_production, yesterday):
     print("Deleting old indices...")
-    es_fallback.indices.delete(index=("file-{}3,organism-{}3,specimen-{}3,dataset-{}3,experiment-{}3," +
-                                      "protocol-{}_files-{}3,protocol-{}_samples-{}3").format(yesterday, yesterday,
-                                                                                              yesterday, yesterday,
-                                                                                              yesterday, yesterday,
-                                                                                              yesterday, yesterday,
-                                                                                              yesterday))
-    es_production.indices.delete(index=("file-{}3,organism-{}3,specimen-{}3,dataset-{}3,experiment-{}3," +
-                                        "protocol-{}_files-{}3,protocol-{}_samples-{}3").format(yesterday, yesterday,
-                                                                                                yesterday, yesterday,
-                                                                                                yesterday, yesterday,
-                                                                                                yesterday, yesterday,
-                                                                                                yesterday))
+    es_fallback.indices.delete(index=("{}_file,{}_organism,{}_specimen,{}_dataset,{}_experiment," +
+                                      "{}_files,{}_protocol_samples").format(yesterday, yesterday, yesterday, yesterday,
+                                                                             yesterday, yesterday, yesterday))
+    es_production.indices.delete(index=("{}_file,{}_organism,{}_specimen,{}_dataset,{}_experiment," +
+                                        "{}_files,{}_protocol_samples").format(yesterday, yesterday, yesterday,
+                                                                               yesterday, yesterday, yesterday,
+                                                                               yesterday))
 
 
 if __name__ == "__main__":
