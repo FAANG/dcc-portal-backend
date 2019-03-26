@@ -25,6 +25,7 @@ GetOptions(
 
 croak "Need -es_host" unless ($es_host);
 #print "Working on $es_index_name at $es_host\n";
+my $es = Search::Elasticsearch->new(nodes => $es_host, client => '6_0::Direct'); #client option to make it compatiable with elasticsearch 1.x APIs
 
 #Import FAANG data from FAANG endpoint of ENA API
 #ENA API documentation available at: http://www.ebi.ac.uk/ena/portal/api/doc?format=pdf
@@ -61,8 +62,6 @@ my %technologies = (
 
 #the line below enable to investigate the fields used in ENA
 #&investigateENAfields($json_text);
-
-my $es = Search::Elasticsearch->new(nodes => $es_host, client => '6_0::Direct'); #client option to make it compatiable with elasticsearch 1.x APIs
 
 #get specimen information from current elasticsearch server which will be used to calculate species for dataset etc.
 #which means that this script must be executed after import_from_biosample.pl
@@ -686,7 +685,7 @@ foreach my $study(keys %new_errors){
 }
 close OUT;
 
-&clean_elasticsearch();
+# &clean_elasticsearch();
 #delete records in ES which no longer exists in BioSample
 #BE careful, this no-more-existances could be caused by lost of server
 sub clean_elasticsearch{
@@ -703,7 +702,8 @@ sub clean_elasticsearch{
   while (my $loaded_doc = $filescroll->next) {
     next SCROLL if $indexed_files{$loaded_doc->{_id}};
     # some Legacy files imported in import_from_ena_legacy, not here, so not cleaned
-    next SCROLL if ($loaded_doc->{_source}->{standardMet} && $loaded_doc->{_source}->{standardMet} eq "Legacy");
+    # the statement below does not work as standard met is in experiment
+#    next SCROLL if ($loaded_doc->{_source}->{standardMet} && $loaded_doc->{_source}->{standardMet} eq "Legacy");
     $es->delete(
       index => $es_index_name.'_file',
       type => '_doc',
