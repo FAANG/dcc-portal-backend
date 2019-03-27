@@ -79,16 +79,12 @@ def main():
                 experiment_target = 'input DNA'
         file_type = ''
         source_type = ''
-        try:
-            for data_source in DATA_SOURCES:
-                for my_type in DATA_TYPES:
-                    key_to_check = f"{data_source}_{my_type}"
-                    if key_to_check in record and record[key_to_check] != '':
-                        file_type = my_type
-                        source_type = data_source
-                        raise BreakIt
-        except:
-            pass
+        for data_source in DATA_SOURCES:
+            for my_type in DATA_TYPES:
+                key_to_check = f"{data_source}_{my_type}"
+                if key_to_check in record and record[key_to_check] != '':
+                    file_type = my_type
+                    source_type = data_source
         if file_type == '':
             continue
         if source_type == 'fastq':
@@ -104,7 +100,7 @@ def main():
         for index, file in enumerate(files):
             specimen_biosample_id = record['sample_accession']
             if specimen_biosample_id not in biosample_ids:
-                if specimen_biosample_id not in known_errors[record['study_accession']]:
+                if (record['study_accession'] in known_errors and specimen_biosample_id not in known_errors[record['study_accession']]) or (record['study_accession'] not in known_errors):
                     new_errors.setdefault(record['study_accession'], {})
                     new_errors[record['study_accession']][specimen_biosample_id] = 1
                 continue
@@ -112,7 +108,7 @@ def main():
             filename = fullname.split(".")[0]
             es_doc = {
                 'specimen': specimen_biosample_id,
-                'organism': biosample_ids[record['sample_accession']]['organism']['biosampleId'],
+                'organism': check_existsence(biosample_ids[record['sample_accession']]['organism'], 'biosampleId'),
                 'species': biosample_ids[record['sample_accession']]['organism']['organism'],
                 'url': file,
                 'name': fullname,
@@ -147,7 +143,8 @@ def main():
                     'accession': record['study_accession'],
                     'alias': record['study_alias'],
                     'title': record['study_title'],
-                    'type': record['study_type'],
+                    # TODO it is mandatory field
+                    'type': check_existsence(record, 'study_type'),
                     'secondaryAccession': record['secondary_study_accession']
                 }
             }
@@ -421,7 +418,7 @@ def main():
     dataset_ids = sorted(list(studies_from_api.keys()))
     for index, dataset_id in enumerate(dataset_ids):
         num_exps = 0
-        if 'experiment' in datasets['tmp'][dataset_id]:
+        if dataset_id in datasets['tmp'] and 'experiment' in datasets['tmp'][dataset_id]:
             num_exps = len(list(datasets['tmp'][dataset_id]['experiment'].keys()))
         print(f"{index} {dataset_id} has {studies_from_api[dataset_id]} runs from api and {num_exps} "
               f"experiments to be processed")
@@ -463,7 +460,15 @@ def get_known_errors():
             study, biosample = line.split("\t")
             known_errors.setdefault(study, {})
             known_errors[study][biosample] = 1
+    print(known_errors)
     return known_errors
+
+
+def check_existsence(data_to_check, field_to_check):
+    if field_to_check in data_to_check:
+        return data_to_check[field_to_check]
+    else:
+        return None
 
 
 if __name__ == "__main__":
