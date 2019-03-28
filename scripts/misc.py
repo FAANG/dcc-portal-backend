@@ -46,3 +46,21 @@ def get_filename_from_url(url, accession):
         return url.split("/")[-1]
     else:
         return url
+
+
+def convert_readable(size_to_convert):
+    """
+    This function will convert size to human readable string
+    :param size_to_convert: size in bytes
+    :return: human-readable string with size
+    """
+    size_to_convert = int(size_to_convert)
+    units = ['B', 'kB', 'MB', 'GB', 'TB', 'PB']
+    for i in range(6):
+        size_to_convert /= 1024
+        if size_to_convert < 1:
+            break
+    size_to_convert *= 1024
+    if i == 0:
+        return f"{size_to_convert}B"
+    return f"{round(size_to_convert, 2)}{units[i]}"
