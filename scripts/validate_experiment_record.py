@@ -163,4 +163,55 @@ def parse_ontology_term(ontology_term):
 
 
 def parse_validation_results(entities):
-    pass
+    summary = dict()
+    errors = dict()
+    result = dict()
+    for entity in entities:
+        status = entity['_outcome']['status']
+        summary.setdefault(status, 0)
+        summary[status] += 1
+        id = entity['id']
+        result.setdefault('detail', {})
+        result['detail'].setdefault(id, {})
+        result['detail'][id]['status'] = status
+        backup_msg = ''
+        tag = status + 's'
+        status = status.upper()
+        outcome_msgs = list()
+        if tag in entity['_outcome']:
+            for message in entity['_outcome'][tag]:
+                outcome_msgs.append(f"({status}){message}")
+        backup_msg = ";".join(outcome_msgs)
+        msgs = list()
+        attributes = entity['attributes']
+        both_type_flag = 0
+        contain_error_flag = 0
+        for attr in attributes:
+            field_status = attr['_outcome']['status']
+            if field_status.upper() == 'PASS':
+                continue
+            if field_status != status:
+                both_type_flag = 1
+            if field_status.upper() == 'ERROR':
+                contain_error_flag = 1
+            tag = field_status.lower() + 's'
+            msg = f"{attr['name']}:{attr['_outcome'][tag][0]}"
+            if field_status.upper() == 'ERROR':
+                errors.setdefault(msg, 0)
+                errors[msg] += 1
+            msg = f"({field_status}){msg}"
+            msgs.append(msg)
+        msgs = sorted(msgs)
+        total_msg = ";".join(msgs)
+        if len(msgs) == 0:
+            total_msg = backup_msg
+            if status == 'error':
+                errors.setdefault(backup_msg, 0)
+                errors[backup_msg] += 1
+        elif both_type_flag == 1 and contain_error_flag == 0:
+            total_msg += f";{backup_msg}"
+        result['detail'].setdefault(entity['id'], {})
+        result['detail'][entity['id']]['message'] = total_msg
+    result['summary'] = summary
+    result['errors'] = errors
+    return result
