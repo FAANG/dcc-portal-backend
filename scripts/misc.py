@@ -7,6 +7,9 @@ def to_lower_camel_case(str_to_convert):
     :param str_to_convert: target string
     :return: converted string
     """
+    if type(str_to_convert) is not str:
+        raise TypeError("The method only take str as its input")
+    str_to_convert = str_to_convert.replace("_", " ")
     tmp = re.split(r'\s|-', str_to_convert)
     return "".join([item.lower() for i,item in enumerate(tmp) if i == 0] +
                    [item.capitalize() for i,item in enumerate(tmp) if i != 0])
@@ -18,6 +21,8 @@ def from_lower_camel_case(str_to_convert):
     :param str_to_convert: string to convert
     :return: return converted string
     """
+    if type(str_to_convert) is not str:
+        raise TypeError("The method only take str as its input")
     tmp = re.split(r'([A-Z])', str_to_convert)
     tmp2 = list()
     tmp2.append(tmp[0])
@@ -28,7 +33,7 @@ def from_lower_camel_case(str_to_convert):
 
 def get_filename_from_url(url, accession):
     """
-    Return filename from url
+    Return the filename extracted from the given URL. If it is not a pdf file, return the original url
     :param url: url to parse
     :param accession: accession number
     :return: file name
@@ -37,7 +42,7 @@ def get_filename_from_url(url, accession):
         # TODO add logging
         print(f"{accession} url is empty")
         return ""
-    if 'pdf' in url.lower():
+    if url.lower().endswith(".pdf"):
         return url.split("/")[-1]
     else:
         return url

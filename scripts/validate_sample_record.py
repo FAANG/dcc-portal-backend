@@ -7,7 +7,7 @@ from misc import *
 
 def get_ruleset_version():
     """
-    This fucntion will get ruleset version
+    This function will get ruleset version
     :return: version of ruleset
     """
     url = 'https://api.github.com/repos/FAANG/faang-metadata/releases'

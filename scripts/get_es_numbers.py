@@ -19,6 +19,7 @@ def main():
             print(f"\t{count}", end='')
         print()
 
+
 def read_number_from_es():
     counts = {}
     url = "{}/_cat/indices?v".format(ES_HOST)
