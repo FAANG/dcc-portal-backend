@@ -1,9 +1,9 @@
 from elasticsearch import Elasticsearch
 from datetime import date, timedelta
-import logging
 from dirsync import sync
 
 from constants import *
+from utils import *
 
 
 class SyncHinxtonLondon:
@@ -124,19 +124,8 @@ if __name__ == "__main__":
     es_fallback = Elasticsearch([FALLBACK_NODE1, FALLBACK_NODE2])
     es_production = Elasticsearch([PRODUCTION_NODE1, PRODUCTION_NODE2])
 
-    # Create a custom logger
-    logger = logging.getLogger("sync_hx_hh")
-
-    # Create handlers
-    f_handler = logging.FileHandler('sync_hs_hh.log')
-    f_handler.setLevel(logging.DEBUG)
-
-    # Create formatters and add it to handlers
-    f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
-    f_handler.setFormatter(f_format)
-
-    # Add handlers to the logger
-    logger.addHandler(f_handler)
+    # Create logger to log info
+    logger = create_logging_instance('sync_hx_hh')
 
     # Create object and run syncing
     sync_object = SyncHinxtonLondon(es_staging, es_fallback, es_production, logger)
