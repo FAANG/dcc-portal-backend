@@ -1,15 +1,32 @@
 import requests
 from typing import Dict
+import click
 TYPES = ["organism", "specimen", "dataset", "experiment", "file"]
-ES_HOST = 'http://wp-np3-e2:9200'
 
+@click.command()
+@click.option(
+    '--es_host',
+    default="http://wp-np3-e2:9200",
+    help='Specify the Elastic Search server (port should be included), default to be http://wp-np3-e2:9200.'
+)
+@click.option(
+    '--es_index_prefix',
+    default="faang_build",
+    help='Specify the Elastic Search index prefix, default to be faang_build.'
+         'Combined with serial (default 3) then the indices will be faang_build_1_organism etc.'
+)
+@click.option(
+    '--serial',
+    default=3,
+    help="Combined with es_index_prefix"
+)
 
-def main():
-    numbers: Dict[str, int] = read_number_from_es()
+def main(es_host, es_index_prefix, serial):
+    numbers: Dict[str, int] = read_number_from_es(es_host)
     header = "\t".join(TYPES)
     print("\t"+header)
-    for i in range(1, 5):
-        index_base = f"faang_build_{str(i)}"
+    for i in range(1, serial+1):
+        index_base = f"{es_index_prefix}_{str(i)}"
         print(index_base, end='')
         for type in TYPES:
             index = f"{index_base}_{type}"
@@ -20,9 +37,9 @@ def main():
         print()
 
 
-def read_number_from_es():
+def read_number_from_es(es_host):
     counts = {}
-    url = "{}/_cat/indices?v".format(ES_HOST)
+    url = f"{es_host}/_cat/indices?v"
     response = requests.get(url).text
     # removes the header
     lines = response.split("\n")[1:]
