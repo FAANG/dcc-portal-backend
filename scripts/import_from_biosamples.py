@@ -10,6 +10,8 @@ from columns import *
 from misc import *
 from typing import Dict
 from datetime import date
+import click
+import logging
 
 INDEXED_SAMPLES = dict()
 ORGANISM = dict()
@@ -27,49 +29,84 @@ STANDARDS = {
     'FAANG Legacy Samples': 'Legacy'
 }
 TOTAL_RECORDS_TO_UPDATE = 0
+ETAGS_CACHE = dict()
 
+logger = logging.getLogger(__name__)
+logging.basicConfig(format='%(asctime)s\t%(levelname)s:\t%(name)s line %(lineno)s\t%(message)s', level=logging.INFO)
 
+@click.command()
+@click.option(
+    '--es_hosts',
+    default="wp-np3-e2;wp-np3-e3",
+    help='Specify the Elastic Search server(s) (port could be included), e.g. wp-np3-e2:9200. '
+         'If multiple servers are provided, please use ";" to separate them, e.g. "wp-np3-e2;wp-np3-e3"'
+)
+@click.option(
+    '--es_index_prefix',
+    default="",
+    help='Specify the Elastic Search index prefix, e.g. '
+         'faang_build_1_ then the indices will be faang_build_1_organism etc.'
+         'If not provided, then work on the aliases'
+)
 # TODO check single or double quotes
-def main():
+def main(es_hosts, es_index_prefix):
+    global ETAGS_CACHE
+    today = date.today().strftime('%Y-%m-%d')
+    try:
+        with open("etag_list_{}.txt".format(today), 'r') as f:
+            for line in f:
+                line = line.rstrip()
+                data = line.split("\t")
+                ETAGS_CACHE[data[0]] = data[1]
+    except FileNotFoundError:
+        logger.error(f"Could not find the local etag cache file etag_list_{today}.txt")
+        sys.exit(1)
+
+    hosts = es_hosts.split(";")
+    logger.info("Command line parameters")
+    logger.info("Hosts: "+str(hosts))
+    if es_index_prefix:
+        logger.info("Index_prefix:"+es_index_prefix)
+
     ruleset_version = get_ruleset_version()
-    es = Elasticsearch(['wp-np3-e2', 'wp-np3-e3'])
+    es = Elasticsearch(hosts)
 
-    print(f"The program starts at {datetime.datetime.now()}")
-    print(f"Current ruleset version is {ruleset_version}")
+    logger.info(f"The program starts at {datetime.datetime.now()}")
+    logger.info(f"Current ruleset version is {ruleset_version}")
 
-    etags: Dict[str, str] = get_existing_etags()
+    etags_es: Dict[str, str] = get_existing_etags(hosts[0], es_index_prefix)
 
-    print(f"There are {len(etags)} records with etags in ES")
-    print(f"Finish retrieving existing etags at {datetime.datetime.now()}")
-    print("Importing FAANG data")
+    logger.info(f"There are {len(etags_es)} records with etags_es in ES")
+    logger.info(f"Finish retrieving existing etags_es at {datetime.datetime.now()}")
+    logger.info("Importing FAANG data")
     # when more than half biosample records not already stored in ES, take the batch import route
     # otherwise compare each record's etag to decide
-    if len(etags) == 0 or len(fetch_biosample_ids())/len(etags) > 2:
+    if len(etags_es) == 0 or len(fetch_biosample_ids())/len(etags_es) > 2:
         fetch_records_by_project()
     else:
-        fetch_records_by_project_via_etag(etags)
+        fetch_records_by_project_via_etag(etags_es)
 
     if TOTAL_RECORDS_TO_UPDATE == 0:
-        print("Did not obtain any records from BioSamples")
+        logger.critical("Did not obtain any records from BioSamples")
         sys.exit(0)
 
-    print(f"Indexing organism starts at {datetime.datetime.now()}")
-    process_organisms(es)
+    logger.info(f"Indexing organism starts at {datetime.datetime.now()}")
+    process_organisms(es, es_index_prefix)
 
-    print(f"Indexing specimen from organism starts at {datetime.datetime.now()}")
-    process_specimens(es)
+    logger.info(f"Indexing specimen from organism starts at {datetime.datetime.now()}")
+    process_specimens(es, es_index_prefix)
 
-    print(f"Indexing cell specimens starts at {datetime.datetime.now()}")
-    process_cell_specimens(es)
+    logger.info(f"Indexing cell specimens starts at {datetime.datetime.now()}")
+    process_cell_specimens(es, es_index_prefix)
 
-    print(f"Indexing cell culture starts at {datetime.datetime.now()}")
-    process_cell_cultures(es)
+    logger.info(f"Indexing cell culture starts at {datetime.datetime.now()}")
+    process_cell_cultures(es, es_index_prefix)
 
-    print(f"Indexing pool of specimen starts at {datetime.datetime.now()}")
-    process_pool_specimen(es)
+    logger.info(f"Indexing pool of specimen starts at {datetime.datetime.now()}")
+    process_pool_specimen(es, es_index_prefix)
 
-    print(f"Indexing cell line starts at {datetime.datetime.now()}")
-    process_cell_lines(es)
+    logger.info(f"Indexing cell line starts at {datetime.datetime.now()}")
+    process_cell_lines(es, es_index_prefix)
 
     all_organism_list = list(ORGANISM.keys())
     organism_referred_list = list(ORGANISM_REFERRED_BY_SPECIMEN.keys())
@@ -89,21 +126,24 @@ def main():
     for acc in union:
         # TODO add logging
         if union[acc]['count'] == 1:
-            print(f"{acc} only in source {union[acc]['source']}")
-    clean_elasticsearch('specimen', es)
-    clean_elasticsearch('organism', es)
-    print(f"Program ends at {datetime.datetime.now()}")
+            logger.warning(f"{acc} only in source {union[acc]['source']}")
+    clean_elasticsearch(f'{es_index_prefix}specimen', es)
+    clean_elasticsearch(f'{es_index_prefix}organism', es)
+    logger.info(f"Program ends at {datetime.datetime.now()}")
 
 
-def get_existing_etags()->Dict[str, str]:
+def get_existing_etags(host: str, es_index_prefix)->Dict[str, str]:
     """
     Function gets etags from organisms and specimens in elastic search
     :return: list of etags
     """
-    url_schema = 'http://wp-np3-e2.ebi.ac.uk:9200/{}/_search?_source=biosampleId,etag&sort=biosampleId&size=100000'
+    # url_schema = 'http://wp-np3-e2.ebi.ac.uk:9200/{}/_search?_source=biosampleId,etag&sort=biosampleId&size=100000'
+    if not host.endswith(":9200"):
+        host = host + ":9200"
+#    url_schema = f'http://{host}/{{}/_search?_source=biosampleId,etag&sort=biosampleId&size=100000'
     results = dict()
     for item in ("organism", "specimen"):
-        url = url_schema.format(item)
+        url = f'http://{host}/{es_index_prefix}{item}/_search?_source=biosampleId,etag&sort=biosampleId&size=100000'
         response = requests.get(url).json()
         for result in response['hits']['hits']:
             if 'etag' in result['_source']:
@@ -145,32 +185,37 @@ def fetch_records_by_project_via_etag(etags):
                 hash[material] += 1
     for k, v in hash.items():
         TOTAL_RECORDS_TO_UPDATE += v
-        print(f"There are {v} {k} records needing update")
+        logger.info(f"There are {v} {k} records needing update")
     if TOTAL_RECORDS_TO_UPDATE == 0:
-        print("All records have not been modified since last importation.")
-        print(f"Exit program at {datetime.datetime.now()}")
+        logger.info("All records have not been modified since last importation.")
+        logger.info(f"Exit program at {datetime.datetime.now()}")
         sys.exit(0)
     if TOTAL_RECORDS_TO_UPDATE <=20:
         for item in ORGANISM, SPECIMEN_FROM_ORGANISM, CELL_SPECIMEN, CELL_CULTURE, CELL_LINE, POOL_SPECIMEN:
             for k in item:
-                print(f"To be updated: {k}")
-    print(f"The sum is {TOTAL_RECORDS_TO_UPDATE}")
-    print(f"Finish comparing etags and retrieving necessary records at {datetime.datetime.now()}")
+                logger.info(f"To be updated: {k}")
+    logger.info(f"The sum is {TOTAL_RECORDS_TO_UPDATE}")
+    logger.info(f"Finish comparing etags and retrieving necessary records at {datetime.datetime.now()}")
 
 
 def fetch_records_by_project():
     global TOTAL_RECORDS_TO_UPDATE
     biosamples = list()
     hash = dict()
+
     url = 'https://www.ebi.ac.uk/biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG'
+    logger.info("Size of local etag cache: "+str(len(ETAGS_CACHE)))
     while url:
         response = requests.get(url).json()
+        for biosample in response['_embedded']['samples']:
+            biosample = deal_with_decimal_degrees(biosample)
+            biosample['etag'] = ETAGS_CACHE[biosample['accession']]
+            biosamples.append(biosample)
         if 'next' in response['_links']:
             url = response['_links']['next']['href']
-            for biosample in response['_embedded']['samples']:
-                biosamples.append(deal_with_decimal_degrees(biosample))
         else:
             url = ''
+
     for i, biosample in enumerate(biosamples):
         if not check_is_faang(biosample):
             continue
@@ -191,8 +236,8 @@ def fetch_records_by_project():
         hash[material] += 1
     for k, v in hash.items():
         TOTAL_RECORDS_TO_UPDATE += v
-        print(f"There are {v} {k} records needing update")
-    print(f"The sum is {TOTAL_RECORDS_TO_UPDATE}")
+        logger.info(f"There are {v} {k} records needing update")
+    logger.info(f"The sum is {TOTAL_RECORDS_TO_UPDATE}")
 
 
 def fetch_single_record(biosampleId):
@@ -244,7 +289,7 @@ def deal_with_decimal_degrees(item):
 
 # all functions beginning with "process_" need to refer to the ruleset at
 # https://github.com/FAANG/faang-metadata/blob/master/rulesets/faang_samples.metadata_rules.json
-def process_organisms(es):
+def process_organisms(es, es_index_prefix):
     """
     Function prepares json file that should be inserted into elasticsearch
     :return: dictionary with data that should be inserted into elasticsearch
@@ -295,9 +340,10 @@ def process_organisms(es):
         doc_for_update = populate_basic_biosample_info(doc_for_update, item)
         doc_for_update = extract_custom_field(doc_for_update, item, 'organism')
         doc_for_update['healthStatus'] = get_health_status(item)
-        relationships = parse_relationship(item)
+        relationships: Dict = parse_relationship(item)
         if 'childOf' in relationships:
-            doc_for_update['childOf'] = relationships.keys()
+            # after python 3.3.1 dict.keys() return dict_keys rather than list, so wrapped with list() function
+            doc_for_update['childOf'] = list(relationships['childOf'].keys())
         doc_for_update['alternativeId'] = get_alternative_id(relationships)
         add_organism_info_for_specimen(accession, item)
         if 'strain' in item['characteristics']:
@@ -311,10 +357,10 @@ def process_organisms(es):
             }
 
         converted[accession] = doc_for_update
-    insert_into_es(converted, 'organism', es)
+    insert_into_es(converted, es_index_prefix, 'organism', es)
 
 
-def process_specimens(es):
+def process_specimens(es, es_index_prefix):
     converted = dict()
     for accession, item in SPECIMEN_FROM_ORGANISM.items():
         doc_for_update = dict()
@@ -398,10 +444,10 @@ def process_specimens(es):
         ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
         ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
         converted[accession] = doc_for_update
-    insert_into_es(converted, 'specimen', es)
+    insert_into_es(converted, es_index_prefix, 'specimen', es)
 
 
-def process_cell_specimens(es):
+def process_cell_specimens(es, es_index_prefix):
     converted = dict()
     for accession, item in CELL_SPECIMEN.items():
         doc_for_update = dict()
@@ -441,10 +487,10 @@ def process_cell_specimens(es):
         ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
         ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
         converted[accession] = doc_for_update
-    insert_into_es(converted, 'specimen', es)
+    insert_into_es(converted, es_index_prefix, 'specimen', es)
 
 
-def process_cell_cultures(es):
+def process_cell_cultures(es, es_index_prefix):
     converted = dict()
     for accession, item in CELL_CULTURE.items():
         doc_for_update = dict()
@@ -490,10 +536,10 @@ def process_cell_cultures(es):
         ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
         ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
         converted[accession] = doc_for_update
-    insert_into_es(converted, 'specimen', es)
+    insert_into_es(converted, es_index_prefix, 'specimen', es)
 
 
-def process_pool_specimen(es):
+def process_pool_specimen(es, es_index_prefix):
     converted = dict()
     for accession, item in POOL_SPECIMEN.items():
         doc_for_update = dict()
@@ -566,7 +612,7 @@ def process_pool_specimen(es):
                     # TODO bug fix: etag could raise the case that only pool of specimen has been updated,
                     #  e.g. missing a specimen in the first submission, so need to retrieve individually
 
-                    print(f"No organism found for specimen {acc}")
+                    logger.error(f"No organism found for specimen {acc}")
         doc_for_update['alternativeId'] = get_alternative_id(relationships)
         for type in ['organism', 'sex', 'breed']:
             values = list(tmp[type].keys())
@@ -578,10 +624,10 @@ def process_pool_specimen(es):
                 doc_for_update['organism'].setdefault(type, {})
                 doc_for_update['organism'][type]['text'] = ";".join(values)
         converted[accession] = doc_for_update
-    insert_into_es(converted, 'specimen', es)
+    insert_into_es(converted, es_index_prefix, 'specimen', es)
 
 
-def process_cell_lines(es):
+def process_cell_lines(es, es_index_prefix):
     converted = dict()
     for accession, item in CELL_LINE.items():
         doc_for_update = dict()
@@ -641,7 +687,7 @@ def process_cell_lines(es):
         for type in ['organism', 'sex', 'breed']:
             doc_for_update['organism'][type] = doc_for_update['cellLine'][type]
         converted[accession] = doc_for_update
-    insert_into_es(converted, 'specimen', es)
+    insert_into_es(converted, es_index_prefix, 'specimen', es)
 
 
 def check_existence(item, field_name, subfield):
@@ -663,7 +709,7 @@ def check_existence(item, field_name, subfield):
         return None
 
 
-def populate_basic_biosample_info(doc, item):
+def populate_basic_biosample_info(doc: Dict, item: Dict):
     """
     This function add common field to document, applies to both animal and samples
     :param doc: ES document to update with common fields
@@ -685,6 +731,9 @@ def populate_basic_biosample_info(doc, item):
     doc['availability'] = check_existence(item, 'availability', 'text')
     for organization in item['organization']:
         # TODO logging to error if name or role or url do not exist
+        organization.setdefault('Name', None)
+        organization.setdefault('Role', None)
+        organization.setdefault('URL', None)
         doc.setdefault('organization', [])
         doc['organization'].append(
             {
@@ -749,8 +798,8 @@ def get_health_status(item):
         key = 'health status at collection'
     else:
         # TODO logging
-        print("Health status was not provided")
-        print(item['characteristics'])
+        logger.debug("Health status was not provided")
+        # print(item['characteristics'])
         return health_status
     for status in item['characteristics'][key]:
         health_status.append(
@@ -767,12 +816,14 @@ def parse_relationship(item):
     if 'relationships' not in item:
         return results
     accession = item['accession']
+#    if accession == 'SAMEA103887551':
+#       logger.info(item['relationships'])
     for relation in item['relationships']:
-        relationship_type = relation['relationship_type']
-        results.setdefault(relationship_type, {})
-        results.setdefault(to_lower_camel_case(relationship_type), {})
+        relationship_type = relation['type']
         # non-directional
         if relationship_type == 'EBI equivalent BioSample' or relationship_type == 'same as':
+            results.setdefault(relationship_type, {})
+            results.setdefault(to_lower_camel_case(relationship_type), {})
             target = relation['target'] if relation['source'] == item['accession'] else relation['source']
             results[relationship_type].setdefault(target, 0)
             results[to_lower_camel_case(relationship_type)].setdefault(target, 0)
@@ -786,11 +837,16 @@ def parse_relationship(item):
         # 2 for specimen only derived from will be kept
         else:
             if relation['target'] != accession:
+                results.setdefault(relationship_type, {})
+                results.setdefault(to_lower_camel_case(relationship_type), {})
                 target = relation['target']
                 results[relationship_type].setdefault(target, 0)
                 results[to_lower_camel_case(relationship_type)].setdefault(target, 0)
                 results[relationship_type][target] += 1
                 results[to_lower_camel_case(relationship_type)][target] += 1
+#    if accession == 'SAMEA103887551':
+#        logger.info(str(results))
+#        exit()
     return results
 
 
@@ -846,7 +902,7 @@ def parse_date(date):
     return date
 
 
-def insert_into_es(data, my_type, es):
+def insert_into_es(data, index_prefix, my_type, es):
     """
     This function will update current index with new data
     :param data: data to update elasticsearch with
@@ -866,27 +922,29 @@ def insert_into_es(data, my_type, es):
             else:
                 es_doc['standardMet'] = STANDARDS[ruleset]
                 break
-        body = {
-            "doc": json.dumps(es_doc)
-        }
+        body = json.dumps(es_doc)
+
         try:
-            es.update(index=my_type, doc_type="_doc", id=biosample_id, body=body)
+            existing_flag = es.exists(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id, ignore=200)
+            if existing_flag:
+                es.delete(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id, ignore=200)
+            es.create(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id, body=body, ignore=201)
         except:
             # TODO logging error
-            print("Error when try to update elasticsearch index")
+            logger.error("Error when try to index into elasticsearch")
 
 
-def clean_elasticsearch(my_type, es):
+def clean_elasticsearch(index, es):
     """
     This function will delete all records that do not exist in biosamples anymore
-    :param my_type: type of index to check
+    :param in: type of index to check
     :param es: elasticsearch object
     """
     # TODO only remove records with FAANG or FAANG Legacy standard, not basic
-    data = es.search(index=my_type, size=100000, _source="_id")
+    data = es.search(index=index, size=100000, _source="_id")
     for hit in data['hits']['hits']:
         if hit['_id'] not in INDEXED_SAMPLES:
-            es.delete(index=my_type, doc_type='_doc', id=hit['_id'])
+            es.delete(index=index, doc_type='_doc', id=hit['_id'])
 
 
 if __name__ == "__main__":
