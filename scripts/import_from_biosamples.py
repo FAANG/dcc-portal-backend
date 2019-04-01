@@ -1,9 +1,5 @@
 from elasticsearch import Elasticsearch
 import datetime
-import requests
-import sys
-import re
-import json
 from validate_sample_record import *
 from get_all_etags import fetch_biosample_ids
 from columns import *
@@ -36,6 +32,7 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(format='%(asctime)s\t%(levelname)s:\t%(name)s line %(lineno)s\t%(message)s', level=logging.INFO)
 # suppress logging information from elasticsearch
 logging.getLogger('elasticsearch').setLevel(logging.WARNING)
+
 
 @click.command()
 @click.option(
@@ -74,13 +71,17 @@ def main(es_hosts, es_index_prefix):
     ruleset_version = get_ruleset_version()
     es = Elasticsearch(hosts)
 
+#   pool of specimen
 #    accessions = ['SAMEA3540915', 'SAMEA3540914', 'SAMEA3540913', 'SAMEA3540912', 'SAMEA3540911', 'SAMEA3303533']
-#    for acc in accessions:
-#        tmp = fetch_single_record(acc)
-#        POOL_SPECIMEN[acc] = tmp
+#   cell lines
+    accessions = ['SAMEA5428995', 'SAMEA3540916']
+    for acc in accessions:
+        tmp = fetch_single_record(acc)
+        CELL_LINE[acc] = tmp
 
 #    process_pool_specimen(es, es_index_prefix)
-#    exit()
+    process_cell_lines(es, es_index_prefix)
+    exit()
     logger.info(f"The program starts at {datetime.datetime.now()}")
     logger.info(f"Current ruleset version is {ruleset_version}")
 
@@ -142,7 +143,7 @@ def main(es_hosts, es_index_prefix):
     logger.info(f"Program ends at {datetime.datetime.now()}")
 
 
-def get_existing_etags(host: str, es_index_prefix)->Dict[str, str]:
+def get_existing_etags(host: str, es_index_prefix) -> Dict[str, str]:
     """
     Function gets etags from organisms and specimens in elastic search
     :return: list of etags
@@ -163,7 +164,7 @@ def get_existing_etags(host: str, es_index_prefix)->Dict[str, str]:
 
 def fetch_records_by_project_via_etag(etags):
     global TOTAL_RECORDS_TO_UPDATE
-    hash = dict()
+    counts = dict()
     today = date.today().strftime('%Y-%m-%d')
     with open("etag_list_{}.txt".format(today), 'r') as f:
         for line in f:
@@ -178,7 +179,7 @@ def fetch_records_by_project_via_etag(etags):
                 single['etag'] = data[1]
                 if not check_is_faang(single):
                     continue
-                material =single['characteristics']['Material'][0]['text']
+                material = single['characteristics']['Material'][0]['text']
                 if material == 'organism':
                     ORGANISM[data[0]] = single
                 elif material == 'specimen from organism':
@@ -191,16 +192,16 @@ def fetch_records_by_project_via_etag(etags):
                     CELL_LINE[data[0]] = single
                 elif material == 'pool of specimens':
                     POOL_SPECIMEN[data[0]] = single
-                hash.setdefault(material, 0)
-                hash[material] += 1
-    for k, v in hash.items():
+                counts.setdefault(material, 0)
+                counts[material] += 1
+    for k, v in counts.items():
         TOTAL_RECORDS_TO_UPDATE += v
         logger.info(f"There are {v} {k} records needing update")
     if TOTAL_RECORDS_TO_UPDATE == 0:
         logger.info("All records have not been modified since last importation.")
         logger.info(f"Exit program at {datetime.datetime.now()}")
         sys.exit(0)
-    if TOTAL_RECORDS_TO_UPDATE <=20:
+    if TOTAL_RECORDS_TO_UPDATE <= 20:
         for item in ORGANISM, SPECIMEN_FROM_ORGANISM, CELL_SPECIMEN, CELL_CULTURE, CELL_LINE, POOL_SPECIMEN:
             for k in item:
                 logger.info(f"To be updated: {k}")
@@ -211,7 +212,7 @@ def fetch_records_by_project_via_etag(etags):
 def fetch_records_by_project():
     global TOTAL_RECORDS_TO_UPDATE
     biosamples = list()
-    hash = dict()
+    counts = dict()
 
     url = 'https://www.ebi.ac.uk/biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG'
     logger.info("Size of local etag cache: "+str(len(ETAGS_CACHE)))
@@ -242,24 +243,24 @@ def fetch_records_by_project():
             CELL_LINE[biosample['accession']] = biosample
         elif material == 'pool of specimens':
             POOL_SPECIMEN[biosample['accession']] = biosample
-        hash.setdefault(material, 0)
-        hash[material] += 1
-    for k, v in hash.items():
+        counts.setdefault(material, 0)
+        counts[material] += 1
+    for k, v in counts.items():
         TOTAL_RECORDS_TO_UPDATE += v
         logger.info(f"There are {v} {k} records needing update")
     logger.info(f"The sum is {TOTAL_RECORDS_TO_UPDATE}")
 
 
-def fetch_single_record(biosampleId):
+def fetch_single_record(biosample_id):
     """
     Function returns json file of single record from biosamples
-    :param biosampleId: accession id or record to return
+    :param biosample_id: accession id or record to return
     :return: json file of sample with biosampleId
     """
     url_schema = 'https://www.ebi.ac.uk/biosamples/samples/{}.json?curationdomain=self.FAANG_DCC_curation'
-    url = url_schema.format(biosampleId)
+    url = url_schema.format(biosample_id)
     result = requests.get(url).json()
-    result['etag'] = ETAGS_CACHE[biosampleId]
+    result['etag'] = ETAGS_CACHE[biosample_id]
     return result
 
 
@@ -560,23 +561,29 @@ def process_pool_specimen(es, es_index_prefix):
         relationships = parse_relationship(item)
         url = check_existence(item, 'pool creation protocol', 'text')
         filename = get_filename_from_url(url, accession)
+        # noinspection PyTypeChecker
         doc_for_update.setdefault('poolOfSpecimens', {})
+        # noinspection PyTypeChecker
         doc_for_update['poolOfSpecimens']['poolCreationDate'] = {
             'text': check_existence(item, 'pool creation date', 'text'),
             'unit': check_existence(item, 'pool creation date', 'unit')
         }
+        # noinspection PyTypeChecker
         doc_for_update['poolOfSpecimens']['poolCreationProtocol'] = {
             'url': url,
             'filename': filename
         }
+        # noinspection PyTypeChecker
         doc_for_update['poolOfSpecimens']['specimenVolume'] = {
             'text': check_existence(item, 'specimen volume', 'text'),
             'unit': check_existence(item, 'specimen volume', 'unit')
         }
+        # noinspection PyTypeChecker
         doc_for_update['poolOfSpecimens']['specimenSize'] = {
             'text': check_existence(item, 'specimen size', 'text'),
             'unit': check_existence(item, 'specimen size', 'unit')
         }
+        # noinspection PyTypeChecker
         doc_for_update['poolOfSpecimens']['specimenWeight'] = {
             'text': check_existence(item, 'specimen weight', 'text'),
             'unit': check_existence(item, 'specimen weight', 'unit')
@@ -600,7 +607,6 @@ def process_pool_specimen(es, es_index_prefix):
                 if acc not in SPECIMEN_ORGANISM_RELATIONSHIP:
                     item = SPECIMEN_FROM_ORGANISM[acc]
                     relationships = parse_relationship(item)
-                    organism_accession = None
                     if 'derivedFrom' in relationships:
                         organism_accession = list(relationships['derivedFrom'].keys())[0]
                         SPECIMEN_ORGANISM_RELATIONSHIP[acc] = organism_accession
@@ -635,19 +641,18 @@ def process_pool_specimen(es, es_index_prefix):
                 }
 
         doc_for_update['alternativeId'] = get_alternative_id(relationships)
-        doc_for_update.setdefault('organism',{})
-        for type in ['organism', 'sex', 'breed']:
-            values = list(tmp[type].keys())
+        doc_for_update.setdefault('organism', {})
+        for field_name in ['organism', 'sex', 'breed']:
+            values = list(tmp[field_name].keys())
             if len(values) == 1:
-                doc_for_update['organism'].setdefault(type, {})
-                doc_for_update['organism'][type]['text'] = tmp[type][values[0]][type]['text']
-                doc_for_update['organism'][type]['ontologyTerms'] = tmp[type][values[0]][type]['ontologyTerms']
+                doc_for_update['organism'].setdefault(field_name, {})
+                doc_for_update['organism'][field_name]['text'] = tmp[field_name][values[0]][field_name]['text']
+                doc_for_update['organism'][field_name]['ontologyTerms'] = \
+                    tmp[field_name][values[0]][field_name]['ontologyTerms']
             else:
-                doc_for_update['organism'].setdefault(type, {})
-                doc_for_update['organism'][type]['text'] = ";".join(values)
+                doc_for_update['organism'].setdefault(field_name, {})
+                doc_for_update['organism'][field_name]['text'] = ";".join(values)
         converted[accession] = doc_for_update
-#        pprint.pprint(doc_for_update)
-#        exit()
     insert_into_es(converted, es_index_prefix, 'specimen', es)
 
 
@@ -708,8 +713,8 @@ def process_cell_lines(es, es_index_prefix):
             doc_for_update['derivedFrom'] = relationships['derivedFrom'][0]
         doc_for_update['alternativeId'] = get_alternative_id(relationships)
         doc_for_update.setdefault('organism', {})
-        for type in ['organism', 'sex', 'breed']:
-            doc_for_update['organism'][type] = doc_for_update['cellLine'][type]
+        for field_name in ['organism', 'sex', 'breed']:
+            doc_for_update['organism'][field_name] = doc_for_update['cellLine'][field_name]
         converted[accession] = doc_for_update
     insert_into_es(converted, es_index_prefix, 'specimen', es)
 
@@ -743,7 +748,7 @@ def populate_basic_biosample_info(doc: Dict, item: Dict):
     doc['name'] = item['name']
     doc['biosampleId'] = item['accession']
     doc['etag'] = item['etag']
-    doc['id_number'] = item['accession'][5:] # remove SAMEA
+    doc['id_number'] = item['accession'][5:]  # remove SAMEA
     doc['description'] = check_existence(item, 'description', 'text')
     doc['releaseDate'] = parse_date(item['release'])
     doc['updateDate'] = parse_date(item['update'])
@@ -913,23 +918,24 @@ def add_organism_info_for_specimen(accession, item):
     ORGANISM_FOR_SPECIMEN[accession]['healthStatus'] = get_health_status(item)
 
 
-def parse_date(date):
+def parse_date(date_str):
     """
     This function parses date
-    :param date: date to parse
+    :param date_str: date to parse
     :return: parsed date
     """
     # TODO logging to error if date doesn't exist
-    parsed_date = re.search("(\d+-\d+-\d+)T", date)
+    parsed_date = re.search(r"(\d+-\d+-\d+)T", date_str)
     if parsed_date:
-        date = parsed_date.groups()[0]
-    return date
+        date_str = parsed_date.groups()[0]
+    return date_str
 
 
 def insert_into_es(data, index_prefix, my_type, es):
     """
     This function will update current index with new data
     :param data: data to update elasticsearch with
+    :param index_prefix: combined with my_type to generate the actual index value to operate on
     :param my_type: name of index to update
     :param es: elasticsearch object
     :return: updates index or return error it it was impossible ot sample didn't go through validation
@@ -941,8 +947,8 @@ def insert_into_es(data, index_prefix, my_type, es):
         for ruleset in RULESETS:
             if validation_results[ruleset]['detail'][biosample_id]['status'] == 'error':
                 # TODO logging to error
-                print(f"{biosample_id}\t{validation_results[ruleset]['detail'][biosample_id]['type']}\t{'error'}\t"
-                      f"{validation_results[ruleset]['detail'][biosample_id]['message']}")
+                logger.error(f"{biosample_id}\t{validation_results[ruleset]['detail'][biosample_id]['type']}\t"
+                             f"{'error'}\t{validation_results[ruleset]['detail'][biosample_id]['message']}")
             else:
                 es_doc['standardMet'] = STANDARDS[ruleset]
                 break
@@ -953,15 +959,15 @@ def insert_into_es(data, index_prefix, my_type, es):
             if existing_flag:
                 es.delete(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id)
             es.create(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id, body=body)
-        except:
+        except Exception as e:
             # TODO logging error
-            logger.error("Error when try to index into elasticsearch")
+            logger.error("Error when try to index into elasticsearch: "+str(e.args))
 
 
 def clean_elasticsearch(index, es):
     """
     This function will delete all records that do not exist in biosamples anymore
-    :param in: type of index to check
+    :param index: name of index to check
     :param es: elasticsearch object
     """
     # TODO only remove records with FAANG or FAANG Legacy standard, not basic

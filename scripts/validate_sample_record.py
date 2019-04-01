@@ -75,9 +75,9 @@ def validate_record(data, my_type, ruleset):
         command = f'curl -F "format=json" -F "rule_set_name={ruleset}" -F "file_format=JSON"' + \
                   f' -F "metadata_file=@{tmp_out_file}" "https://www.ebi.ac.uk/vg/faang/validate" > validation.json'
         os.system(command)
-    except:
+    except Exception as e:
         # TODO log to error
-        print("Validation Error!!!")
+        logger.error("Validation Error!!!" + str(e.args))
         sys.exit(0)
     with open('validation.json', 'r') as f:
         data = json.load(f)
@@ -185,14 +185,17 @@ def parse_ontology_term(ontology_term):
     """
     This function will parse ontology term
     :param ontology_term: ontology term to parse
-    :return: new dict with two values: id and source_ref
+    :return: new dict with two values: short_term and source_ref
     """
-    id = ontology_term.split("/")[-1].replace(":", "_")
-    if id == 'UBERON_0000468':
-        id = 'OBI_0100026'
+    # TODO: in general this method is correct, safest is to use OLS API which is used in validation tool.
+    #  For ontology libraries used in FAANG, it is fine
+    short_term = ontology_term.split("/")[-1].replace(":", "_")
+    # some user wrongly provided multicellular organism (UBERON_0000468) for organism
+    if short_term == 'UBERON_0000468':
+        short_term = 'OBI_0100026'
     result = {
-        'id': id,
-        'source_ref': id.split("_")[0]
+        'id': short_term,
+        'source_ref': short_term.split("_")[0]
     }
     return result
 
@@ -211,12 +214,11 @@ def parse_validation_results(data, my_type):
         status = entity['_outcome']['status']
         summary.setdefault(status, 0)
         summary[status] += 1
-        id = entity['id']
+        biosample_id = entity['id']
         result.setdefault('detail', {})
-        result['detail'].setdefault(id, {})
-        result['detail'][id]['status'] = status
-        result['detail'][id]['type'] = my_type
-        backup_msg = ''
+        result['detail'].setdefault(biosample_id, {})
+        result['detail'][biosample_id]['status'] = status
+        result['detail'][biosample_id]['type'] = my_type
         tag = status + 's'
         outcome_msgs = list()
         if tag in entity['_outcome']:
