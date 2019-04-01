@@ -32,7 +32,7 @@ class SyncHinxtonLondon:
         self.logger = logger
         self.today = date.today().strftime('%Y-%m-%d')
         self.yesterday = (date.today() - timedelta(1)).strftime('%Y-%m-%d')
-        self.snapshot_name = "snapshot_{}".format(today)
+        self.snapshot_name = "snapshot_{}".format(self.today)
 
     def run_sync(self):
         """
@@ -53,7 +53,7 @@ class SyncHinxtonLondon:
                       "ignore_unavailable": True,
                       "include_global_state": False
                       }
-        self.es_staging.snapshot.create(repository='es6_faang_repo', snapshot=snapshot_name, body=parameters)
+        self.es_staging.snapshot.create(repository='es6_faang_repo', snapshot=self.snapshot_name, body=parameters)
 
     def sync_snapshot(self):
         """
@@ -71,7 +71,7 @@ class SyncHinxtonLondon:
             "ignore_unavailable": True,
             "include_aliases": False,
             "rename_pattern": ".*((protocol_)?file(s)?|protocol_samples|organism|specimen|dataset|experiment).*",
-            "rename_replacement": "{}_$1".format(today)
+            "rename_replacement": "{}_$1".format(self.today)
         }
         self.es_fallback.snapshot.restore(repository='es6_faang_repo', snapshot=self.snapshot_name, body=parameters)
         self.es_production.snapshot.restore(repository='es6_faang_repo', snapshot=self.snapshot_name, body=parameters)
