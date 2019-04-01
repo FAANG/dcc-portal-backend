@@ -20,7 +20,6 @@ TYPES = ["organism", "specimen", "dataset", "experiment", "file"]
     default=3,
     help="Combined with es_index_prefix"
 )
-
 def main(es_host, es_index_prefix, serial):
     numbers: Dict[str, int] = read_number_from_es(es_host)
     header = "\t".join(TYPES)

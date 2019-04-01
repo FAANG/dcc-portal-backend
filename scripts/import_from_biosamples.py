@@ -12,6 +12,7 @@ from typing import Dict
 from datetime import date
 import click
 import logging
+# import pprint
 
 INDEXED_SAMPLES = dict()
 ORGANISM = dict()
@@ -33,6 +34,8 @@ ETAGS_CACHE = dict()
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(format='%(asctime)s\t%(levelname)s:\t%(name)s line %(lineno)s\t%(message)s', level=logging.INFO)
+# suppress logging information from elasticsearch
+logging.getLogger('elasticsearch').setLevel(logging.WARNING)
 
 @click.command()
 @click.option(
@@ -71,6 +74,13 @@ def main(es_hosts, es_index_prefix):
     ruleset_version = get_ruleset_version()
     es = Elasticsearch(hosts)
 
+#    accessions = ['SAMEA3540915', 'SAMEA3540914', 'SAMEA3540913', 'SAMEA3540912', 'SAMEA3540911', 'SAMEA3303533']
+#    for acc in accessions:
+#        tmp = fetch_single_record(acc)
+#        POOL_SPECIMEN[acc] = tmp
+
+#    process_pool_specimen(es, es_index_prefix)
+#    exit()
     logger.info(f"The program starts at {datetime.datetime.now()}")
     logger.info(f"Current ruleset version is {ruleset_version}")
 
@@ -248,7 +258,9 @@ def fetch_single_record(biosampleId):
     """
     url_schema = 'https://www.ebi.ac.uk/biosamples/samples/{}.json?curationdomain=self.FAANG_DCC_curation'
     url = url_schema.format(biosampleId)
-    return requests.get(url).json()
+    result = requests.get(url).json()
+    result['etag'] = ETAGS_CACHE[biosampleId]
+    return result
 
 
 def check_is_faang(item):
@@ -540,6 +552,8 @@ def process_cell_cultures(es, es_index_prefix):
 
 
 def process_pool_specimen(es, es_index_prefix):
+    global SPECIMEN_FROM_ORGANISM
+    global SPECIMEN_ORGANISM_RELATIONSHIP
     converted = dict()
     for accession, item in POOL_SPECIMEN.items():
         doc_for_update = dict()
@@ -552,7 +566,7 @@ def process_pool_specimen(es, es_index_prefix):
             'unit': check_existence(item, 'pool creation date', 'unit')
         }
         doc_for_update['poolOfSpecimens']['poolCreationProtocol'] = {
-            'ulr': url,
+            'url': url,
             'filename': filename
         }
         doc_for_update['poolOfSpecimens']['specimenVolume'] = {
@@ -580,50 +594,60 @@ def process_pool_specimen(es, es_index_prefix):
             derived_from = list(relationships['derivedFrom'].keys())
             doc_for_update['derivedFrom'] = derived_from
             for acc in derived_from:
-                if acc in SPECIMEN_ORGANISM_RELATIONSHIP:
-                    organism_accession = SPECIMEN_ORGANISM_RELATIONSHIP[acc]
-                    ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
-                    ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
-                    if organism_accession not in ORGANISM_FOR_SPECIMEN:
-                        add_organism_info_for_specimen(organism_accession, fetch_single_record(organism_accession))
-                    tmp['organism'] = {
-                        ORGANISM_FOR_SPECIMEN[organism_accession] : {
-                            'organism': {
-                                'text': ORGANISM_FOR_SPECIMEN[organism_accession]['organism']['ontologyTerms']
-                            }
+                if acc not in SPECIMEN_FROM_ORGANISM:
+                    tmp_specimen = fetch_single_record(acc)
+                    SPECIMEN_FROM_ORGANISM[acc] = tmp_specimen
+                if acc not in SPECIMEN_ORGANISM_RELATIONSHIP:
+                    item = SPECIMEN_FROM_ORGANISM[acc]
+                    relationships = parse_relationship(item)
+                    organism_accession = None
+                    if 'derivedFrom' in relationships:
+                        organism_accession = list(relationships['derivedFrom'].keys())[0]
+                        SPECIMEN_ORGANISM_RELATIONSHIP[acc] = organism_accession
+                organism_accession = SPECIMEN_ORGANISM_RELATIONSHIP[acc]
+                ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
+                ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
+                if organism_accession not in ORGANISM_FOR_SPECIMEN:
+                    add_organism_info_for_specimen(organism_accession, fetch_single_record(organism_accession))
+                tmp['organism'] = {
+                    organism_accession: {
+                        'organism': {
+                            'text': ORGANISM_FOR_SPECIMEN[organism_accession]['organism']['text'],
+                            'ontologyTerms': ORGANISM_FOR_SPECIMEN[organism_accession]['organism']['ontologyTerms']
                         }
                     }
-                    tmp['sex'] = {
-                        ORGANISM_FOR_SPECIMEN[organism_accession]: {
-                            'sex': {
-                                'text': ORGANISM_FOR_SPECIMEN[organism_accession]['sex']['ontologyTerms']
-                            }
+                }
+                tmp['sex'] = {
+                    organism_accession: {
+                        'sex': {
+                            'text': ORGANISM_FOR_SPECIMEN[organism_accession]['sex']['text'],
+                            'ontologyTerms': ORGANISM_FOR_SPECIMEN[organism_accession]['sex']['ontologyTerms']
                         }
                     }
-                    tmp['breed'] = {
-                        ORGANISM_FOR_SPECIMEN[organism_accession]: {
-                            'breed': {
-                                'text': ORGANISM_FOR_SPECIMEN[organism_accession]['breed']['ontologyTerms']
-                            }
+                }
+                tmp['breed'] = {
+                    organism_accession: {
+                        'breed': {
+                            'text': ORGANISM_FOR_SPECIMEN[organism_accession]['breed']['text'],
+                            'ontologyTerms': ORGANISM_FOR_SPECIMEN[organism_accession]['breed']['ontologyTerms']
                         }
                     }
-                else:
-                    # TODO error logging
-                    # TODO bug fix: etag could raise the case that only pool of specimen has been updated,
-                    #  e.g. missing a specimen in the first submission, so need to retrieve individually
+                }
 
-                    logger.error(f"No organism found for specimen {acc}")
         doc_for_update['alternativeId'] = get_alternative_id(relationships)
+        doc_for_update.setdefault('organism',{})
         for type in ['organism', 'sex', 'breed']:
             values = list(tmp[type].keys())
             if len(values) == 1:
                 doc_for_update['organism'].setdefault(type, {})
-                doc_for_update['organism'][type]['text'] = values[0]
-                doc_for_update['organism'][type]['ontologyTerms'] = tmp[type][values[0]]
+                doc_for_update['organism'][type]['text'] = tmp[type][values[0]][type]['text']
+                doc_for_update['organism'][type]['ontologyTerms'] = tmp[type][values[0]][type]['ontologyTerms']
             else:
                 doc_for_update['organism'].setdefault(type, {})
                 doc_for_update['organism'][type]['text'] = ";".join(values)
         converted[accession] = doc_for_update
+#        pprint.pprint(doc_for_update)
+#        exit()
     insert_into_es(converted, es_index_prefix, 'specimen', es)
 
 
@@ -925,10 +949,10 @@ def insert_into_es(data, index_prefix, my_type, es):
         body = json.dumps(es_doc)
 
         try:
-            existing_flag = es.exists(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id, ignore=200)
+            existing_flag = es.exists(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id)
             if existing_flag:
-                es.delete(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id, ignore=200)
-            es.create(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id, body=body, ignore=201)
+                es.delete(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id)
+            es.create(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id, body=body)
         except:
             # TODO logging error
             logger.error("Error when try to index into elasticsearch")
