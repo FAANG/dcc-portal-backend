@@ -39,10 +39,12 @@ class CreateProtocols:
                 url = result['_source']['specimenFromOrganism']['specimenCollectionProtocol']['url']
                 try:
                     protocol_type = \
-                    result['_source']['specimenFromOrganism']['specimenCollectionProtocol']['url'].split("/")[5]
+                        result['_source']['specimenFromOrganism']['specimenCollectionProtocol']['url'].split("/")[5]
                 except Exception as e:
-                    errno, strerror = e.args
-                    self.logger.warning(f"{errno}: {strerror}")
+                    self.logger.warning("Error was: {}, URL was: {}".format(
+                        e.args[0],
+                        result['_source']['specimenFromOrganism']['specimenCollectionProtocol']['url']
+                    ))
                     protocol_type = ""
                 parsed = key.split("_")
                 if parsed[0] in UNIVERSITIES:
