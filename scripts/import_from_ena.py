@@ -424,6 +424,115 @@ def main():
               f"experiments to be processed")
     print(f"There are {len(list(datasets.keys())) -  1} datasets to be processed")
     validation_results = validate_total_experiment_records(experiments, RULESETS)
+    exp_validation = dict()
+    for exp_id in sorted(experiments.keys()):
+        exp_es = experiments[exp_id]
+        for ruleset in RULESETS:
+            if validation_results[ruleset]['detail'][exp_id]['status'] == 'error':
+                # TODO logging to error
+                print(f"{exp_id}\t{exps_in_dataset[exp_id]}\tExperiment\terror\t{validation_results[ruleset]['detail'][exp_id]['message']}")
+            else:
+                exp_validation[exp_id] = STANDARDS[ruleset]
+                exp_es['standardMet'] = STANDARDS[ruleset]
+                if exp_es['standardMet'] ==  'FAANG':
+                    exp_es['versionLastStandardMet'] = ruleset_version
+                break
+        body = {
+            "doc": json.dumps(exp_es)
+        }
+        try:
+            es.update(index='experiment', doc_type="_doc", id=exp_id, body=body)
+        except:
+            # TODO logging error
+            print("Error when try to update elasticsearch index")
+
+    for file_id in files:
+        es_doc = files[file_id]
+        exp_id = es_doc['experiment']['accession']
+        if exp_id not in exp_validation:
+            continue
+        es_doc['experiment']['standardMet'] = exp_validation[exp_id]
+        body = {
+            "doc": json.dumps(es_doc)
+        }
+        try:
+            es.update(index=file, doc_type="_doc", id=file_id, body=body)
+        except:
+            # TODO logging error
+            print("Error when try to update elasticsearch index")
+        indexed_files[file_id] = 1
+
+    for dataset_id in datasets:
+        if dataset_id == 'tmp':
+            continue
+        es_doc_dataset = datasets[dataset_id]
+        exps = datasets['tmp'][dataset_id]['experiment']
+        only_valid_exps = dict()
+        dataset_standard = 'FAANG'
+        experiment_type = dict()
+        tech_type = dict()
+        for exp_id in exps:
+            if exp_id in exp_validation:
+                if exp_validation[exp_id] == 'FAANG Legacy':
+                    dataset_standard = 'Legacy'
+                only_valid_exps[exp_id] = exps[exp_id]
+                assay_type = exps[exp_id]['assayType']
+                tech_type.setdefault(TECHNOLOGIES[assay_type], 0)
+                tech_type[TECHNOLOGIES[assay_type]] += 1
+                experiment_type.setdefault(assay_type, 0)
+                experiment_type[assay_type] += 1
+            else:
+                pass
+        num_valid_exps = len(only_valid_exps.keys())
+        if num_valid_exps == 0:
+            print(f"dataset {dataset_id} has no valid experiments, skipped.")
+            continue
+        es_doc_dataset['standardMet'] = dataset_standard
+        specimens_dict = datasets['tmp'][dataset_id]['specimen']
+        species = dict()
+        specimens = list()
+        for specimen in specimens_dict:
+            specimen_detail = biosample_ids[specimen]
+            es_doc_specimen = {
+                'biosampleId': specimen_detail['biosampleId'],
+                'material': specimen_detail['material'],
+                'cellType': specimen_detail['cellType'],
+                'organism': specimen_detail['organism']['organism'],
+                'sex': specimen_detail['organism']['sex'],
+                'breed': specimen_detail['organism']['breed']
+            }
+            specimens.append(es_doc_specimen)
+            species[specimen_detail['organism']['organism']['text']] = specimen_detail['organism']['organism']
+        es_doc_dataset['specimen'] = sorted(specimens, key=lambda k: k['biosampleId'])
+        es_doc_dataset['species'] = species.values()
+        file_arr = datasets['tmp'][dataset_id][file].values()
+        valid_files = list()
+        for file_entry in sorted(file_arr, key=lambda k: k['name']):
+            file_id = file_entry['fileId']
+            if file_id in indexed_files:
+                valid_files.append(file_entry)
+        es_doc_dataset['file'] = valid_files
+        es_doc_dataset['experiment'] = only_valid_exps.values()
+        es_doc_dataset['assayType'] = experiment_type.keys()
+        es_doc_dataset['tech'] = tech_type.keys()
+        es_doc_dataset['instrument'] = datasets['tmp'][dataset_id]['instrument'].keys()
+        es_doc_dataset['centerName'] = datasets['tmp'][dataset_id]['centerName'].keys()
+        es_doc_dataset['archive'] = sorted(datasets['tmp'][dataset_id]['archive'].keys())
+        body = {
+            "doc": json.dumps(es_doc_dataset)
+        }
+        try:
+            es.update(index='dataset', doc_type="_doc", id=dataset_id, body=body)
+        except:
+            # TODO logging error
+            print("Error when try to update elasticsearch index")
+    with open('ena_not_in_biosample.txt', 'a') as w:
+        for study in new_errors:
+            tmp = new_errors[study]
+            for biosample in sorted(tmp.keys()):
+                print(f"{biosample} from {study} does not exist in BioSamples at the moment\n")
+                w.write(f"{study}\t{biosample}")
+
 
 
 def get_ena_data():
