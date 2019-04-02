@@ -37,29 +37,23 @@ class SyncHinxtonLondon:
         """
         Main function that will run syncing
         """
-        self.create_snapshot()
-        self.sync_snapshot()
+        self.create_snapshot('staging')
+        self.create_snapshot('production')
         self.restore_snapshot()
         self.change_aliases()
         self.delete_old_indices()
 
-    def create_snapshot(self):
+    def create_snapshot(self, rep_type):
         """
         This function will create snapshot on test server
+        :param rep_type type of repo to use (staging or production)
         """
         self.logger.info('Creating snapshot')
         parameters = {"indices": "file,organism,specimen,dataset,experiment,protocol_files,protocol_samples",
                       "ignore_unavailable": True,
                       "include_global_state": False
                       }
-        self.es_staging.snapshot.create(repository='es6_faang_repo', snapshot=self.snapshot_name, body=parameters)
-
-    def sync_snapshot(self):
-        """
-        This function will sync content of two folder using sync library
-        """
-        self.logger.info('Syncing snapshot')
-        sync(FROM, TO, 'sync')
+        self.es_staging.snapshot.create(repository=rep_type, snapshot=self.snapshot_name, body=parameters)
 
     def restore_snapshot(self):
         """
