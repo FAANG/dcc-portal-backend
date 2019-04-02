@@ -2,7 +2,6 @@ from elasticsearch import Elasticsearch
 from datetime import date, timedelta
 from dirsync import sync
 
-from constants import *
 from utils import *
 
 

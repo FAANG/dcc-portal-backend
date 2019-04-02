@@ -36,3 +36,6 @@ UNIVERSITIES = {
     "ULE": "University of León (León, Spain)",
     "USDA": "The United States Department of Agriculture",
 }
+
+# Current indices in use
+INDICES = ['organism', 'file', 'specimen', 'dataset', 'experiment']
