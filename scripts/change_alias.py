@@ -5,13 +5,27 @@ from utils import *
 
 
 class ChangeAliases:
+    """
+    Using this class user can change aliases to point to new indexes
+    We use this schema with indices: faang_build_{build number}_{index name}
+    Currently master indices has build number 3
+    """
     def __init__(self, name, es_staging):
+        """
+        Initialize object with prefix name and elasticsearch instance
+        :param name: prefix name
+        :param es_staging: elasticsearch instance
+        """
         self.name = name
         self.es_staging = es_staging
 
     def run(self):
+        """
+        Main function to run aliases change
+        """
         print("Current aliases in use: ")
         old_index_prefix = print_current_aliases(self.es_staging)
+        # Exit if user try to change aliases to indexes with the same prefix
         if old_index_prefix == self.name:
             print("Prefix is already in use, exiting!")
             sys.exit(0)
