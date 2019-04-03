@@ -74,14 +74,18 @@ def main(es_hosts, es_index_prefix):
 #   pool of specimen
 #    accessions = ['SAMEA3540915', 'SAMEA3540914', 'SAMEA3540913', 'SAMEA3540912', 'SAMEA3540911', 'SAMEA3303533']
 #   cell lines
-    accessions = ['SAMEA5428995', 'SAMEA3540916']
-    for acc in accessions:
-        tmp = fetch_single_record(acc)
-        CELL_LINE[acc] = tmp
-
+#    accessions = ['SAMEA5428995', 'SAMEA3540916']
+#   cell culture
+#    accessions = ['SAMEA5428985']
+#    for acc in accessions:
+#        tmp = fetch_single_record(acc)
+#        CELL_CULTURE[acc] = tmp
+#        CELL_LINE[acc] = tmp
+#    pprint.pprint(CELL_CULTURE)
 #    process_pool_specimen(es, es_index_prefix)
-    process_cell_lines(es, es_index_prefix)
-    exit()
+#    process_cell_lines(es, es_index_prefix)
+#    process_cell_cultures(es, es_index_prefix)
+#    exit()
     logger.info(f"The program starts at {datetime.datetime.now()}")
     logger.info(f"Current ruleset version is {ruleset_version}")
 
@@ -175,6 +179,8 @@ def fetch_records_by_project_via_etag(etags):
                 INDEXED_SAMPLES[data[0]] = 1
                 continue
             else:
+#                logger.info(data[0] + " cache: " + data[1] + " ES: "+etags[data[0]])
+#                exit()
                 single = fetch_single_record(data[0])
                 single['etag'] = data[1]
                 if not check_is_faang(single):
@@ -182,29 +188,40 @@ def fetch_records_by_project_via_etag(etags):
                 material = single['characteristics']['Material'][0]['text']
                 if material == 'organism':
                     ORGANISM[data[0]] = single
+                    # this may seem to be duplicate, however necessary: any unrecognized material type will be stored
+                    # in counts, but will not be loaded into ES and need to inform FAANG DCC
+                    TOTAL_RECORDS_TO_UPDATE += 1
                 elif material == 'specimen from organism':
                     SPECIMEN_FROM_ORGANISM[data[0]] = single
+                    TOTAL_RECORDS_TO_UPDATE += 1
                 elif material == 'cell specimen':
                     CELL_SPECIMEN[data[0]] = single
+                    TOTAL_RECORDS_TO_UPDATE += 1
                 elif material == 'cell culture':
                     CELL_CULTURE[data[0]] = single
+                    TOTAL_RECORDS_TO_UPDATE += 1
                 elif material == 'cell line':
                     CELL_LINE[data[0]] = single
+                    TOTAL_RECORDS_TO_UPDATE += 1
                 elif material == 'pool of specimens':
                     POOL_SPECIMEN[data[0]] = single
+                    TOTAL_RECORDS_TO_UPDATE += 1
                 counts.setdefault(material, 0)
                 counts[material] += 1
-    for k, v in counts.items():
-        TOTAL_RECORDS_TO_UPDATE += v
-        logger.info(f"There are {v} {k} records needing update")
     if TOTAL_RECORDS_TO_UPDATE == 0:
         logger.info("All records have not been modified since last importation.")
         logger.info(f"Exit program at {datetime.datetime.now()}")
+        if counts:
+            logger.warning("Some records with wrong material type have been found")
+            logger.warning(counts)
         sys.exit(0)
+    for k, v in counts.items():
+        logger.info(f"There are {v} {k} records needing update")
+    # keep for the debug purpose
     if TOTAL_RECORDS_TO_UPDATE <= 20:
         for item in ORGANISM, SPECIMEN_FROM_ORGANISM, CELL_SPECIMEN, CELL_CULTURE, CELL_LINE, POOL_SPECIMEN:
             for k in item:
-                logger.info(f"To be updated: {k}")
+                logger.info(f"To be updated in {item}: {k}")
     logger.info(f"The sum is {TOTAL_RECORDS_TO_UPDATE}")
     logger.info(f"Finish comparing etags and retrieving necessary records at {datetime.datetime.now()}")
 
@@ -441,7 +458,8 @@ def process_specimens(es, es_index_prefix):
                 doc_for_update['specimenFromOrganism']['specimenPictureUrl'].append(picture_url['text'])
         doc_for_update['specimenFromOrganism'].setdefault('healthStatusAtCollection', [])
         if 'health status at collection' in item['characteristics']:
-            # TODO check with get_health_status function, no need to have codes in both places which could be confusing
+            # TODO to Alexey:
+            #  check with get_health_status function, no need to have codes in both places which could be confusing
             for health_status in item['characteristics']['health status at collection']:
                 doc_for_update['specimenFromOrganism']['healthStatusAtCollection'].append(
                     {
@@ -515,10 +533,13 @@ def process_cell_cultures(es, es_index_prefix):
         if derived_from_accession in SPECIMEN_ORGANISM_RELATIONSHIP:
             organism_accession = SPECIMEN_ORGANISM_RELATIONSHIP[derived_from_accession]
         else:
-            # TODO bug needs to be fixed
             tmp = parse_relationship(fetch_single_record(derived_from_accession))
             if 'derivedFrom' in tmp:
                 organism_accession = list(tmp['derivedFrom'].keys())[0]
+                candidate = fetch_single_record(organism_accession)
+                if(candidate['characteristics']['Material'][0]['text'] == 'specimen from organism'):
+                    tmp2 = parse_relationship(candidate)
+                    organism_accession = list(tmp2['derivedFrom'].keys())[0]
         SPECIMEN_ORGANISM_RELATIONSHIP[accession] = organism_accession
         doc_for_update['derivedFrom'] = derived_from_accession
         doc_for_update.setdefault('cellCulture', {})
@@ -665,7 +686,7 @@ def process_cell_lines(es, es_index_prefix):
         if url:
             filename = get_filename_from_url(url, accession)
         else:
-            # TODO why not just get_filename_from_url as others
+            # TODO To Alexey: why not just get_filename_from_url as others
             filename = None
         doc_for_update.setdefault('cellLine', {})
         doc_for_update['cellLine']['organism'] = {
@@ -971,10 +992,15 @@ def clean_elasticsearch(index, es):
     :param es: elasticsearch object
     """
     # TODO only remove records with FAANG or FAANG Legacy standard, not basic
-    data = es.search(index=index, size=100000, _source="_id")
+    data = es.search(index=index, size=100000, _source="_id,standardMet")
     for hit in data['hits']['hits']:
         if hit['_id'] not in INDEXED_SAMPLES:
-            es.delete(index=index, doc_type='_doc', id=hit['_id'])
+            # Legacy (basic) data imported in import_from_ena_legacy, not here, so not cleaned
+            to_be_cleaned = True
+            if 'standardMet' in hit['_source'] and hit['_source']['standardMet'] == 'Legacy (basic)':
+                to_be_cleaned = False
+            if to_be_cleaned:
+                es.delete(index=index, doc_type='_doc', id=hit['_id'])
 
 
 if __name__ == "__main__":
