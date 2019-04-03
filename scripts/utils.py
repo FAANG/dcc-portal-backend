@@ -41,7 +41,7 @@ def print_current_aliases(es_staging):
     for index_name, alias in aliases.items():
         alias = list(alias['aliases'].keys())[0]
         name.add(index_name.split(alias)[0])
-        print(f"{index_name} -> {alias}")
+        print("{} -> {}".format(index_name, alias))
     if len(name) != 1:
         print("There are multiple prefixes or suffixes in use, manual check is required!")
         sys.exit(0)
