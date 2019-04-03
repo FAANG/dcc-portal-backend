@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 
 from misc import *
 
@@ -90,9 +91,13 @@ def convert_data(item):
     result = dict()
     result['entity_type'] = 'experiment'
     result['id'] = data['accession']
-    del data['accession']
-    del data['standardMet']
-    del data['versionLastStandardMet']
+    type_specific_dict = dict()
+    if 'accession' in data:
+        del data['accession']
+    if 'standardMet' in data:
+        del data['standardMet']
+    if 'versionLastStandardMet' in data:
+        del data['versionLastStandardMet']
     if data['assayType'] == 'methylation profiling by high throughput sequencing':
         type_specific = 'BS-seq'
     elif data['assayType'] == 'DNase-Hypersensitivity seq':
@@ -145,7 +150,7 @@ def parse(attr, data):
             if key == 'derivedFrom':
                 tmp['name'] = 'Derived from'
             if key == 'rnaPurity260280ratio':
-                tmp['name'] =  'rna purity - 260:280 ratio'
+                tmp['name'] = 'rna purity - 260:280 ratio'
             if key == 'rnaPurity260230ratio':
                 tmp['name'] = 'rna purity - 260:230 ratio'
             tmp['value'] = value
@@ -170,7 +175,10 @@ def parse_hash(hash, key):
         key = from_lower_camel_case(key)
     else:
         key = from_lower_camel_case(key)
-        tmp['value'] = hash['text']
+        if 'text' in hash:
+            tmp['value'] = hash['text']
+        else:
+            tmp['value'] = None
     tmp['name'] = key
     return tmp
 
