@@ -53,7 +53,8 @@ class SyncHinxtonLondon:
                       "ignore_unavailable": True,
                       "include_global_state": False
                       }
-        self.es_staging.snapshot.create(repository=rep_type, snapshot=self.snapshot_name, body=parameters)
+        self.es_staging.snapshot.create(repository=rep_type, snapshot=self.snapshot_name, body=parameters,
+                                        wait_for_completion=True)
 
     def restore_snapshot(self):
         """
