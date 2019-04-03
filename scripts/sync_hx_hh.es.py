@@ -37,8 +37,8 @@ class SyncHinxtonLondon:
         """
         Main function that will run syncing
         """
-        self.create_snapshot('staging')
-        self.create_snapshot('production')
+        self.create_snapshot('es6_faang_repo')
+        self.create_snapshot('es6_faang_repo_production')
         self.restore_snapshot()
         self.change_aliases()
         self.delete_old_indices()
@@ -66,8 +66,10 @@ class SyncHinxtonLondon:
             "rename_pattern": ".*((protocol_)?file(s)?|protocol_samples|organism|specimen|dataset|experiment).*",
             "rename_replacement": "{}_$1".format(self.today)
         }
-        self.es_fallback.snapshot.restore(repository='es6_faang_repo', snapshot=self.snapshot_name, body=parameters)
-        self.es_production.snapshot.restore(repository='es6_faang_repo', snapshot=self.snapshot_name, body=parameters)
+        self.es_fallback.snapshot.restore(repository='es6_faang_repo_production',
+                                          snapshot=self.snapshot_name, body=parameters)
+        self.es_production.snapshot.restore(repository='es6_faang_repo_production',
+                                            snapshot=self.snapshot_name, body=parameters)
 
     def change_aliases(self):
         """
