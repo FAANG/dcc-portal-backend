@@ -8,7 +8,6 @@ from typing import Dict
 from datetime import date
 import click
 import logging
-# import pprint
 
 INDEXED_SAMPLES = dict()
 ORGANISM = dict()
@@ -50,6 +49,12 @@ logging.getLogger('elasticsearch').setLevel(logging.WARNING)
 )
 # TODO check single or double quotes
 def main(es_hosts, es_index_prefix):
+    """
+
+    :param es_hosts:
+    :param es_index_prefix:
+    :return:
+    """
     global ETAGS_CACHE
     today = date.today().strftime('%Y-%m-%d')
     try:
@@ -71,21 +76,6 @@ def main(es_hosts, es_index_prefix):
     ruleset_version = get_ruleset_version()
     es = Elasticsearch(hosts)
 
-#   pool of specimen
-#    accessions = ['SAMEA3540915', 'SAMEA3540914', 'SAMEA3540913', 'SAMEA3540912', 'SAMEA3540911', 'SAMEA3303533']
-#   cell lines
-#    accessions = ['SAMEA5428995', 'SAMEA3540916']
-#   cell culture
-#    accessions = ['SAMEA5428985']
-#    for acc in accessions:
-#        tmp = fetch_single_record(acc)
-#        CELL_CULTURE[acc] = tmp
-#        CELL_LINE[acc] = tmp
-#    pprint.pprint(CELL_CULTURE)
-#    process_pool_specimen(es, es_index_prefix)
-#    process_cell_lines(es, es_index_prefix)
-#    process_cell_cultures(es, es_index_prefix)
-#    exit()
     logger.info(f"The program starts at {datetime.datetime.now()}")
     logger.info(f"Current ruleset version is {ruleset_version}")
 
@@ -152,10 +142,8 @@ def get_existing_etags(host: str, es_index_prefix) -> Dict[str, str]:
     Function gets etags from organisms and specimens in elastic search
     :return: list of etags
     """
-    # url_schema = 'http://wp-np3-e2.ebi.ac.uk:9200/{}/_search?_source=biosampleId,etag&sort=biosampleId&size=100000'
     if not host.endswith(":9200"):
         host = host + ":9200"
-#    url_schema = f'http://{host}/{{}/_search?_source=biosampleId,etag&sort=biosampleId&size=100000'
     results = dict()
     for item in ("organism", "specimen"):
         url = f'http://{host}/{es_index_prefix}{item}/_search?_source=biosampleId,etag&sort=biosampleId&size=100000'
@@ -179,8 +167,6 @@ def fetch_records_by_project_via_etag(etags):
                 INDEXED_SAMPLES[data[0]] = 1
                 continue
             else:
-#                logger.info(data[0] + " cache: " + data[1] + " ES: "+etags[data[0]])
-#                exit()
                 single = fetch_single_record(data[0])
                 single['etag'] = data[1]
                 if not check_is_faang(single):
@@ -217,11 +203,7 @@ def fetch_records_by_project_via_etag(etags):
         sys.exit(0)
     for k, v in counts.items():
         logger.info(f"There are {v} {k} records needing update")
-    # keep for the debug purpose
-    if TOTAL_RECORDS_TO_UPDATE <= 20:
-        for item in ORGANISM, SPECIMEN_FROM_ORGANISM, CELL_SPECIMEN, CELL_CULTURE, CELL_LINE, POOL_SPECIMEN:
-            for k in item:
-                logger.info(f"To be updated in {item}: {k}")
+
     logger.info(f"The sum is {TOTAL_RECORDS_TO_UPDATE}")
     logger.info(f"Finish comparing etags and retrieving necessary records at {datetime.datetime.now()}")
 
@@ -866,8 +848,6 @@ def parse_relationship(item):
     if 'relationships' not in item:
         return results
     accession = item['accession']
-#    if accession == 'SAMEA103887551':
-#       logger.info(item['relationships'])
     for relation in item['relationships']:
         relationship_type = relation['type']
         # non-directional
@@ -894,9 +874,6 @@ def parse_relationship(item):
                 results[to_lower_camel_case(relationship_type)].setdefault(target, 0)
                 results[relationship_type][target] += 1
                 results[to_lower_camel_case(relationship_type)][target] += 1
-#    if accession == 'SAMEA103887551':
-#        logger.info(str(results))
-#        exit()
     return results
 
 
@@ -1005,7 +982,3 @@ def clean_elasticsearch(index, es):
 
 if __name__ == "__main__":
     main()
-    # for k, v in INDEXED_SAMPLES.items():
-    #     if v == 0:
-    #         print(k)
-    # print(INDEXED_SAMPLES)
