@@ -32,9 +32,11 @@ scripts/*.log
 scripts/*.txt
 scripts/*.xlsx
 scripts/*.json
-
+# legacy perl scripts
+scripts/legacy_perl/*
 # PyCharm files
 .idea/
-
+# python middle file
+scripts/__pycache__/*
 # initialize ES commands
 elasticsearch/initialze_test_es_server.sh
