@@ -40,5 +40,5 @@ if __name__ == "__main__":
     main()
     today = date.today().strftime('%Y-%m-%d')
     with open("etag_list_{}.txt".format(today), 'w') as w:
-        for item in ETAG:
+        for item in sorted(ETAG):
             w.write(item + "\n")

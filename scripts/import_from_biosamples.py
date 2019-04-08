@@ -1,15 +1,13 @@
 from elasticsearch import Elasticsearch
 import datetime
-import requests
-import sys
-import re
-import json
 from validate_sample_record import *
 from get_all_etags import fetch_biosample_ids
 from columns import *
 from misc import *
 from typing import Dict
 from datetime import date
+import click
+import logging
 
 INDEXED_SAMPLES = dict()
 ORGANISM = dict()
@@ -27,49 +25,93 @@ STANDARDS = {
     'FAANG Legacy Samples': 'Legacy'
 }
 TOTAL_RECORDS_TO_UPDATE = 0
+ETAGS_CACHE = dict()
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(format='%(asctime)s\t%(levelname)s:\t%(name)s line %(lineno)s\t%(message)s', level=logging.INFO)
+# suppress logging information from elasticsearch
+logging.getLogger('elasticsearch').setLevel(logging.WARNING)
 
 
+@click.command()
+@click.option(
+    '--es_hosts',
+    default="wp-np3-e2;wp-np3-e3",
+    help='Specify the Elastic Search server(s) (port could be included), e.g. wp-np3-e2:9200. '
+         'If multiple servers are provided, please use ";" to separate them, e.g. "wp-np3-e2;wp-np3-e3"'
+)
+@click.option(
+    '--es_index_prefix',
+    default="",
+    help='Specify the Elastic Search index prefix, e.g. '
+         'faang_build_1_ then the indices will be faang_build_1_organism etc.'
+         'If not provided, then work on the aliases'
+)
 # TODO check single or double quotes
-def main():
+def main(es_hosts, es_index_prefix):
+    """
+
+    :param es_hosts:
+    :param es_index_prefix:
+    :return:
+    """
+    global ETAGS_CACHE
+    today = date.today().strftime('%Y-%m-%d')
+    try:
+        with open("etag_list_{}.txt".format(today), 'r') as f:
+            for line in f:
+                line = line.rstrip()
+                data = line.split("\t")
+                ETAGS_CACHE[data[0]] = data[1]
+    except FileNotFoundError:
+        logger.error(f"Could not find the local etag cache file etag_list_{today}.txt")
+        sys.exit(1)
+
+    hosts = es_hosts.split(";")
+    logger.info("Command line parameters")
+    logger.info("Hosts: "+str(hosts))
+    if es_index_prefix:
+        logger.info("Index_prefix:"+es_index_prefix)
+
     ruleset_version = get_ruleset_version()
-    es = Elasticsearch(['wp-np3-e2', 'wp-np3-e3'])
+    es = Elasticsearch(hosts)
 
-    print(f"The program starts at {datetime.datetime.now()}")
-    print(f"Current ruleset version is {ruleset_version}")
+    logger.info(f"The program starts at {datetime.datetime.now()}")
+    logger.info(f"Current ruleset version is {ruleset_version}")
 
-    etags: Dict[str, str] = get_existing_etags()
+    etags_es: Dict[str, str] = get_existing_etags(hosts[0], es_index_prefix)
 
-    print(f"There are {len(etags)} records with etags in ES")
-    print(f"Finish retrieving existing etags at {datetime.datetime.now()}")
-    print("Importing FAANG data")
+    logger.info(f"There are {len(etags_es)} records with etags_es in ES")
+    logger.info(f"Finish retrieving existing etags_es at {datetime.datetime.now()}")
+    logger.info("Importing FAANG data")
     # when more than half biosample records not already stored in ES, take the batch import route
     # otherwise compare each record's etag to decide
-    if len(etags) == 0 or len(fetch_biosample_ids())/len(etags) > 2:
+    if len(etags_es) == 0 or len(fetch_biosample_ids())/len(etags_es) > 2:
         fetch_records_by_project()
     else:
-        fetch_records_by_project_via_etag(etags)
+        fetch_records_by_project_via_etag(etags_es)
 
     if TOTAL_RECORDS_TO_UPDATE == 0:
-        print("Did not obtain any records from BioSamples")
+        logger.critical("Did not obtain any records from BioSamples")
         sys.exit(0)
 
-    print(f"Indexing organism starts at {datetime.datetime.now()}")
-    process_organisms(es)
+    logger.info(f"Indexing organism starts at {datetime.datetime.now()}")
+    process_organisms(es, es_index_prefix)
 
-    print(f"Indexing specimen from organism starts at {datetime.datetime.now()}")
-    process_specimens(es)
+    logger.info(f"Indexing specimen from organism starts at {datetime.datetime.now()}")
+    process_specimens(es, es_index_prefix)
 
-    print(f"Indexing cell specimens starts at {datetime.datetime.now()}")
-    process_cell_specimens(es)
+    logger.info(f"Indexing cell specimens starts at {datetime.datetime.now()}")
+    process_cell_specimens(es, es_index_prefix)
 
-    print(f"Indexing cell culture starts at {datetime.datetime.now()}")
-    process_cell_cultures(es)
+    logger.info(f"Indexing cell culture starts at {datetime.datetime.now()}")
+    process_cell_cultures(es, es_index_prefix)
 
-    print(f"Indexing pool of specimen starts at {datetime.datetime.now()}")
-    process_pool_specimen(es)
+    logger.info(f"Indexing pool of specimen starts at {datetime.datetime.now()}")
+    process_pool_specimen(es, es_index_prefix)
 
-    print(f"Indexing cell line starts at {datetime.datetime.now()}")
-    process_cell_lines(es)
+    logger.info(f"Indexing cell line starts at {datetime.datetime.now()}")
+    process_cell_lines(es, es_index_prefix)
 
     all_organism_list = list(ORGANISM.keys())
     organism_referred_list = list(ORGANISM_REFERRED_BY_SPECIMEN.keys())
@@ -89,21 +131,22 @@ def main():
     for acc in union:
         # TODO add logging
         if union[acc]['count'] == 1:
-            print(f"{acc} only in source {union[acc]['source']}")
-    clean_elasticsearch('specimen', es)
-    clean_elasticsearch('organism', es)
-    print(f"Program ends at {datetime.datetime.now()}")
+            logger.warning(f"{acc} only in source {union[acc]['source']}")
+    clean_elasticsearch(f'{es_index_prefix}specimen', es)
+    clean_elasticsearch(f'{es_index_prefix}organism', es)
+    logger.info(f"Program ends at {datetime.datetime.now()}")
 
 
-def get_existing_etags()->Dict[str, str]:
+def get_existing_etags(host: str, es_index_prefix) -> Dict[str, str]:
     """
     Function gets etags from organisms and specimens in elastic search
     :return: list of etags
     """
-    url_schema = 'http://wp-np3-e2.ebi.ac.uk:9200/{}/_search?_source=biosampleId,etag&sort=biosampleId&size=100000'
+    if not host.endswith(":9200"):
+        host = host + ":9200"
     results = dict()
     for item in ("organism", "specimen"):
-        url = url_schema.format(item)
+        url = f'http://{host}/{es_index_prefix}{item}/_search?_source=biosampleId,etag&sort=biosampleId&size=100000'
         response = requests.get(url).json()
         for result in response['hits']['hits']:
             if 'etag' in result['_source']:
@@ -113,7 +156,7 @@ def get_existing_etags()->Dict[str, str]:
 
 def fetch_records_by_project_via_etag(etags):
     global TOTAL_RECORDS_TO_UPDATE
-    hash = dict()
+    counts = dict()
     today = date.today().strftime('%Y-%m-%d')
     with open("etag_list_{}.txt".format(today), 'r') as f:
         for line in f:
@@ -128,49 +171,61 @@ def fetch_records_by_project_via_etag(etags):
                 single['etag'] = data[1]
                 if not check_is_faang(single):
                     continue
-                material =single['characteristics']['Material'][0]['text']
+                material = single['characteristics']['Material'][0]['text']
                 if material == 'organism':
                     ORGANISM[data[0]] = single
+                    # this may seem to be duplicate, however necessary: any unrecognized material type will be stored
+                    # in counts, but will not be loaded into ES and need to inform FAANG DCC
+                    TOTAL_RECORDS_TO_UPDATE += 1
                 elif material == 'specimen from organism':
                     SPECIMEN_FROM_ORGANISM[data[0]] = single
+                    TOTAL_RECORDS_TO_UPDATE += 1
                 elif material == 'cell specimen':
                     CELL_SPECIMEN[data[0]] = single
+                    TOTAL_RECORDS_TO_UPDATE += 1
                 elif material == 'cell culture':
                     CELL_CULTURE[data[0]] = single
+                    TOTAL_RECORDS_TO_UPDATE += 1
                 elif material == 'cell line':
                     CELL_LINE[data[0]] = single
+                    TOTAL_RECORDS_TO_UPDATE += 1
                 elif material == 'pool of specimens':
                     POOL_SPECIMEN[data[0]] = single
-                hash.setdefault(material, 0)
-                hash[material] += 1
-    for k, v in hash.items():
-        TOTAL_RECORDS_TO_UPDATE += v
-        print(f"There are {v} {k} records needing update")
+                    TOTAL_RECORDS_TO_UPDATE += 1
+                counts.setdefault(material, 0)
+                counts[material] += 1
     if TOTAL_RECORDS_TO_UPDATE == 0:
-        print("All records have not been modified since last importation.")
-        print(f"Exit program at {datetime.datetime.now()}")
+        logger.info("All records have not been modified since last importation.")
+        logger.info(f"Exit program at {datetime.datetime.now()}")
+        if counts:
+            logger.warning("Some records with wrong material type have been found")
+            logger.warning(counts)
         sys.exit(0)
-    if TOTAL_RECORDS_TO_UPDATE <=20:
-        for item in ORGANISM, SPECIMEN_FROM_ORGANISM, CELL_SPECIMEN, CELL_CULTURE, CELL_LINE, POOL_SPECIMEN:
-            for k in item:
-                print(f"To be updated: {k}")
-    print(f"The sum is {TOTAL_RECORDS_TO_UPDATE}")
-    print(f"Finish comparing etags and retrieving necessary records at {datetime.datetime.now()}")
+    for k, v in counts.items():
+        logger.info(f"There are {v} {k} records needing update")
+
+    logger.info(f"The sum is {TOTAL_RECORDS_TO_UPDATE}")
+    logger.info(f"Finish comparing etags and retrieving necessary records at {datetime.datetime.now()}")
 
 
 def fetch_records_by_project():
     global TOTAL_RECORDS_TO_UPDATE
     biosamples = list()
-    hash = dict()
+    counts = dict()
+
     url = 'https://www.ebi.ac.uk/biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG'
+    logger.info("Size of local etag cache: "+str(len(ETAGS_CACHE)))
     while url:
         response = requests.get(url).json()
+        for biosample in response['_embedded']['samples']:
+            biosample = deal_with_decimal_degrees(biosample)
+            biosample['etag'] = ETAGS_CACHE[biosample['accession']]
+            biosamples.append(biosample)
         if 'next' in response['_links']:
             url = response['_links']['next']['href']
-            for biosample in response['_embedded']['samples']:
-                biosamples.append(deal_with_decimal_degrees(biosample))
         else:
             url = ''
+
     for i, biosample in enumerate(biosamples):
         if not check_is_faang(biosample):
             continue
@@ -187,23 +242,25 @@ def fetch_records_by_project():
             CELL_LINE[biosample['accession']] = biosample
         elif material == 'pool of specimens':
             POOL_SPECIMEN[biosample['accession']] = biosample
-        hash.setdefault(material, 0)
-        hash[material] += 1
-    for k, v in hash.items():
+        counts.setdefault(material, 0)
+        counts[material] += 1
+    for k, v in counts.items():
         TOTAL_RECORDS_TO_UPDATE += v
-        print(f"There are {v} {k} records needing update")
-    print(f"The sum is {TOTAL_RECORDS_TO_UPDATE}")
+        logger.info(f"There are {v} {k} records needing update")
+    logger.info(f"The sum is {TOTAL_RECORDS_TO_UPDATE}")
 
 
-def fetch_single_record(biosampleId):
+def fetch_single_record(biosample_id):
     """
     Function returns json file of single record from biosamples
-    :param biosampleId: accession id or record to return
+    :param biosample_id: accession id or record to return
     :return: json file of sample with biosampleId
     """
     url_schema = 'https://www.ebi.ac.uk/biosamples/samples/{}.json?curationdomain=self.FAANG_DCC_curation'
-    url = url_schema.format(biosampleId)
-    return requests.get(url).json()
+    url = url_schema.format(biosample_id)
+    result = requests.get(url).json()
+    result['etag'] = ETAGS_CACHE[biosample_id]
+    return result
 
 
 def check_is_faang(item):
@@ -244,7 +301,7 @@ def deal_with_decimal_degrees(item):
 
 # all functions beginning with "process_" need to refer to the ruleset at
 # https://github.com/FAANG/faang-metadata/blob/master/rulesets/faang_samples.metadata_rules.json
-def process_organisms(es):
+def process_organisms(es, es_index_prefix):
     """
     Function prepares json file that should be inserted into elasticsearch
     :return: dictionary with data that should be inserted into elasticsearch
@@ -295,9 +352,10 @@ def process_organisms(es):
         doc_for_update = populate_basic_biosample_info(doc_for_update, item)
         doc_for_update = extract_custom_field(doc_for_update, item, 'organism')
         doc_for_update['healthStatus'] = get_health_status(item)
-        relationships = parse_relationship(item)
+        relationships: Dict = parse_relationship(item)
         if 'childOf' in relationships:
-            doc_for_update['childOf'] = relationships.keys()
+            # after python 3.3.1 dict.keys() return dict_keys rather than list, so wrapped with list() function
+            doc_for_update['childOf'] = list(relationships['childOf'].keys())
         doc_for_update['alternativeId'] = get_alternative_id(relationships)
         add_organism_info_for_specimen(accession, item)
         if 'strain' in item['characteristics']:
@@ -311,10 +369,10 @@ def process_organisms(es):
             }
 
         converted[accession] = doc_for_update
-    insert_into_es(converted, 'organism', es)
+    insert_into_es(converted, es_index_prefix, 'organism', es)
 
 
-def process_specimens(es):
+def process_specimens(es, es_index_prefix):
     converted = dict()
     for accession, item in SPECIMEN_FROM_ORGANISM.items():
         doc_for_update = dict()
@@ -382,7 +440,8 @@ def process_specimens(es):
                 doc_for_update['specimenFromOrganism']['specimenPictureUrl'].append(picture_url['text'])
         doc_for_update['specimenFromOrganism'].setdefault('healthStatusAtCollection', [])
         if 'health status at collection' in item['characteristics']:
-            # TODO check with get_health_status function, no need to have codes in both places which could be confusing
+            # TODO to Alexey:
+            #  check with get_health_status function, no need to have codes in both places which could be confusing
             for health_status in item['characteristics']['health status at collection']:
                 doc_for_update['specimenFromOrganism']['healthStatusAtCollection'].append(
                     {
@@ -398,10 +457,10 @@ def process_specimens(es):
         ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
         ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
         converted[accession] = doc_for_update
-    insert_into_es(converted, 'specimen', es)
+    insert_into_es(converted, es_index_prefix, 'specimen', es)
 
 
-def process_cell_specimens(es):
+def process_cell_specimens(es, es_index_prefix):
     converted = dict()
     for accession, item in CELL_SPECIMEN.items():
         doc_for_update = dict()
@@ -441,10 +500,10 @@ def process_cell_specimens(es):
         ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
         ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
         converted[accession] = doc_for_update
-    insert_into_es(converted, 'specimen', es)
+    insert_into_es(converted, es_index_prefix, 'specimen', es)
 
 
-def process_cell_cultures(es):
+def process_cell_cultures(es, es_index_prefix):
     converted = dict()
     for accession, item in CELL_CULTURE.items():
         doc_for_update = dict()
@@ -456,10 +515,13 @@ def process_cell_cultures(es):
         if derived_from_accession in SPECIMEN_ORGANISM_RELATIONSHIP:
             organism_accession = SPECIMEN_ORGANISM_RELATIONSHIP[derived_from_accession]
         else:
-            # TODO bug needs to be fixed
             tmp = parse_relationship(fetch_single_record(derived_from_accession))
             if 'derivedFrom' in tmp:
                 organism_accession = list(tmp['derivedFrom'].keys())[0]
+                candidate = fetch_single_record(organism_accession)
+                if(candidate['characteristics']['Material'][0]['text'] == 'specimen from organism'):
+                    tmp2 = parse_relationship(candidate)
+                    organism_accession = list(tmp2['derivedFrom'].keys())[0]
         SPECIMEN_ORGANISM_RELATIONSHIP[accession] = organism_accession
         doc_for_update['derivedFrom'] = derived_from_accession
         doc_for_update.setdefault('cellCulture', {})
@@ -490,33 +552,41 @@ def process_cell_cultures(es):
         ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
         ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
         converted[accession] = doc_for_update
-    insert_into_es(converted, 'specimen', es)
+    insert_into_es(converted, es_index_prefix, 'specimen', es)
 
 
-def process_pool_specimen(es):
+def process_pool_specimen(es, es_index_prefix):
+    global SPECIMEN_FROM_ORGANISM
+    global SPECIMEN_ORGANISM_RELATIONSHIP
     converted = dict()
     for accession, item in POOL_SPECIMEN.items():
         doc_for_update = dict()
         relationships = parse_relationship(item)
         url = check_existence(item, 'pool creation protocol', 'text')
         filename = get_filename_from_url(url, accession)
+        # noinspection PyTypeChecker
         doc_for_update.setdefault('poolOfSpecimens', {})
+        # noinspection PyTypeChecker
         doc_for_update['poolOfSpecimens']['poolCreationDate'] = {
             'text': check_existence(item, 'pool creation date', 'text'),
             'unit': check_existence(item, 'pool creation date', 'unit')
         }
+        # noinspection PyTypeChecker
         doc_for_update['poolOfSpecimens']['poolCreationProtocol'] = {
-            'ulr': url,
+            'url': url,
             'filename': filename
         }
+        # noinspection PyTypeChecker
         doc_for_update['poolOfSpecimens']['specimenVolume'] = {
             'text': check_existence(item, 'specimen volume', 'text'),
             'unit': check_existence(item, 'specimen volume', 'unit')
         }
+        # noinspection PyTypeChecker
         doc_for_update['poolOfSpecimens']['specimenSize'] = {
             'text': check_existence(item, 'specimen size', 'text'),
             'unit': check_existence(item, 'specimen size', 'unit')
         }
+        # noinspection PyTypeChecker
         doc_for_update['poolOfSpecimens']['specimenWeight'] = {
             'text': check_existence(item, 'specimen weight', 'text'),
             'unit': check_existence(item, 'specimen weight', 'unit')
@@ -534,54 +604,62 @@ def process_pool_specimen(es):
             derived_from = list(relationships['derivedFrom'].keys())
             doc_for_update['derivedFrom'] = derived_from
             for acc in derived_from:
-                if acc in SPECIMEN_ORGANISM_RELATIONSHIP:
-                    organism_accession = SPECIMEN_ORGANISM_RELATIONSHIP[acc]
-                    ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
-                    ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
-                    if organism_accession not in ORGANISM_FOR_SPECIMEN:
-                        add_organism_info_for_specimen(organism_accession, fetch_single_record(organism_accession))
-                    tmp['organism'] = {
-                        ORGANISM_FOR_SPECIMEN[organism_accession] : {
-                            'organism': {
-                                'text': ORGANISM_FOR_SPECIMEN[organism_accession]['organism']['ontologyTerms']
-                            }
+                if acc not in SPECIMEN_FROM_ORGANISM:
+                    tmp_specimen = fetch_single_record(acc)
+                    SPECIMEN_FROM_ORGANISM[acc] = tmp_specimen
+                if acc not in SPECIMEN_ORGANISM_RELATIONSHIP:
+                    item = SPECIMEN_FROM_ORGANISM[acc]
+                    relationships = parse_relationship(item)
+                    if 'derivedFrom' in relationships:
+                        organism_accession = list(relationships['derivedFrom'].keys())[0]
+                        SPECIMEN_ORGANISM_RELATIONSHIP[acc] = organism_accession
+                organism_accession = SPECIMEN_ORGANISM_RELATIONSHIP[acc]
+                ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
+                ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
+                if organism_accession not in ORGANISM_FOR_SPECIMEN:
+                    add_organism_info_for_specimen(organism_accession, fetch_single_record(organism_accession))
+                tmp['organism'] = {
+                    organism_accession: {
+                        'organism': {
+                            'text': ORGANISM_FOR_SPECIMEN[organism_accession]['organism']['text'],
+                            'ontologyTerms': ORGANISM_FOR_SPECIMEN[organism_accession]['organism']['ontologyTerms']
                         }
                     }
-                    tmp['sex'] = {
-                        ORGANISM_FOR_SPECIMEN[organism_accession]: {
-                            'sex': {
-                                'text': ORGANISM_FOR_SPECIMEN[organism_accession]['sex']['ontologyTerms']
-                            }
+                }
+                tmp['sex'] = {
+                    organism_accession: {
+                        'sex': {
+                            'text': ORGANISM_FOR_SPECIMEN[organism_accession]['sex']['text'],
+                            'ontologyTerms': ORGANISM_FOR_SPECIMEN[organism_accession]['sex']['ontologyTerms']
                         }
                     }
-                    tmp['breed'] = {
-                        ORGANISM_FOR_SPECIMEN[organism_accession]: {
-                            'breed': {
-                                'text': ORGANISM_FOR_SPECIMEN[organism_accession]['breed']['ontologyTerms']
-                            }
+                }
+                tmp['breed'] = {
+                    organism_accession: {
+                        'breed': {
+                            'text': ORGANISM_FOR_SPECIMEN[organism_accession]['breed']['text'],
+                            'ontologyTerms': ORGANISM_FOR_SPECIMEN[organism_accession]['breed']['ontologyTerms']
                         }
                     }
-                else:
-                    # TODO error logging
-                    # TODO bug fix: etag could raise the case that only pool of specimen has been updated,
-                    #  e.g. missing a specimen in the first submission, so need to retrieve individually
+                }
 
-                    print(f"No organism found for specimen {acc}")
         doc_for_update['alternativeId'] = get_alternative_id(relationships)
-        for type in ['organism', 'sex', 'breed']:
-            values = list(tmp[type].keys())
+        doc_for_update.setdefault('organism', {})
+        for field_name in ['organism', 'sex', 'breed']:
+            values = list(tmp[field_name].keys())
             if len(values) == 1:
-                doc_for_update['organism'].setdefault(type, {})
-                doc_for_update['organism'][type]['text'] = values[0]
-                doc_for_update['organism'][type]['ontologyTerms'] = tmp[type][values[0]]
+                doc_for_update['organism'].setdefault(field_name, {})
+                doc_for_update['organism'][field_name]['text'] = tmp[field_name][values[0]][field_name]['text']
+                doc_for_update['organism'][field_name]['ontologyTerms'] = \
+                    tmp[field_name][values[0]][field_name]['ontologyTerms']
             else:
-                doc_for_update['organism'].setdefault(type, {})
-                doc_for_update['organism'][type]['text'] = ";".join(values)
+                doc_for_update['organism'].setdefault(field_name, {})
+                doc_for_update['organism'][field_name]['text'] = ";".join(values)
         converted[accession] = doc_for_update
-    insert_into_es(converted, 'specimen', es)
+    insert_into_es(converted, es_index_prefix, 'specimen', es)
 
 
-def process_cell_lines(es):
+def process_cell_lines(es, es_index_prefix):
     converted = dict()
     for accession, item in CELL_LINE.items():
         doc_for_update = dict()
@@ -590,7 +668,7 @@ def process_cell_lines(es):
         if url:
             filename = get_filename_from_url(url, accession)
         else:
-            # TODO why not just get_filename_from_url as others
+            # TODO To Alexey: why not just get_filename_from_url as others
             filename = None
         doc_for_update.setdefault('cellLine', {})
         doc_for_update['cellLine']['organism'] = {
@@ -638,10 +716,10 @@ def process_cell_lines(es):
             doc_for_update['derivedFrom'] = relationships['derivedFrom'][0]
         doc_for_update['alternativeId'] = get_alternative_id(relationships)
         doc_for_update.setdefault('organism', {})
-        for type in ['organism', 'sex', 'breed']:
-            doc_for_update['organism'][type] = doc_for_update['cellLine'][type]
+        for field_name in ['organism', 'sex', 'breed']:
+            doc_for_update['organism'][field_name] = doc_for_update['cellLine'][field_name]
         converted[accession] = doc_for_update
-    insert_into_es(converted, 'specimen', es)
+    insert_into_es(converted, es_index_prefix, 'specimen', es)
 
 
 def check_existence(item, field_name, subfield):
@@ -663,7 +741,7 @@ def check_existence(item, field_name, subfield):
         return None
 
 
-def populate_basic_biosample_info(doc, item):
+def populate_basic_biosample_info(doc: Dict, item: Dict):
     """
     This function add common field to document, applies to both animal and samples
     :param doc: ES document to update with common fields
@@ -673,7 +751,7 @@ def populate_basic_biosample_info(doc, item):
     doc['name'] = item['name']
     doc['biosampleId'] = item['accession']
     doc['etag'] = item['etag']
-    doc['id_number'] = item['accession'][5:] # remove SAMEA
+    doc['id_number'] = item['accession'][5:]  # remove SAMEA
     doc['description'] = check_existence(item, 'description', 'text')
     doc['releaseDate'] = parse_date(item['release'])
     doc['updateDate'] = parse_date(item['update'])
@@ -685,6 +763,9 @@ def populate_basic_biosample_info(doc, item):
     doc['availability'] = check_existence(item, 'availability', 'text')
     for organization in item['organization']:
         # TODO logging to error if name or role or url do not exist
+        organization.setdefault('Name', None)
+        organization.setdefault('Role', None)
+        organization.setdefault('URL', None)
         doc.setdefault('organization', [])
         doc['organization'].append(
             {
@@ -749,8 +830,8 @@ def get_health_status(item):
         key = 'health status at collection'
     else:
         # TODO logging
-        print("Health status was not provided")
-        print(item['characteristics'])
+        logger.debug("Health status was not provided")
+        # print(item['characteristics'])
         return health_status
     for status in item['characteristics'][key]:
         health_status.append(
@@ -768,11 +849,11 @@ def parse_relationship(item):
         return results
     accession = item['accession']
     for relation in item['relationships']:
-        relationship_type = relation['relationship_type']
-        results.setdefault(relationship_type, {})
-        results.setdefault(to_lower_camel_case(relationship_type), {})
+        relationship_type = relation['type']
         # non-directional
         if relationship_type == 'EBI equivalent BioSample' or relationship_type == 'same as':
+            results.setdefault(relationship_type, {})
+            results.setdefault(to_lower_camel_case(relationship_type), {})
             target = relation['target'] if relation['source'] == item['accession'] else relation['source']
             results[relationship_type].setdefault(target, 0)
             results[to_lower_camel_case(relationship_type)].setdefault(target, 0)
@@ -786,6 +867,8 @@ def parse_relationship(item):
         # 2 for specimen only derived from will be kept
         else:
             if relation['target'] != accession:
+                results.setdefault(relationship_type, {})
+                results.setdefault(to_lower_camel_case(relationship_type), {})
                 target = relation['target']
                 results[relationship_type].setdefault(target, 0)
                 results[to_lower_camel_case(relationship_type)].setdefault(target, 0)
@@ -833,23 +916,24 @@ def add_organism_info_for_specimen(accession, item):
     ORGANISM_FOR_SPECIMEN[accession]['healthStatus'] = get_health_status(item)
 
 
-def parse_date(date):
+def parse_date(date_str):
     """
     This function parses date
-    :param date: date to parse
+    :param date_str: date to parse
     :return: parsed date
     """
     # TODO logging to error if date doesn't exist
-    parsed_date = re.search("(\d+-\d+-\d+)T", date)
+    parsed_date = re.search(r"(\d+-\d+-\d+)T", date_str)
     if parsed_date:
-        date = parsed_date.groups()[0]
-    return date
+        date_str = parsed_date.groups()[0]
+    return date_str
 
 
-def insert_into_es(data, my_type, es):
+def insert_into_es(data, index_prefix, my_type, es):
     """
     This function will update current index with new data
     :param data: data to update elasticsearch with
+    :param index_prefix: combined with my_type to generate the actual index value to operate on
     :param my_type: name of index to update
     :param es: elasticsearch object
     :return: updates index or return error it it was impossible ot sample didn't go through validation
@@ -861,37 +945,40 @@ def insert_into_es(data, my_type, es):
         for ruleset in RULESETS:
             if validation_results[ruleset]['detail'][biosample_id]['status'] == 'error':
                 # TODO logging to error
-                print(f"{biosample_id}\t{validation_results[ruleset]['detail'][biosample_id]['type']}\t{'error'}\t"
-                      f"{validation_results[ruleset]['detail'][biosample_id]['message']}")
+                logger.error(f"{biosample_id}\t{validation_results[ruleset]['detail'][biosample_id]['type']}\t"
+                             f"{'error'}\t{validation_results[ruleset]['detail'][biosample_id]['message']}")
             else:
                 es_doc['standardMet'] = STANDARDS[ruleset]
                 break
-        body = {
-            "doc": json.dumps(es_doc)
-        }
+        body = json.dumps(es_doc)
+
         try:
-            es.update(index=my_type, doc_type="_doc", id=biosample_id, body=body)
-        except:
+            existing_flag = es.exists(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id)
+            if existing_flag:
+                es.delete(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id)
+            es.create(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id, body=body)
+        except Exception as e:
             # TODO logging error
-            print("Error when try to update elasticsearch index")
+            logger.error("Error when try to index into elasticsearch: "+str(e.args))
 
 
-def clean_elasticsearch(my_type, es):
+def clean_elasticsearch(index, es):
     """
     This function will delete all records that do not exist in biosamples anymore
-    :param my_type: type of index to check
+    :param index: name of index to check
     :param es: elasticsearch object
     """
     # TODO only remove records with FAANG or FAANG Legacy standard, not basic
-    data = es.search(index=my_type, size=100000, _source="_id")
+    data = es.search(index=index, size=100000, _source="_id,standardMet")
     for hit in data['hits']['hits']:
         if hit['_id'] not in INDEXED_SAMPLES:
-            es.delete(index=my_type, doc_type='_doc', id=hit['_id'])
+            # Legacy (basic) data imported in import_from_ena_legacy, not here, so not cleaned
+            to_be_cleaned = True
+            if 'standardMet' in hit['_source'] and hit['_source']['standardMet'] == 'Legacy (basic)':
+                to_be_cleaned = False
+            if to_be_cleaned:
+                es.delete(index=index, doc_type='_doc', id=hit['_id'])
 
 
 if __name__ == "__main__":
     main()
-    # for k, v in INDEXED_SAMPLES.items():
-    #     if v == 0:
-    #         print(k)
-    # print(INDEXED_SAMPLES)
