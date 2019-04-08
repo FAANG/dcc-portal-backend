@@ -8,6 +8,8 @@ from typing import Dict
 from datetime import date
 import click
 import logging
+import os
+import os.path
 
 INDEXED_SAMPLES = dict()
 ORGANISM = dict()
@@ -57,8 +59,12 @@ def main(es_hosts, es_index_prefix):
     """
     global ETAGS_CACHE
     today = date.today().strftime('%Y-%m-%d')
+    cache_filename = f"etag_list_{today}.txt"
+    if not os.path.isfile(cache_filename):
+        logger.info("Could not find today etag cache file. Generating")
+        os.system("python get_all_etags.py")
     try:
-        with open("etag_list_{}.txt".format(today), 'r') as f:
+        with open(cache_filename, 'r') as f:
             for line in f:
                 line = line.rstrip()
                 data = line.split("\t")
