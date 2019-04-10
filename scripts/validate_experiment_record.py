@@ -15,18 +15,17 @@ def validate_total_experiment_records(target_dict, rulesets):
         part = list()
         for j in range(portion_size):
             part.append(target_dict[data.pop()])
-        total_results = get_validation_results(part, rulesets)
+        total_results = get_validation_results(total_results, part, rulesets)
 
     # Rest of the samples
     part = list()
     for biosample_id in data:
         part.append(target_dict[biosample_id])
-    total_results = get_validation_results(part, rulesets)
+    total_results = get_validation_results(total_results, part, rulesets)
     return total_results
 
 
-def get_validation_results(part, rulesets):
-    total_results = dict()
+def get_validation_results(total_results, part, rulesets):
     for ruleset in rulesets:
         validation_results = validate_record(part, ruleset)
         total_results = merge_results(total_results, validation_results, ruleset)

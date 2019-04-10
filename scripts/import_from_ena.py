@@ -419,7 +419,6 @@ def main(es_hosts, es_index_prefix):
                     }
                 experiments[exp_id] = exp_es
 
-            print(f"Passed to index: {exp_id}")
             # if exp_id not in experiments:
             # dataset (study) has mutliple experiments/runs/files/specimens_list so collection information into datasets
             # and process it after iteration of all files
@@ -505,17 +504,16 @@ def main(es_hosts, es_index_prefix):
                 exp_es['standardMet'] = STANDARDS[ruleset]
                 if exp_es['standardMet'] == 'FAANG':
                     exp_es['versionLastStandardMet'] = ruleset_version
-                print(f"Experiment {exp_id} with standard {exp_es['standardMet']}")
                 body = json.dumps(exp_es)
-                common_functions.insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
-                # try:
-                #     existing_flag = es.exists(index=f'{es_index_prefix}experiment', doc_type="_doc", id=exp_id)
-                #     if existing_flag:
-                #         es.delete(index=f'{es_index_prefix}experiment', doc_type="_doc", id=exp_id)
-                #     es.create(index=f'{es_index_prefix}experiment', doc_type="_doc", id=exp_id, body=body)
-                # except Exception as e:
-                #     # TODO logging error
-                #     logger.error("Error when try to index experiment into elasticsearch: " + str(e.args))
+#                common_functions.insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
+                try:
+                    existing_flag = es.exists(index=f'{es_index_prefix}experiment', doc_type="_doc", id=exp_id)
+                    if existing_flag:
+                        es.delete(index=f'{es_index_prefix}experiment', doc_type="_doc", id=exp_id)
+                    es.create(index=f'{es_index_prefix}experiment', doc_type="_doc", id=exp_id, body=body)
+                except Exception as e:
+                    # TODO logging error
+                    logger.error("Error when try to index experiment into elasticsearch: " + str(e.args))
 
                 # index into ES so break the loop
                 break
@@ -665,7 +663,6 @@ def get_known_errors():
     return known_errors
 
 
-# TODO to Alexey what is the difference between Dict.get() and this function
 def check_existsence(data_to_check, field_to_check):
     if field_to_check in data_to_check:
         if len(data_to_check[field_to_check]) == 0:
