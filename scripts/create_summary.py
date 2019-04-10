@@ -130,7 +130,33 @@ class CreateSummary:
         self.es_instance.update(index="summary_specimen", doc_type="_doc", id="summary_specimen", body=body)
 
     def create_dataset_summary(self):
-        pass
+        """
+        This function will parse dataset data and create summary document for es
+        """
+        results = requests.get("http://test.faang.org/api/dataset/_search/?size=100000").json()
+        standard_data = get_standard(results['hits']['hits'])
+        paper_published_data = get_number_of_published_papers(results['hits']['hits'])
+        species_data = dict()
+        assay_type_data = dict()
+        for item in results['hits']['hits']:
+            # get data for species_data
+            for specie in item['_source']['species']:
+                species_data.setdefault(specie['text'], 0)
+                species_data[specie['text']] += 1
+
+            # get data for assay_type_data
+            for assay_type in item['_source']['assayType']:
+                assay_type_data.setdefault(assay_type, 0)
+                assay_type_data[assay_type] += 1
+
+        # create document for es
+        results = dict()
+        results['standardSummary'] = create_summary_document_for_es(standard_data)
+        results['paperPublishedSummary'] = create_summary_document_for_es(paper_published_data)
+        results['specieSummary'] = create_summary_document_for_es(species_data)
+        results['assayTypeSummary'] = create_summary_document_for_es(assay_type_data)
+        body = {"doc": results}
+        self.es_instance.update(index="summary_specimen", doc_type="_doc", id="summary_specimen", body=body)
 
     def create_file_summary(self):
         pass
