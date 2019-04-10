@@ -156,10 +156,41 @@ class CreateSummary:
         results['specieSummary'] = create_summary_document_for_es(species_data)
         results['assayTypeSummary'] = create_summary_document_for_es(assay_type_data)
         body = {"doc": results}
-        self.es_instance.update(index="summary_specimen", doc_type="_doc", id="summary_specimen", body=body)
+        self.es_instance.update(index="summary_dataset", doc_type="_doc", id="summary_dataset", body=body)
 
     def create_file_summary(self):
-        pass
+        """
+        This function will parse file data and create summary document for es
+        """
+        results = requests.get("http://test.faang.org/api/file/_search/?size=100000").json()
+        standard_data = dict()
+        paper_published_data = get_number_of_published_papers(results['hits']['hits'])
+        species_data = dict()
+        assay_type_data = dict()
+        for item in results['hits']['hits']:
+            # get data for standard_data
+            standard = item['_source']['experiment']['standardMet']
+            standard_data.setdefault(standard, 0)
+            standard_data[standard] += 1
+
+            # get data for species_data
+            specie = item['_source']['species']['text']
+            species_data.setdefault(specie, 0)
+            species_data[specie] += 1
+
+            # get data for assay_type_data
+            assay_type = item['_source']['experiment']['assayType']
+            assay_type_data.setdefault(assay_type, 0)
+            assay_type_data[assay_type] += 1
+
+        # create document for es
+        results = dict()
+        results['standardSummary'] = create_summary_document_for_es(standard_data)
+        results['paperPublishedSummary'] = create_summary_document_for_es(paper_published_data)
+        results['specieSummary'] = create_summary_document_for_es(species_data)
+        results['assayTypeSummary'] = create_summary_document_for_es(assay_type_data)
+        body = {"doc": results}
+        self.es_instance.update(index="summary_file", doc_type="_doc", id="summary_file", body=body)
 
 
 if __name__ == "__main__":
