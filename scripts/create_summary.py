@@ -1,5 +1,6 @@
 from elasticsearch import Elasticsearch
 import requests
+import json
 
 from utils import *
 
@@ -19,17 +20,16 @@ class CreateSummary:
         self.logger_instance = logger_instance
 
     def create_organism_summary(self):
+        """
+        This function will parse organism data and create summary document for es
+        """
         results = requests.get("http://test.faang.org/api/organism/_search/?size=100000").json()
-        standard_data = dict()
+        standard_data = get_standard(results['hits']['hits'])
         sex_data = dict()
-        paper_published_data = {'yes': 0, 'no': 0}
+        paper_published_data = get_number_of_published_papers(results['hits']['hits'])
         organism_data = dict()
-        breeds_data = dict()
+        breed_data = dict()
         for item in results['hits']['hits']:
-            # Get data for standard_data
-            standard_data.setdefault(item['_source']['standardMet'], 0)
-            standard_data[item['_source']['standardMet']] += 1
-
             # get data for sex_data
             sex = item['_source']['sex']['text']
             if sex in MALES:
@@ -41,66 +41,93 @@ class CreateSummary:
             sex_data.setdefault(sex, 0)
             sex_data[sex] += 1
 
-            # get data for paper_published_data
-            if 'paperPublished' in item['_source']:
-                paper_published_data['yes'] += 1
-            else:
-                paper_published_data['no'] += 1
-
             # get data for organism_data
             organism = item['_source']['organism']['text']
             organism_data.setdefault(organism, 0)
             organism_data[organism] += 1
 
-            # get data for breeds_data
+            # get data for breed_data
             organism = item['_source']['organism']['text']
             breed = item['_source']['breed']['text']
-            breeds_data.setdefault(organism, {})
-            breeds_data[organism].setdefault(breed, 0)
-            breeds_data[organism][breed] += 1
+            breed_data.setdefault(organism, {})
+            breed_data[organism].setdefault(breed, 0)
+            breed_data[organism][breed] += 1
+
         # create document for es
         results = dict()
-        for k, v in sex_data.items():
-            results.setdefault('sexSummary', [])
-            results['sexSummary'].append({
-                'name': k,
-                'value': v
-            })
-        for k, v in paper_published_data.items():
-            results.setdefault('paperPublishedSummary', [])
-            results['paperPublishedSummary'].append({
-                'name': k,
-                'value': v
-            })
-        for k, v in standard_data.items():
-            results.setdefault('standardSummary', [])
-            results['standardSummary'].append({
-                'name': k,
-                'value': v
-            })
-        for k, v in organism_data.items():
-            results.setdefault('organismSummary', [])
-            results['organismSummary'].append({
-                'name': k,
-                'value': v
-            })
-        for k, v in breeds_data.items():
-            results.setdefault('breedSummary', [])
-            tmp_list = list()
-            for tmp_k, tmp_v in v.items():
-                tmp_list.append({
-                    'name': tmp_k,
-                    'value': tmp_v
-                })
-            results['breedSummary'].append({
-                "name": k,
-                "value": tmp_list
-            })
+        results['sexSummary'] = create_summary_document_for_es(sex_data)
+        results['paperPublishedSummary'] = create_summary_document_for_es(paper_published_data)
+        results['standardSummary'] = create_summary_document_for_es(standard_data)
+        results['organismSummary'] = create_summary_document_for_es(organism_data)
+        results['breedSummary'] = create_summary_document_for_breeds(breed_data)
         body = {"doc": results}
         self.es_instance.update(index="summary_organism", doc_type="_doc", id="summary_organism", body=body)
 
     def create_specimen_summary(self):
-        pass
+        """
+        This function will parse specimen data and create summary document for es
+        """
+        results = requests.get("http://test.faang.org/api/specimen/_search/?size=100000").json()
+        sex_data = dict()
+        paper_published_data = get_number_of_published_papers(results['hits']['hits'])
+        standard_data = get_standard(results['hits']['hits'])
+        cell_type_data = dict()
+        organism_data = dict()
+        material_data = dict()
+        breed_data = dict()
+
+        # get data for sex_data
+        for item in results['hits']['hits']:
+            # get data for sex_data
+            if 'sex' in item['_source']['organism']:
+                sex = item['_source']['organism']['sex']['text']
+                if sex in MALES:
+                    sex = 'male'
+                elif sex in FEMALES:
+                    sex = 'female'
+                else:
+                    sex = 'not determined'
+            else:
+                sex = 'not determined'
+            sex_data.setdefault(sex, 0)
+            sex_data[sex] += 1
+
+            # get data for cell_type_data
+            if 'cellType' in item['_source']:
+                cell_type_data.setdefault(item['_source']['cellType']['text'], 0)
+                cell_type_data[item['_source']['cellType']['text']] += 1
+
+            # get data for organism_data
+            if 'organism' in item['_source']:
+                organism = item['_source']['organism']['organism']['text']
+                organism_data.setdefault(organism, 0)
+                organism_data[organism] += 1
+
+            # get data for material_data
+            if 'material' in item['_source']:
+                material = item['_source']['material']['text']
+                material_data.setdefault(material, 0)
+                material_data[material] += 1
+
+            # get data for breed_data
+            if 'organism' in item['_source'] and 'breed' in item['_source']['organism']:
+                organism = item['_source']['organism']['organism']['text']
+                breed = item['_source']['organism']['breed']['text']
+                breed_data.setdefault(organism, {})
+                breed_data[organism].setdefault(breed, 0)
+                breed_data[organism][breed] += 1
+
+        # create document for es
+        results = dict()
+        results['sexSummary'] = create_summary_document_for_es(sex_data)
+        results['paperPublishedSummary'] = create_summary_document_for_es(paper_published_data)
+        results['standardSummary'] = create_summary_document_for_es(standard_data)
+        results['cellTypeSummary'] = create_summary_document_for_es(cell_type_data)
+        results['organismSummary'] = create_summary_document_for_es(organism_data)
+        results['materialSummary'] = create_summary_document_for_es(material_data)
+        results['breedSummary'] = create_summary_document_for_breeds(breed_data)
+        body = {"doc": results}
+        self.es_instance.update(index="summary_specimen", doc_type="_doc", id="summary_specimen", body=body)
 
     def create_dataset_summary(self):
         pass

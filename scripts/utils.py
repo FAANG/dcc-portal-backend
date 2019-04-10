@@ -103,7 +103,7 @@ def create_summary_document_for_breeds(data):
     """
     results = list()
     for k, v in data.items():
-        tmp_list = ()
+        tmp_list = list()
         for tmp_k, tmp_v in v.items():
             tmp_list.append({
                 'name': tmp_k,
