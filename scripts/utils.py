@@ -60,7 +60,7 @@ def get_number_of_published_papers(data):
         'no': 0
     }
     for item in data:
-        if 'paperPublished' in item['_source']:
+        if 'paperPublished' in item['_source'] and item['_source']['paperPublished'] == 'true':
             paper_published_data['yes'] += 1
         else:
             paper_published_data['no'] += 1
@@ -107,7 +107,7 @@ def create_summary_document_for_breeds(data):
         for tmp_k, tmp_v in v.items():
             tmp_list.append({
                 'name': tmp_k,
-                'value': tmp_k
+                'value': tmp_v
             })
         results.append({
             "name": k,
