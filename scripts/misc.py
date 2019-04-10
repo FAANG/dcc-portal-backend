@@ -2,7 +2,10 @@
 A collection of commonly-used functions, could be cross-projects
 """
 import re
+import logging
 
+logger = logging.getLogger(__name__)
+logging.basicConfig(format='%(asctime)s\t%(levelname)s:\t%(name)s line %(lineno)s\t%(message)s', level=logging.INFO)
 
 def to_lower_camel_case(str_to_convert):
     """
@@ -42,8 +45,7 @@ def get_filename_from_url(url, accession):
     :return: file name
     """
     if (not url) or (url and len(url) == 0):
-        # TODO add logging
-        print(f"{accession} url is empty")
+        logger.debug(f"{accession} url is empty")
         return ""
     if url.lower().endswith(".pdf"):
         return url.split("/")[-1]
