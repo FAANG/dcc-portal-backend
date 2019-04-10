@@ -1,12 +1,18 @@
+"""
+This script reads from ENA FAANG data portal, parses and validates the data and stores into Elastic Search
+It is highly recommended to check out the corresponding rule set
+https://github.com/FAANG/faang-metadata/blob/master/rulesets/faang_experiments.metadata_rules.json
+to help understanding the code
+"""
+from typing import Dict
+import click
+import common_functions
 from elasticsearch import Elasticsearch
-import requests
-import sys
-
-from validate_sample_record import *
 from validate_experiment_record import *
-from misc import *
+from validate_sample_record import *
 
-TECHNOLOGIES = {
+# keys are assay types and values are the corresponding technology
+TECHNOLOGIES: Dict[str, str] = {
     'ATAC-seq': 'ATAC-seq',
     'methylation profiling by high throughput sequencing': 'BS-seq',
     'ChIP-seq': 'ChIP-seq',
@@ -27,22 +33,57 @@ STANDARDS = {
 DATA_SOURCES = ['fastq', 'sra', 'cram_index']
 DATA_TYPES = ['ftp', 'galaxy', 'aspera']
 
+logger = logging.getLogger(__name__)
+logging.basicConfig(format='%(asctime)s\t%(levelname)s:\t%(name)s line %(lineno)s\t%(message)s', level=logging.INFO)
+# suppress logging information from elasticsearch
+logging.getLogger('elasticsearch').setLevel(logging.WARNING)
 
-def main():
+
+@click.command()
+@click.option(
+    '--es_hosts',
+    default="wp-np3-e2;wp-np3-e3",
+    help='Specify the Elastic Search server(s) (port could be included), e.g. wp-np3-e2:9200. '
+         'If multiple servers are provided, please use ";" to separate them, e.g. "wp-np3-e2;wp-np3-e3"'
+)
+@click.option(
+    '--es_index_prefix',
+    default="",
+    help='Specify the Elastic Search index prefix, e.g. '
+         'faang_build_1_ then the indices will be faang_build_1_experiment etc.'
+         'If not provided, then work on the aliases, e.g. experiment'
+)
+# TODO check single or double quotes
+def main(es_hosts, es_index_prefix):
     """
     Main function that will import data from ena
+    :param es_hosts:
+    :param es_index_prefix:
     :return:
     """
-    es = Elasticsearch(['wp-np3-e2', 'wp-np3-e3'])
+
+    hosts = es_hosts.split(";")
+    logger.info("Command line parameters")
+    logger.info("Hosts: "+str(hosts))
+    if es_index_prefix:
+        logger.info("Index_prefix:"+es_index_prefix)
+
+    es = Elasticsearch(hosts)
+
+    logger.info("Retrieving data from ENA")
     data = get_ena_data()
-    biosample_ids = get_all_specimen_ids()
+
+    logger.info(f"Get current specimens stored in the corresponding ES index {es_index_prefix}specimen")
+    biosample_ids = get_all_specimen_ids(hosts[0], es_index_prefix)
     if not biosample_ids:
         # TODO log to error
-        print('BioSample IDs were not imported')
-        sys.exit(0)
+        logger.error("No specimen data found in the given index, please run import_from_biosamle.py first")
+        sys.exit(1)
     known_errors = get_known_errors()
     new_errors = dict()
+
     ruleset_version = get_ruleset_version()
+    logger.info(f"Current experiment ruleset version: {ruleset_version}")
     indexed_files = dict()
     datasets = dict()
     experiments = dict()
@@ -55,36 +96,35 @@ def main():
         library_strategy = record['library_strategy']
         assay_type = record['assay_type']
         experiment_target = record['experiment_target']
+        # some studies use non-standard values or miss value for assay type, library strategy and experiment target
+        # standardize them below based on the 1-to-1 relationship in the ruleset
+        # assign assay type according to library strategy
         if assay_type == '':
             if library_strategy == 'Bisulfite-Seq':
                 assay_type = 'methylation profiling by high throughput sequencing'
             elif library_strategy == 'DNase-Hypersensitivity':
                 assay_type = 'DNase-Hypersensitivity seq'
         if assay_type == 'whole genome sequencing':
-            assay_type == 'whole genome sequencing assay'
+            assay_type = 'whole genome sequencing assay'
+        # assign value to experiment target if empty according to assay type
         if assay_type == 'ATAC-seq':
-            if not len(experiment_target) > 0:
+            if len(experiment_target) == 0:
                 experiment_target = 'open_chromatin_region'
-        elif assay_type == '"methylation profiling by high throughput sequencing':
-            if not len(experiment_target) > 0:
+        elif assay_type == 'methylation profiling by high throughput sequencing':
+            if len(experiment_target) == 0:
                 experiment_target = 'DNA methylation'
         elif assay_type == 'DNase-Hypersensitivity seq':
-            if not len(experiment_target) > 0:
+            if len(experiment_target) == 0:
                 experiment_target = 'open_chromatin_region'
         elif assay_type == 'Hi-C':
-            if not len(experiment_target) > 0:
+            if len(experiment_target) == 0:
                 experiment_target = 'chromatin'
         elif assay_type == 'whole genome sequencing assay':
-            if not len(experiment_target) > 0:
+            if len(experiment_target) == 0:
                 experiment_target = 'input DNA'
-        file_type = ''
-        source_type = ''
-        for data_source in DATA_SOURCES:
-            for my_type in DATA_TYPES:
-                key_to_check = f"{data_source}_{my_type}"
-                if key_to_check in record and record[key_to_check] != '':
-                    file_type = my_type
-                    source_type = data_source
+
+        file_type, source_type = determine_file_and_source(record)
+
         if file_type == '':
             continue
         if source_type == 'fastq':
@@ -96,20 +136,27 @@ def main():
         files = record[f"{source_type}_{file_type}"].split(";")
         types = record['submitted_format'].split(";")
         sizes = record[f"{source_type}_bytes"].split(";")
+        if len(files) != len(types) or len(files) != len(sizes) or len(types) == 0:
+            continue
+        # for ENA, it is fixed to MD5 as the checksum method
         checksums = record[f"{source_type}_md5"].split(";")
         for index, file in enumerate(files):
             specimen_biosample_id = record['sample_accession']
+            # if the ena records contains biosample records which have not been in FAANG data portal (biosample_ids)
+            # and not been reported before (known_errors) then these records need to be reported
             if specimen_biosample_id not in biosample_ids:
-                if (record['study_accession'] in known_errors and specimen_biosample_id not in known_errors[record['study_accession']]) or (record['study_accession'] not in known_errors):
+                if (record['study_accession'] not in known_errors) \
+                        or (record['study_accession'] in known_errors
+                            and specimen_biosample_id not in known_errors[record['study_accession']]):
                     new_errors.setdefault(record['study_accession'], {})
                     new_errors[record['study_accession']][specimen_biosample_id] = 1
                 continue
             fullname = file.split("/")[-1]
             filename = fullname.split(".")[0]
-            es_doc = {
+            es_file_doc = {
                 'specimen': specimen_biosample_id,
-                'organism': check_existsence(biosample_ids[record['sample_accession']]['organism'], 'biosampleId'),
-                'species': biosample_ids[record['sample_accession']]['organism']['organism'],
+                'organism': check_existsence(biosample_ids[specimen_biosample_id]['organism'], 'biosampleId'),
+                'species': biosample_ids[specimen_biosample_id]['organism']['organism'],
                 'url': file,
                 'name': fullname,
                 'type': types[index],
@@ -148,8 +195,9 @@ def main():
                     'secondaryAccession': record['secondary_study_accession']
                 }
             }
-            files_dict[filename] = es_doc
+            files_dict[filename] = es_file_doc
             exp_id = record['experiment_accession']
+            # one experiment could have multiple runs/files, therefore experiment info needs to be collected once
             if exp_id not in experiments:
                 experiment_protocol = None
                 experiment_protocol_filename = None
@@ -169,11 +217,11 @@ def main():
                     'accession': exp_id,
                     'assayType': assay_type,
                     'experimentTarget': experiment_target,
-                    'sampleStorage': record['sample_storage'],
+                    'sampleStorage': check_existsence(record, 'sample_storage'),
                     'sampleStorageProcessing': record['sample_storage_processing'],
                     'samplingToPreparationInterval': {
-                        'text': record['sample_prep_interval'],
-                        'unit': record['sample_prep_interval_units']
+                        'text': check_existsence(record, 'sample_prep_interval'),
+                        'unit': check_existsence(record, 'sample_prep_interval_units')
                     },
                     'experimentalProtocol': {
                         'url': experiment_protocol,
@@ -183,15 +231,15 @@ def main():
                         'url': extraction_protocol,
                         'filename': extraction_protocol_filename
                     },
-                    'libraryPreparationLocation': record['library_prep_location'],
+                    'libraryPreparationLocation': check_existsence(record, 'library_prep_location'),
                     'libraryPreparationDate': {
-                        'text': record['library_prep_date'],
-                        'unit': record['library_prep_date_format']
+                        'text': check_existsence(record, 'library_prep_date'),
+                        'unit': check_existsence(record, 'library_prep_date_format')
                     },
-                    'sequencingLocation': record['sequencing_location'],
+                    'sequencingLocation': check_existsence(record, 'sequencing_location'),
                     'sequencingDate': {
-                        'text': record['sequencing_date'],
-                        'unit': record['sequencing_date_format']
+                        'text': check_existsence(record, 'sequencing_date'),
+                        'unit': check_existsence(record, 'sequencing_date_format')
                     }
                 }
                 if 'library_prep_longitude' in record and len(record['library_prep_longitude']) > 0:
@@ -214,8 +262,8 @@ def main():
                         'text': record['sequencing_latitude'],
                         'unit': 'decimal degrees'
                     }
-                section_info = dict()
-                if assay_type == 'ATAC-seq':
+                # deal with technology specific data
+                if assay_type == 'ATAC-seq':  # ATAC-seq
                     transposase_protocol = record['transposase_protocol']
                     transposase_protocol_filename = get_filename_from_url(transposase_protocol,
                                                                           f"{exp_id} ATAC transposase protocol")
@@ -225,7 +273,7 @@ def main():
                             'filename': transposase_protocol_filename
                         }
                     }
-                elif assay_type == 'methylation profiling by high throughput sequencing':
+                elif assay_type == 'methylation profiling by high throughput sequencing':  # BS-Seq
                     conversion_protocol = None
                     conversion_protocol_filename = None
                     pcr_isolation_protocol = None
@@ -246,20 +294,22 @@ def main():
                         },
                         'pcrProductIsolationProtocol': {
                             'url': pcr_isolation_protocol,
-                            'filanem': pcr_isolation_protocol_filename
+                            'filename': pcr_isolation_protocol_filename
                         },
                         'bisulfiteConversionPercent': record['bisulfite_percent'],
                         'restrictionEnzyme': record['restriction_enzyme']
                     }
+                    # in the old ruleset, mistake made to allow RBBS instead of RRBS,
+                    # so the statement below must be there until old data gets curated
                     if exp_es['BS-seq']['librarySelection'] == 'RBBS':
                         exp_es['BS-seq']['librarySelection'] = 'RRBS'
-                elif assay_type == 'ChIP-seq':
+                elif assay_type == 'ChIP-seq':  # ChIP-seq
                     chip_protocol = record['chip_protocol']
                     chip_protocol_filename = get_filename_from_url(chip_protocol, f"{exp_id} chip protocol")
                     section_info = {
                         'chipProtocol': {
                             'url': chip_protocol,
-                            'filanem': chip_protocol_filename
+                            'filename': chip_protocol_filename
                         },
                         'libraryGenerationMaxFragmentSizeRange': record['library_max_fragment_size'],
                         'libraryGenerationMinFragmentSizeRange': record['library_min_fragment_size']
@@ -271,7 +321,7 @@ def main():
                         section_info['chipAntibodyCatalog'] = record['chip_ab_catalog']
                         section_info['chipAntibodyLot'] = record['chip_ab_lot']
                         exp_es['ChiP-seq histone'] = section_info
-                elif assay_type == 'DNase-Hypersensitivity seq"':
+                elif assay_type == 'DNase-Hypersensitivity seq"':  # DNase seq
                     dnase_protocol = None
                     dnase_protocol_filename = None
                     if 'dnase_protocol' in record:
@@ -283,7 +333,7 @@ def main():
                             'filename': dnase_protocol_filename
                         }
                     }
-                elif assay_type == 'Hi-C':
+                elif assay_type == 'Hi-C':  # Hi-C
                     hi_c_protocol = None
                     hi_c_protocol_filename = None
                     if 'hi_c_protocol' in record:
@@ -297,7 +347,7 @@ def main():
                             'filename': hi_c_protocol_filename
                         }
                     }
-                elif assay_type == 'whole genome sequencing assay':
+                elif assay_type == 'whole genome sequencing assay':  # WGS
                     library_pcr_protocol = record['library_pcr_isolation_protocol']
                     library_pcr_protocol_filename = get_filename_from_url(library_pcr_protocol,
                                                                           f"{exp_id} WGS pcr protocol")
@@ -315,7 +365,7 @@ def main():
                         },
                         'librarySelection': record['faang_library_selection']
                     }
-                else:
+                else:  # RNA-seq
                     rna_3_adapter_protocol = None
                     rna_3_adapter_protocol_filename = None
                     rna_5_adapter_protocol = None
@@ -344,7 +394,7 @@ def main():
                     if 'library_gen_protocol' in record:
                         library_generation_protocol = record['library_gen_protocol']
                         library_generation_protocol_filename = get_filename_from_url(library_generation_protocol,
-                                                                                     f"{exp_id} RNA generation protocol")
+                                                                                     f"{exp_id} RNA generate protocol")
                     exp_es['RNA-seq'] = {
                         'rnaPreparation3AdapterLigationProtocol': {
                             'url': rna_3_adapter_protocol,
@@ -368,6 +418,11 @@ def main():
                         }
                     }
                 experiments[exp_id] = exp_es
+
+            print(f"Passed to index: {exp_id}")
+            # if exp_id not in experiments:
+            # dataset (study) has mutliple experiments/runs/files/specimens_list so collection information into datasets
+            # and process it after iteration of all files
             dataset_id = record['study_accession']
             exps_in_dataset[exp_id] = dataset_id
             es_doc_dataset = dict()
@@ -381,15 +436,19 @@ def main():
             datasets.setdefault('tmp', {})
             datasets['tmp'].setdefault(dataset_id, {})
             datasets['tmp'][dataset_id].setdefault('specimen', {})
+            # noinspection PyTypeChecker
             datasets['tmp'][dataset_id]['specimen'][specimen_biosample_id] = 1
 
             datasets['tmp'][dataset_id].setdefault('instrument', {})
+            # noinspection PyTypeChecker
             datasets['tmp'][dataset_id]['instrument'][record['instrument_model']] = 1
 
             datasets['tmp'][dataset_id].setdefault('center_name', {})
+            # noinspection PyTypeChecker
             datasets['tmp'][dataset_id]['center_name'][record['center_name']] = 1
 
             datasets['tmp'][dataset_id].setdefault('archive', {})
+            # noinspection PyTypeChecker
             datasets['tmp'][dataset_id]['archive'][archive] = 1
 
             tmp_file = {
@@ -405,6 +464,7 @@ def main():
                 'readCount': record['read_count']
             }
             datasets['tmp'][dataset_id].setdefault('file', {})
+            # noinspection PyTypeChecker
             datasets['tmp'][dataset_id]['file'][fullname] = tmp_file
             tmp_exp = {
                 'accession': record['experiment_accession'],
@@ -412,17 +472,23 @@ def main():
                 'target': experiment_target
             }
             datasets['tmp'][dataset_id].setdefault('experiment', {})
+            # noinspection PyTypeChecker
             datasets['tmp'][dataset_id]['experiment'][record['experiment_accession']] = tmp_exp
             datasets[dataset_id] = es_doc_dataset
-    print("The dataset list:")
+
+    logger.info("The dataset list:")
     dataset_ids = sorted(list(studies_from_api.keys()))
     for index, dataset_id in enumerate(dataset_ids):
         num_exps = 0
+        # noinspection PyTypeChecker
         if dataset_id in datasets['tmp'] and 'experiment' in datasets['tmp'][dataset_id]:
-            num_exps = len(list(datasets['tmp'][dataset_id]['experiment'].keys()))
-        print(f"{index} {dataset_id} has {studies_from_api[dataset_id]} runs from api and {num_exps} "
-              f"experiments to be processed")
-    print(f"There are {len(list(datasets.keys())) -  1} datasets to be processed")
+            # noinspection PyTypeChecker
+            num_exps = len(list(datasets['tmp'][dataset_id]["experiment"].keys()))
+        printed_index = index + 1
+        logger.info(f"{printed_index} {dataset_id} has {studies_from_api[dataset_id]} runs from api and {num_exps} "
+                    f"experiments to be processed")
+    # datasets contains one artificial value set with the key as 'tmp', so need to -1
+    logger.info(f"There are {len(list(datasets.keys())) -  1} datasets to be processed")
     validation_results = validate_total_experiment_records(experiments, RULESETS)
     exp_validation = dict()
     for exp_id in sorted(experiments.keys()):
@@ -430,43 +496,53 @@ def main():
         for ruleset in RULESETS:
             if validation_results[ruleset]['detail'][exp_id]['status'] == 'error':
                 # TODO logging to error
-                print(f"{exp_id}\t{exps_in_dataset[exp_id]}\tExperiment\terror\t{validation_results[ruleset]['detail'][exp_id]['message']}")
+                # logger.info(f"{exp_id}\t{exps_in_dataset[exp_id]}\tExperiment\terror\t"
+                #            f"{validation_results[ruleset]['detail'][exp_id]['message']}")
+                pass
             else:
+                # only indexing when meeting standard
                 exp_validation[exp_id] = STANDARDS[ruleset]
                 exp_es['standardMet'] = STANDARDS[ruleset]
-                if exp_es['standardMet'] ==  'FAANG':
+                if exp_es['standardMet'] == 'FAANG':
                     exp_es['versionLastStandardMet'] = ruleset_version
-                break
-        body = {
-            "doc": json.dumps(exp_es)
-        }
-        try:
-            es.update(index='experiment', doc_type="_doc", id=exp_id, body=body)
-        except:
-            # TODO logging error
-            print("Error when try to update elasticsearch index")
+                print(f"Experiment {exp_id} with standard {exp_es['standardMet']}")
+                body = json.dumps(exp_es)
+                common_functions.insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
+                # try:
+                #     existing_flag = es.exists(index=f'{es_index_prefix}experiment', doc_type="_doc", id=exp_id)
+                #     if existing_flag:
+                #         es.delete(index=f'{es_index_prefix}experiment', doc_type="_doc", id=exp_id)
+                #     es.create(index=f'{es_index_prefix}experiment', doc_type="_doc", id=exp_id, body=body)
+                # except Exception as e:
+                #     # TODO logging error
+                #     logger.error("Error when try to index experiment into elasticsearch: " + str(e.args))
 
-    for file_id in files:
-        es_doc = files[file_id]
-        exp_id = es_doc['experiment']['accession']
+                # index into ES so break the loop
+                break
+
+    for file_id in files_dict.keys():
+        es_file_doc = files_dict[file_id]
+        # noinspection PyTypeChecker
+        exp_id = es_file_doc['experiment']['accession']
         if exp_id not in exp_validation:
             continue
-        es_doc['experiment']['standardMet'] = exp_validation[exp_id]
-        body = {
-            "doc": json.dumps(es_doc)
-        }
+        es_file_doc['experiment']['standardMet'] = exp_validation[exp_id]
+        body = json.dumps(es_file_doc)
         try:
-            es.update(index=file, doc_type="_doc", id=file_id, body=body)
-        except:
+            existing_flag = es.exists(index=f'{es_index_prefix}file', doc_type="_doc", id=file_id)
+            if existing_flag:
+                es.delete(index=f'{es_index_prefix}file', doc_type="_doc", id=file_id)
+            es.create(index=f'{es_index_prefix}file', doc_type="_doc", id=file_id, body=body)
+        except Exception as e:
             # TODO logging error
-            print("Error when try to update elasticsearch index")
+            logger.error("Error when try to index file into elasticsearch: " + str(e.args))
         indexed_files[file_id] = 1
 
     for dataset_id in datasets:
         if dataset_id == 'tmp':
             continue
         es_doc_dataset = datasets[dataset_id]
-        exps = datasets['tmp'][dataset_id]['experiment']
+        exps = datasets['tmp'][dataset_id]["experiment"]
         only_valid_exps = dict()
         dataset_standard = 'FAANG'
         experiment_type = dict()
@@ -485,12 +561,12 @@ def main():
                 pass
         num_valid_exps = len(only_valid_exps.keys())
         if num_valid_exps == 0:
-            print(f"dataset {dataset_id} has no valid experiments, skipped.")
+            logger.warning(f"dataset {dataset_id} has no valid experiments, skipped.")
             continue
         es_doc_dataset['standardMet'] = dataset_standard
         specimens_dict = datasets['tmp'][dataset_id]['specimen']
         species = dict()
-        specimens = list()
+        specimens_list = list()
         for specimen in specimens_dict:
             specimen_detail = biosample_ids[specimen]
             es_doc_specimen = {
@@ -501,43 +577,57 @@ def main():
                 'sex': specimen_detail['organism']['sex'],
                 'breed': specimen_detail['organism']['breed']
             }
-            specimens.append(es_doc_specimen)
+            specimens_list.append(es_doc_specimen)
             species[specimen_detail['organism']['organism']['text']] = specimen_detail['organism']['organism']
-        es_doc_dataset['specimen'] = sorted(specimens, key=lambda k: k['biosampleId'])
-        es_doc_dataset['species'] = species.values()
-        file_arr = datasets['tmp'][dataset_id][file].values()
+        es_doc_dataset['specimen'] = sorted(specimens_list, key=lambda k: k['biosampleId'])
+        es_doc_dataset['species'] = list(species.values())
+        file_arr = datasets['tmp'][dataset_id]['file'].values()
         valid_files = list()
         for file_entry in sorted(file_arr, key=lambda k: k['name']):
             file_id = file_entry['fileId']
             if file_id in indexed_files:
                 valid_files.append(file_entry)
         es_doc_dataset['file'] = valid_files
-        es_doc_dataset['experiment'] = only_valid_exps.values()
-        es_doc_dataset['assayType'] = experiment_type.keys()
-        es_doc_dataset['tech'] = tech_type.keys()
-        es_doc_dataset['instrument'] = datasets['tmp'][dataset_id]['instrument'].keys()
-        es_doc_dataset['centerName'] = datasets['tmp'][dataset_id]['centerName'].keys()
-        es_doc_dataset['archive'] = sorted(datasets['tmp'][dataset_id]['archive'].keys())
-        body = {
-            "doc": json.dumps(es_doc_dataset)
-        }
+        es_doc_dataset['experiment'] = list(only_valid_exps.values())
+        es_doc_dataset['assayType'] = list(experiment_type.keys())
+        es_doc_dataset['tech'] = list(tech_type.keys())
+        es_doc_dataset['instrument'] = list(datasets['tmp'][dataset_id]['instrument'].keys())
+        es_doc_dataset['centerName'] = list(datasets['tmp'][dataset_id]['center_name'].keys())
+        es_doc_dataset['archive'] = sorted(list(datasets['tmp'][dataset_id]['archive'].keys()))
+        body = json.dumps(es_doc_dataset)
+        # noinspection PyBroadException
         try:
-            es.update(index='dataset', doc_type="_doc", id=dataset_id, body=body)
-        except:
+            existing_flag = es.exists(index=f'{es_index_prefix}dataset', doc_type="_doc", id=dataset_id)
+            if existing_flag:
+                es.delete(index=f'{es_index_prefix}dataset', doc_type="_doc", id=dataset_id)
+            es.create(index=f'{es_index_prefix}dataset', doc_type="_doc", id=dataset_id, body=body)
+        except Exception as e:
             # TODO logging error
-            print("Error when try to update elasticsearch index")
+            logger.error("Error when try to index dataset into elasticsearch: " + str(e.args))
     with open('ena_not_in_biosample.txt', 'a') as w:
         for study in new_errors:
             tmp = new_errors[study]
             for biosample in sorted(tmp.keys()):
-                print(f"{biosample} from {study} does not exist in BioSamples at the moment\n")
+                logger.warning(f"{biosample} from {study} does not exist in BioSamples at the moment\n")
                 w.write(f"{study}\t{biosample}")
 
+
+def determine_file_and_source(record):
+    file_type = ''
+    source_type = ''
+    for data_source in DATA_SOURCES:
+        for my_type in DATA_TYPES:
+            key_to_check = f"{data_source}_{my_type}"
+            if key_to_check in record and record[key_to_check] != '':
+                file_type = my_type
+                source_type = data_source
+                return file_type, source_type
+    return file_type, source_type
 
 
 def get_ena_data():
     """
-    This function will fetch data from ena
+    This function will fetch data from ena FAANG data portal ruead_run result
     :return: json representation of data from ena
     """
     response = requests.get('https://www.ebi.ac.uk/ena/portal/api/search/?result=read_run&format=JSON&limit=0'
@@ -545,13 +635,16 @@ def get_ena_data():
     return response
 
 
-def get_all_specimen_ids():
+def get_all_specimen_ids(host, es_index_prefix):
     """
-    This function return dict with all information from specimens
-    :return: json representation of data from specimens
+    This function return dict with all information from the corresponding specimens
+    :return: A dict with keys as BioSamples id and values as the data stored in ES
     """
+    if not host.endswith(":9200"):
+        host = host + ":9200"
     results = dict()
-    response = requests.get('http://wp-np3-e2.ebi.ac.uk:9200/specimen/_search?size=100000').json()
+    url = f'http://{host}/{es_index_prefix}specimen/_search?size=100000'
+    response = requests.get(url).json()
     for item in response['hits']['hits']:
         results[item['_id']] = item['_source']
     return results
@@ -569,13 +662,16 @@ def get_known_errors():
             study, biosample = line.split("\t")
             known_errors.setdefault(study, {})
             known_errors[study][biosample] = 1
-    print(known_errors)
     return known_errors
 
 
+# TODO to Alexey what is the difference between Dict.get() and this function
 def check_existsence(data_to_check, field_to_check):
     if field_to_check in data_to_check:
-        return data_to_check[field_to_check]
+        if len(data_to_check[field_to_check]) == 0:
+            return None
+        else:
+            return data_to_check[field_to_check]
     else:
         return None
 
