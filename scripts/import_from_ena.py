@@ -505,15 +505,7 @@ def main(es_hosts, es_index_prefix):
                 if exp_es['standardMet'] == 'FAANG':
                     exp_es['versionLastStandardMet'] = ruleset_version
                 body = json.dumps(exp_es)
-#                common_functions.insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
-                try:
-                    existing_flag = es.exists(index=f'{es_index_prefix}experiment', doc_type="_doc", id=exp_id)
-                    if existing_flag:
-                        es.delete(index=f'{es_index_prefix}experiment', doc_type="_doc", id=exp_id)
-                    es.create(index=f'{es_index_prefix}experiment', doc_type="_doc", id=exp_id, body=body)
-                except Exception as e:
-                    # TODO logging error
-                    logger.error("Error when try to index experiment into elasticsearch: " + str(e.args))
+                common_functions.insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
 
                 # index into ES so break the loop
                 break
@@ -526,14 +518,7 @@ def main(es_hosts, es_index_prefix):
             continue
         es_file_doc['experiment']['standardMet'] = exp_validation[exp_id]
         body = json.dumps(es_file_doc)
-        try:
-            existing_flag = es.exists(index=f'{es_index_prefix}file', doc_type="_doc", id=file_id)
-            if existing_flag:
-                es.delete(index=f'{es_index_prefix}file', doc_type="_doc", id=file_id)
-            es.create(index=f'{es_index_prefix}file', doc_type="_doc", id=file_id, body=body)
-        except Exception as e:
-            # TODO logging error
-            logger.error("Error when try to index file into elasticsearch: " + str(e.args))
+        common_functions.insert_into_es(es, es_index_prefix, 'file', file_id, body)
         indexed_files[file_id] = 1
 
     for dataset_id in datasets:
@@ -593,15 +578,7 @@ def main(es_hosts, es_index_prefix):
         es_doc_dataset['centerName'] = list(datasets['tmp'][dataset_id]['center_name'].keys())
         es_doc_dataset['archive'] = sorted(list(datasets['tmp'][dataset_id]['archive'].keys()))
         body = json.dumps(es_doc_dataset)
-        # noinspection PyBroadException
-        try:
-            existing_flag = es.exists(index=f'{es_index_prefix}dataset', doc_type="_doc", id=dataset_id)
-            if existing_flag:
-                es.delete(index=f'{es_index_prefix}dataset', doc_type="_doc", id=dataset_id)
-            es.create(index=f'{es_index_prefix}dataset', doc_type="_doc", id=dataset_id, body=body)
-        except Exception as e:
-            # TODO logging error
-            logger.error("Error when try to index dataset into elasticsearch: " + str(e.args))
+        common_functions.insert_into_es(es, es_index_prefix, 'dataset', dataset_id, body)
     with open('ena_not_in_biosample.txt', 'a') as w:
         for study in new_errors:
             tmp = new_errors[study]

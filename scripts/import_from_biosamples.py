@@ -10,6 +10,7 @@ import click
 import logging
 import os
 import os.path
+import common_functions
 
 INDEXED_SAMPLES = dict()
 ORGANISM = dict()
@@ -958,14 +959,7 @@ def insert_into_es(data, index_prefix, my_type, es):
                 break
         body = json.dumps(es_doc)
 
-        try:
-            existing_flag = es.exists(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id)
-            if existing_flag:
-                es.delete(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id)
-            es.create(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id, body=body)
-        except Exception as e:
-            # TODO logging error
-            logger.error("Error when try to index into elasticsearch: "+str(e.args))
+        common_functions.insert_into_es(es, index_prefix, my_type, biosample_id, body)
 
 
 def clean_elasticsearch(index, es):
