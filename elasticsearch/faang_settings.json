@@ -1,9 +1,4 @@
 {
-    "mappings": {
-        "_doc": {
-            "date_detection": false
-        }
-    },
     "index": {
         "max_result_window" : 100000,
         "analysis": {
