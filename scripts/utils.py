@@ -2,8 +2,10 @@
 Different function that could be used in any faang backend script
 """
 import logging
+import pprint
 import sys
 
+from common_functions import logger
 from constants import *
 
 
@@ -47,3 +49,24 @@ def print_current_aliases(es_staging):
         sys.exit(0)
     else:
         return list(name)[0]
+
+
+def insert_into_es(es, es_index_prefix, doc_type, doc_id, body):
+    """
+    index data into ES
+    :param es: elasticsearch python library instance
+    :param es_index_prefix: combined with doc_type to determine which index to write into
+    :param doc_type: combined with es_index_prefix to determine which index to write into
+    :param doc_id: the id of the document to be indexed
+    :param body: the data of the document to be indexed
+    :return:
+    """
+    try:
+        existing_flag = es.exists(index=f'{es_index_prefix}{doc_type}', doc_type="_doc", id=doc_id)
+        if existing_flag:
+            es.delete(index=f'{es_index_prefix}{doc_type}', doc_type="_doc", id=doc_id)
+        es.create(index=f'{es_index_prefix}{doc_type}', doc_type="_doc", id=doc_id, body=body)
+    except Exception as e:
+        # TODO logging error
+        logger.error(f"Error when try to insert into index {es_index_prefix}{doc_type}: " + str(e.args))
+        pprint.pprint(body)

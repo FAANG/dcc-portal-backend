@@ -1,3 +1,4 @@
+import utils
 from elasticsearch import Elasticsearch
 import datetime
 from validate_sample_record import *
@@ -10,7 +11,6 @@ import click
 import logging
 import os
 import os.path
-import common_functions
 
 INDEXED_SAMPLES = dict()
 ORGANISM = dict()
@@ -959,7 +959,7 @@ def insert_into_es(data, index_prefix, my_type, es):
                 break
         body = json.dumps(es_doc)
 
-        common_functions.insert_into_es(es, index_prefix, my_type, biosample_id, body)
+        utils.insert_into_es(es, index_prefix, my_type, biosample_id, body)
 
 
 def clean_elasticsearch(index, es):

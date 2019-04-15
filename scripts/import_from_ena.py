@@ -6,7 +6,7 @@ to help understanding the code
 """
 from typing import Dict
 import click
-import common_functions
+import utils
 from elasticsearch import Elasticsearch
 from validate_experiment_record import *
 from validate_sample_record import *
@@ -505,7 +505,7 @@ def main(es_hosts, es_index_prefix):
                 if exp_es['standardMet'] == 'FAANG':
                     exp_es['versionLastStandardMet'] = ruleset_version
                 body = json.dumps(exp_es)
-                common_functions.insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
+                utils.insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
 
                 # index into ES so break the loop
                 break
@@ -518,7 +518,7 @@ def main(es_hosts, es_index_prefix):
             continue
         es_file_doc['experiment']['standardMet'] = exp_validation[exp_id]
         body = json.dumps(es_file_doc)
-        common_functions.insert_into_es(es, es_index_prefix, 'file', file_id, body)
+        utils.insert_into_es(es, es_index_prefix, 'file', file_id, body)
         indexed_files[file_id] = 1
 
     for dataset_id in datasets:
@@ -578,7 +578,7 @@ def main(es_hosts, es_index_prefix):
         es_doc_dataset['centerName'] = list(datasets['tmp'][dataset_id]['center_name'].keys())
         es_doc_dataset['archive'] = sorted(list(datasets['tmp'][dataset_id]['archive'].keys()))
         body = json.dumps(es_doc_dataset)
-        common_functions.insert_into_es(es, es_index_prefix, 'dataset', dataset_id, body)
+        utils.insert_into_es(es, es_index_prefix, 'dataset', dataset_id, body)
     with open('ena_not_in_biosample.txt', 'a') as w:
         for study in new_errors:
             tmp = new_errors[study]
