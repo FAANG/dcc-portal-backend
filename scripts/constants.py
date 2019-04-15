@@ -39,3 +39,7 @@ UNIVERSITIES = {
 
 # Current indices in use
 INDICES = ['organism', 'file', 'specimen', 'dataset', 'experiment']
+
+# Sex names
+MALES = ['male', 'male genotypic sex', 'intact male', 'M', 'Male']
+FEMALES = ['female', 'female genotypic sex', 'intact female', 'F', 'Female']
