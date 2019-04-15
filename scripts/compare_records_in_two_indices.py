@@ -2,15 +2,15 @@
 compare two versions of same type records stored in the two different indices
 """
 import click
-import constants
 import requests
 from typing import Set
+import constants
 
 
 @click.command()
 @click.option(
     '--es_host',
-    default="http://wp-np3-e2:9200",
+    default=f"http://{constants.STAGING_NODE1}",
     help='Specify the Elastic Search host, default to be wp-np3-e2'
 )
 @click.option(

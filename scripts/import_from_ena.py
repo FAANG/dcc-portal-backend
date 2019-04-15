@@ -4,26 +4,14 @@ It is highly recommended to check out the corresponding rule set
 https://github.com/FAANG/faang-metadata/blob/master/rulesets/faang_experiments.metadata_rules.json
 to help understanding the code
 """
-from typing import Dict
 import click
 import utils
+from constants import TECHNOLOGIES
 from elasticsearch import Elasticsearch
 from validate_experiment_record import *
 from validate_sample_record import *
+import constants
 
-# keys are assay types and values are the corresponding technology
-TECHNOLOGIES: Dict[str, str] = {
-    'ATAC-seq': 'ATAC-seq',
-    'methylation profiling by high throughput sequencing': 'BS-seq',
-    'ChIP-seq': 'ChIP-seq',
-    'DNase-Hypersensitivity seq': 'DNase-seq',
-    'Hi-C': 'Hi-C',
-    'microRNA profiling by high throughput sequencing': 'RNA-seq',
-    'RNA-seq of coding RNA': 'RNA-seq',
-    'RNA-seq of non coding RNA': 'RNA-seq',
-    'transcription profiling by high throughput sequencing': 'RNA-seq',
-    'whole genome sequencing assay': 'WGS'
-}
 
 RULESETS = ["FAANG Experiments", "FAANG Legacy Experiments"]
 STANDARDS = {
@@ -42,7 +30,7 @@ logging.getLogger('elasticsearch').setLevel(logging.WARNING)
 @click.command()
 @click.option(
     '--es_hosts',
-    default="wp-np3-e2;wp-np3-e3",
+    default=constants.STAGING_NODE1,
     help='Specify the Elastic Search server(s) (port could be included), e.g. wp-np3-e2:9200. '
          'If multiple servers are provided, please use ";" to separate them, e.g. "wp-np3-e2;wp-np3-e3"'
 )
@@ -57,8 +45,8 @@ logging.getLogger('elasticsearch').setLevel(logging.WARNING)
 def main(es_hosts, es_index_prefix):
     """
     Main function that will import data from ena
-    :param es_hosts:
-    :param es_index_prefix:
+    :param es_hosts: elasticsearch hosts where the data import into
+    :param es_index_prefix: the index prefix points to a particular version of data
     :return:
     """
 

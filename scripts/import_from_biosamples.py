@@ -11,6 +11,7 @@ import click
 import logging
 import os
 import os.path
+import constants
 
 INDEXED_SAMPLES = dict()
 ORGANISM = dict()
@@ -39,7 +40,7 @@ logging.getLogger('elasticsearch').setLevel(logging.WARNING)
 @click.command()
 @click.option(
     '--es_hosts',
-    default="wp-np3-e2;wp-np3-e3",
+    default=constants.STAGING_NODE1,
     help='Specify the Elastic Search server(s) (port could be included), e.g. wp-np3-e2:9200. '
          'If multiple servers are provided, please use ";" to separate them, e.g. "wp-np3-e2;wp-np3-e3"'
 )
@@ -53,9 +54,9 @@ logging.getLogger('elasticsearch').setLevel(logging.WARNING)
 # TODO check single or double quotes
 def main(es_hosts, es_index_prefix):
     """
-
-    :param es_hosts:
-    :param es_index_prefix:
+    Main function that will import data from biosamples
+    :param es_hosts: elasticsearch hosts where the data import into
+    :param es_index_prefix: the index prefix points to a particular version of data
     :return:
     """
     global ETAGS_CACHE
