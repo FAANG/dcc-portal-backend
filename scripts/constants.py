@@ -57,3 +57,7 @@ TECHNOLOGIES: Dict[str, str] = {
     'transcription profiling by high throughput sequencing': 'RNA-seq',
     'whole genome sequencing assay': 'WGS'
 }
+
+# Sex names
+MALES = ['male', 'male genotypic sex', 'intact male', 'M', 'Male']
+FEMALES = ['female', 'female genotypic sex', 'intact female', 'F', 'Female']

@@ -1,0 +1,62 @@
+{
+  "dynamic": "strict",
+  "properties": {
+    "standardSummary": {
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "value": {
+          "type": "keyword"
+        }
+      }
+    },
+    "sexSummary": {
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "value": {
+          "type": "keyword"
+        }
+      }
+    },
+    "paperPublishedSummary": {
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "value": {
+          "type": "keyword"
+        }
+      }
+    },
+    "organismSummary": {
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "value": {
+          "type": "keyword"
+        }
+      }
+    },
+    "breedSummary": {
+      "properties": {
+        "speciesName": {
+          "type": "keyword"
+        },
+        "speciesValue": {
+          "properties": {
+            "breedsName": {
+              "type": "keyword"
+            },
+            "breedsValue": {
+              "type": "keyword"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -75,3 +75,69 @@ def insert_into_es(es, es_index_prefix, doc_type, doc_id, body):
         # TODO logging error
         logger.error(f"Error when try to insert into index {es_index_prefix}{doc_type}: " + str(e.args))
         pprint.pprint(body)
+
+def get_number_of_published_papers(data):
+    """
+    This function will return number of ids that have associated published papers
+    :param data:
+    :return: dict with yes and no as keys and number of documents for each category
+    """
+    paper_published_data = {
+        'yes': 0,
+        'no': 0
+    }
+    for item in data:
+        if 'paperPublished' in item['_source'] and item['_source']['paperPublished'] == 'true':
+            paper_published_data['yes'] += 1
+        else:
+            paper_published_data['no'] += 1
+    return paper_published_data
+
+
+def get_standard(data):
+    """
+    This function will return number of documents for each existing standard
+    :param data: data to parse
+    :return: dict with standards names as keys and number of documents with each standard as values
+    """
+    standard_data = dict()
+    for item in data:
+        standard_data.setdefault(item['_source']['standardMet'], 0)
+        standard_data[item['_source']['standardMet']] += 1
+    return standard_data
+
+
+def create_summary_document_for_es(data):
+    """
+    This function will create document structure appropriate for es
+    :param data: data to parse
+    :return: part of document to be inserted into es
+    """
+    results = list()
+    for k, v in data.items():
+        results.append({
+            "name": k,
+            "value": v
+        })
+    return results
+
+
+def create_summary_document_for_breeds(data):
+    """
+    This function will create document structure for breeds summary that are appropriate for es
+    :param data: data to parse
+    :return: part of document to be inserted into es
+    """
+    results = list()
+    for k, v in data.items():
+        tmp_list = list()
+        for tmp_k, tmp_v in v.items():
+            tmp_list.append({
+                'breedsName': tmp_k,
+                'breedsValue': tmp_v
+            })
+        results.append({
+            "speciesName": k,
+            "speciesValue": tmp_list
+        })
+    return results
