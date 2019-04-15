@@ -7,9 +7,9 @@ from utils import *
 
 class CreateSummary:
     """
-    This class will parse specimen, organism, dataset and file indexes data and create summary data for summary_specimen,
-    summary_organism, summary_dataset and summary_file indexes; This data will be used by frontend to create charts in
-    summary tab
+    This class will parse specimen, organism, dataset and file indexes data and create summary data for
+    summary_specimen, summary_organism, summary_dataset and summary_file indexes; This data will be used by frontend to
+    create charts in summary tab
     """
     def __init__(self, es_instance, logger_instance):
         """
@@ -47,7 +47,6 @@ class CreateSummary:
             organism_data[organism] += 1
 
             # get data for breed_data
-            organism = item['_source']['organism']['text']
             breed = item['_source']['breed']['text']
             breed_data.setdefault(organism, {})
             breed_data[organism].setdefault(breed, 0)
@@ -60,8 +59,8 @@ class CreateSummary:
         results['standardSummary'] = create_summary_document_for_es(standard_data)
         results['organismSummary'] = create_summary_document_for_es(organism_data)
         results['breedSummary'] = create_summary_document_for_breeds(breed_data)
-        body = {"doc": results}
-        self.es_instance.update(index="summary_organism", doc_type="_doc", id="summary_organism", body=body)
+        body = json.dumps(results)
+        self.es_instance.index(index="summary_organism", doc_type="_doc", id="summary_organism", body=body)
 
     def create_specimen_summary(self):
         """
@@ -126,8 +125,8 @@ class CreateSummary:
         results['organismSummary'] = create_summary_document_for_es(organism_data)
         results['materialSummary'] = create_summary_document_for_es(material_data)
         results['breedSummary'] = create_summary_document_for_breeds(breed_data)
-        body = {"doc": results}
-        self.es_instance.update(index="summary_specimen", doc_type="_doc", id="summary_specimen", body=body)
+        body = json.dumps(results)
+        self.es_instance.index(index="summary_specimen", doc_type="_doc", id="summary_specimen", body=body)
 
     def create_dataset_summary(self):
         """
@@ -155,8 +154,8 @@ class CreateSummary:
         results['paperPublishedSummary'] = create_summary_document_for_es(paper_published_data)
         results['specieSummary'] = create_summary_document_for_es(species_data)
         results['assayTypeSummary'] = create_summary_document_for_es(assay_type_data)
-        body = {"doc": results}
-        self.es_instance.update(index="summary_dataset", doc_type="_doc", id="summary_dataset", body=body)
+        body = json.dumps(results)
+        self.es_instance.index(index="summary_dataset", doc_type="_doc", id="summary_dataset", body=body)
 
     def create_file_summary(self):
         """
@@ -189,8 +188,8 @@ class CreateSummary:
         results['paperPublishedSummary'] = create_summary_document_for_es(paper_published_data)
         results['specieSummary'] = create_summary_document_for_es(species_data)
         results['assayTypeSummary'] = create_summary_document_for_es(assay_type_data)
-        body = {"doc": results}
-        self.es_instance.update(index="summary_file", doc_type="_doc", id="summary_file", body=body)
+        body = json.dumps(results)
+        self.es_instance.index(index="summary_file", doc_type="_doc", id="summary_file", body=body)
 
 
 if __name__ == "__main__":

@@ -63,15 +63,15 @@
     },
     "breedSummary": {
       "properties": {
-        "name": {
+        "speciesName": {
           "type": "keyword"
         },
-        "value": {
+        "speciesValue": {
           "properties": {
-            "name": {
+            "breedsName": {
               "type": "keyword"
             },
-            "value": {
+            "breedsValue": {
               "type": "keyword"
             }
           }
