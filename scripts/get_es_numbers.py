@@ -81,7 +81,6 @@ def read_number_from_es(es_host) -> Dict[str, int]:
     response = requests.get(url).text
     # removes the header of returned value
     lines = response.split("\n")[1:]
-    print(response)
     for line in lines:
         elmts = line.split()
         if elmts:

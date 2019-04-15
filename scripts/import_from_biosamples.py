@@ -1,3 +1,4 @@
+import utils
 from elasticsearch import Elasticsearch
 import datetime
 from validate_sample_record import *
@@ -10,6 +11,7 @@ import click
 import logging
 import os
 import os.path
+import constants
 
 INDEXED_SAMPLES = dict()
 ORGANISM = dict()
@@ -29,16 +31,13 @@ STANDARDS = {
 TOTAL_RECORDS_TO_UPDATE = 0
 ETAGS_CACHE = dict()
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(format='%(asctime)s\t%(levelname)s:\t%(name)s line %(lineno)s\t%(message)s', level=logging.INFO)
-# suppress logging information from elasticsearch
-logging.getLogger('elasticsearch').setLevel(logging.WARNING)
+logger = utils.create_logging_instance('import_biosample', level=logging.INFO)
 
 
 @click.command()
 @click.option(
     '--es_hosts',
-    default="wp-np3-e2;wp-np3-e3",
+    default=constants.STAGING_NODE1,
     help='Specify the Elastic Search server(s) (port could be included), e.g. wp-np3-e2:9200. '
          'If multiple servers are provided, please use ";" to separate them, e.g. "wp-np3-e2;wp-np3-e3"'
 )
@@ -52,9 +51,9 @@ logging.getLogger('elasticsearch').setLevel(logging.WARNING)
 # TODO check single or double quotes
 def main(es_hosts, es_index_prefix):
     """
-
-    :param es_hosts:
-    :param es_index_prefix:
+    Main function that will import data from biosamples
+    :param es_hosts: elasticsearch hosts where the data import into
+    :param es_index_prefix: the index prefix points to a particular version of data
     :return:
     """
     global ETAGS_CACHE
@@ -82,13 +81,13 @@ def main(es_hosts, es_index_prefix):
     ruleset_version = get_ruleset_version()
     es = Elasticsearch(hosts)
 
-    logger.info(f"The program starts at {datetime.datetime.now()}")
+    logger.info(f"The program starts")
     logger.info(f"Current ruleset version is {ruleset_version}")
 
     etags_es: Dict[str, str] = get_existing_etags(hosts[0], es_index_prefix)
 
     logger.info(f"There are {len(etags_es)} records with etags_es in ES")
-    logger.info(f"Finish retrieving existing etags_es at {datetime.datetime.now()}")
+    logger.info(f"Finish retrieving existing etags_es")
     logger.info("Importing FAANG data")
     # when more than half biosample records not already stored in ES, take the batch import route
     # otherwise compare each record's etag to decide
@@ -140,7 +139,7 @@ def main(es_hosts, es_index_prefix):
             logger.warning(f"{acc} only in source {union[acc]['source']}")
     clean_elasticsearch(f'{es_index_prefix}specimen', es)
     clean_elasticsearch(f'{es_index_prefix}organism', es)
-    logger.info(f"Program ends at {datetime.datetime.now()}")
+    logger.info(f"Program ends")
 
 
 def get_existing_etags(host: str, es_index_prefix) -> Dict[str, str]:
@@ -958,14 +957,7 @@ def insert_into_es(data, index_prefix, my_type, es):
                 break
         body = json.dumps(es_doc)
 
-        try:
-            existing_flag = es.exists(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id)
-            if existing_flag:
-                es.delete(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id)
-            es.create(index=f'{index_prefix}{my_type}', doc_type="_doc", id=biosample_id, body=body)
-        except Exception as e:
-            # TODO logging error
-            logger.error("Error when try to index into elasticsearch: "+str(e.args))
+        utils.insert_into_es(es, index_prefix, my_type, biosample_id, body)
 
 
 def clean_elasticsearch(index, es):

@@ -1,6 +1,9 @@
 """
 Different constants that could be used by faang backend workflow
+These constants must be used in more than one script
+otherwise the script-specific constants better stay within that script
 """
+from typing import Dict
 
 # Addresses of elasticsearch servers
 STAGING_NODE1 = 'wp-np3-e2:9200'
@@ -39,6 +42,21 @@ UNIVERSITIES = {
 
 # Current indices in use
 INDICES = ['organism', 'file', 'specimen', 'dataset', 'experiment']
+
+# keys are assay types and values are the corresponding technology
+# expected to be used in import from ena and ena legacy
+TECHNOLOGIES: Dict[str, str] = {
+    'ATAC-seq': 'ATAC-seq',
+    'methylation profiling by high throughput sequencing': 'BS-seq',
+    'ChIP-seq': 'ChIP-seq',
+    'DNase-Hypersensitivity seq': 'DNase-seq',
+    'Hi-C': 'Hi-C',
+    'microRNA profiling by high throughput sequencing': 'RNA-seq',
+    'RNA-seq of coding RNA': 'RNA-seq',
+    'RNA-seq of non coding RNA': 'RNA-seq',
+    'transcription profiling by high throughput sequencing': 'RNA-seq',
+    'whole genome sequencing assay': 'WGS'
+}
 
 # Sex names
 MALES = ['male', 'male genotypic sex', 'intact male', 'M', 'Male']
