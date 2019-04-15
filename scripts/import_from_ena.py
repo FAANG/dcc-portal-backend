@@ -21,10 +21,7 @@ STANDARDS = {
 DATA_SOURCES = ['fastq', 'sra', 'cram_index']
 DATA_TYPES = ['ftp', 'galaxy', 'aspera']
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(format='%(asctime)s\t%(levelname)s:\t%(name)s line %(lineno)s\t%(message)s', level=logging.INFO)
-# suppress logging information from elasticsearch
-logging.getLogger('elasticsearch').setLevel(logging.WARNING)
+logger = utils.create_logging_instance('import_ena', level=logging.INFO)
 
 
 @click.command()

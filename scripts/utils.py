@@ -5,15 +5,15 @@ import logging
 import pprint
 import sys
 
-from common_functions import logger
 from constants import *
 
 
-def create_logging_instance(name):
+def create_logging_instance(name, level=logging.DEBUG):
     """
     This function will create logger instance that will log information to {name}.log file
     Log example: 29-Mar-19 11:54:33 - DEBUG - This is a debug message
     :param name: name of the logger and file
+    :param level: level of the logging
     :return: logger instance
     """
     # Create a custom logger
@@ -21,10 +21,11 @@ def create_logging_instance(name):
 
     # Create handlers
     f_handler = logging.FileHandler('{}.log'.format(name))
-    f_handler.setLevel(logging.DEBUG)
+    f_handler.setLevel(level)
 
     # Create formatters and add it to handlers
-    f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
+    f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - line %(lineno)s - %(message)s',
+                                 datefmt='%y-%b-%d %H:%M:%S')
     f_handler.setFormatter(f_format)
 
     # Add handlers to the logger
@@ -49,6 +50,10 @@ def print_current_aliases(es_staging):
         sys.exit(0)
     else:
         return list(name)[0]
+
+
+logger = create_logging_instance('utils', level=logging.INFO)
+logging.getLogger('elasticsearch').setLevel(logging.WARNING)
 
 
 def insert_into_es(es, es_index_prefix, doc_type, doc_id, body):

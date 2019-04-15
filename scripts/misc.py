@@ -3,9 +3,9 @@ A collection of commonly-used functions, could be cross-projects
 """
 import re
 import logging
+import utils
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(format='%(asctime)s\t%(levelname)s:\t%(name)s line %(lineno)s\t%(message)s', level=logging.INFO)
+logger = utils.create_logging_instance('misc', level=logging.INFO)
 
 def to_lower_camel_case(str_to_convert):
     """
