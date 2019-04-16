@@ -7,6 +7,7 @@ import utils
 
 logger = utils.create_logging_instance('misc', level=logging.INFO)
 
+
 def to_lower_camel_case(str_to_convert):
     """
     This function will convert any string with spaces or underscores to lower camel case string
@@ -17,8 +18,8 @@ def to_lower_camel_case(str_to_convert):
         raise TypeError("The method only take str as its input")
     str_to_convert = str_to_convert.replace("_", " ")
     tmp = re.split(r'\s|-', str_to_convert)
-    return "".join([item.lower() for i,item in enumerate(tmp) if i == 0] +
-                   [item.capitalize() for i,item in enumerate(tmp) if i != 0])
+    return "".join([item.lower() for i, item in enumerate(tmp) if i == 0] +
+                   [item.capitalize() for i, item in enumerate(tmp) if i != 0])
 
 
 def from_lower_camel_case(str_to_convert):

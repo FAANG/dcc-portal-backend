@@ -41,7 +41,7 @@ UNIVERSITIES = {
 }
 
 # Current indices in use
-INDICES = ['organism', 'file', 'specimen', 'dataset', 'experiment']
+INDICES = ['organism', 'specimen', 'file', 'experiment', 'dataset']
 
 # keys are assay types and values are the corresponding technology
 # expected to be used in import from ena and ena legacy

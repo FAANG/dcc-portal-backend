@@ -5,7 +5,6 @@ https://github.com/FAANG/faang-metadata/blob/master/rulesets/faang_experiments.m
 to help understanding the code
 """
 import click
-import utils
 from constants import TECHNOLOGIES
 from elasticsearch import Elasticsearch
 from validate_experiment_record import *
@@ -612,7 +611,7 @@ def get_all_specimen_ids(host, es_index_prefix):
 
 def get_known_errors():
     """
-    This function will read file with associtation from study to biosample
+    This function will read file with association from study to biosample
     :return: dictionary with study as a key and biosample as a values
     """
     known_errors = dict()
