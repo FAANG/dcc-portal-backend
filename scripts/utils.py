@@ -76,6 +76,7 @@ def insert_into_es(es, es_index_prefix, doc_type, doc_id, body):
         logger.error(f"Error when try to insert into index {es_index_prefix}{doc_type}: " + str(e.args))
         pprint.pprint(body)
 
+
 def get_number_of_published_papers(data):
     """
     This function will return number of ids that have associated published papers
