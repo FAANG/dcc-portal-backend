@@ -4,6 +4,7 @@ Test cases for utils module
 
 import unittest
 from elasticsearch import Elasticsearch
+from unittest.mock import Mock
 from unittest.mock import patch
 import io
 
@@ -17,7 +18,12 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(logger.name, 'test')
 
     def test_print_current_aliases(self):
-        es_staging = Elasticsearch([constants.STAGING_NODE1, constants.STAGING_NODE2])
+        es_staging = Mock()
+        es_staging.indices.get_alias.return_value = {'faang_build_3_organism': {'aliases': {'organism': {}}},
+                                                     'faang_build_3_file': {'aliases': {'file': {}}},
+                                                     'faang_build_3_specimen': {'aliases': {'specimen': {}}},
+                                                     'faang_build_3_dataset': {'aliases': {'dataset': {}}},
+                                                     'faang_build_3_experiment': {'aliases': {'experiment': {}}}}
         with patch('sys.stdout', new=io.StringIO()) as fake_stdout:
             utils.print_current_aliases(es_staging)
         self.assertIn('faang_build_3_experiment -> experiment', fake_stdout.getvalue())
