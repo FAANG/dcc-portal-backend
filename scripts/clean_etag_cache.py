@@ -4,13 +4,13 @@ Remove the oldest local etag cache files
 import click
 import subprocess
 
+
 @click.command()
 @click.option(
     '--number_to_keep',
     default="5",
     help='Specify how many etag cache files will be kept locally, default to be 5'
 )
-
 def main(number_to_keep):
     """
     The main function
@@ -29,7 +29,7 @@ def main(number_to_keep):
     lines.pop()
     total = len(lines)
     if num >= total:
-        print ("Within the limit, all etag cache files are kept")
+        print("Within the limit, all etag cache files are kept")
     else:
         for i in range(num, len(lines)):
             remaining = lines[i].split("etag_list_")[1:]

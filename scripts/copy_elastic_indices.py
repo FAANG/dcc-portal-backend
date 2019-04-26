@@ -6,9 +6,11 @@
 import subprocess
 import sys
 
+
 def usage():
     print("Usage: python copy_elastic_indice.py <input index pattern> <output index pattern> [prefix|suffix]")
     exit()
+
 
 len_argv = len(sys.argv)
 if len_argv != 3 and len_argv != 4:
