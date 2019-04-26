@@ -119,10 +119,10 @@ class SyncHinxtonLondon:
                                               f"{self.yesterday}_summary_specimen," +
                                               f"{self.yesterday}_faang_build_3_dataset," +
                                               f"{self.yesterday}_protocol_samples3," +
-                                              f"{self.yesterday}_summary_file" +
-                                              f"{self.yesterday}_faang_build_3_organism" +
-                                              f"{self.yesterday}_summary_organism" +
-                                              f"{self.yesterday}_faang_build_3_experiment" +
+                                              f"{self.yesterday}_summary_file," +
+                                              f"{self.yesterday}_faang_build_3_organism," +
+                                              f"{self.yesterday}_summary_organism," +
+                                              f"{self.yesterday}_faang_build_3_experiment," +
                                               f"{self.yesterday}_protocol_files3")
         self.es_production.indices.delete(index=f"{self.yesterday}_faang_build_3_specimen," +
                                                 f"{self.yesterday}_faang_build_3_file," +
@@ -130,10 +130,10 @@ class SyncHinxtonLondon:
                                                 f"{self.yesterday}_summary_specimen," +
                                                 f"{self.yesterday}_faang_build_3_dataset," +
                                                 f"{self.yesterday}_protocol_samples3," +
-                                                f"{self.yesterday}_summary_file" +
-                                                f"{self.yesterday}_faang_build_3_organism" +
-                                                f"{self.yesterday}_summary_organism" +
-                                                f"{self.yesterday}_faang_build_3_experiment" +
+                                                f"{self.yesterday}_summary_file," +
+                                                f"{self.yesterday}_faang_build_3_organism," +
+                                                f"{self.yesterday}_summary_organism," +
+                                                f"{self.yesterday}_faang_build_3_experiment," +
                                                 f"{self.yesterday}_protocol_files3")
 
 
