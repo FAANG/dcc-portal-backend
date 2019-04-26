@@ -1,5 +1,6 @@
 from elasticsearch import Elasticsearch
 import argparse
+from sys import exit
 
 from utils import *
 
@@ -28,7 +29,7 @@ class ChangeAliases:
         # Exit if user try to change aliases to indexes with the same prefix
         if old_index_prefix == self.name:
             print("Prefix is already in use, exiting!")
-            sys.exit(0)
+            return
         else:
             for index in INDICES:
                 new_index = "{}{}".format(self.name, index)
@@ -57,10 +58,8 @@ if __name__ == "__main__":
         print_current_aliases(es_staging)
         print()
         parser.print_help()
-        sys.exit(0)
     else:
         name = args.name
-
-    change_aliases_object = ChangeAliases(name, es_staging)
-    change_aliases_object.run()
+        change_aliases_object = ChangeAliases(name, es_staging)
+        change_aliases_object.run()
 

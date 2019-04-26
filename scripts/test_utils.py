@@ -11,7 +11,7 @@ import utils
 import constants
 
 
-class TestUnitls(unittest.TestCase):
+class TestUtils(unittest.TestCase):
     def test_create_logging_instance(self):
         logger = utils.create_logging_instance('test')
         self.assertEqual(logger.name, 'test')

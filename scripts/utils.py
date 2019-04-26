@@ -35,7 +35,7 @@ def create_logging_instance(name, level=logging.DEBUG):
 
 def print_current_aliases(es_staging):
     """
-    This function will pring current aliases in format 'index_name' -> 'alias_name'
+    This function will print current aliases in format 'index_name' -> 'alias_name'
     :param es_staging: staging elasticsearch object
     :return: name of the current prefix or suffix in use
     """
