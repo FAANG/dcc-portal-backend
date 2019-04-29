@@ -139,3 +139,51 @@ class TestCreateSummary(unittest.TestCase):
                                                       '"speciesValue": [{"breedsName": "Bhadawari", '
                                                       '"breedsValue": 1}]}]}', doc_type='_doc', id='summary_specimen',
                                                  index='summary_specimen')
+
+    def test_create_dataset_summary(self):
+        with patch('create_summary.requests') as mock_requests:
+            es_instance = Mock()
+            logger = Mock()
+            test_object = create_summary.CreateSummary(es_instance, logger)
+            test_object.create_dataset_summary()
+            self.assertEqual(mock_requests.get.call_count, 1)
+            mock_requests.get.assert_called_with('http://test.faang.org/api/dataset/_search/?size=100000')
+            self.assertEqual(es_instance.index.call_count, 1)
+
+    def test_create_file_summary(self):
+        inner_value = {'_score': 1.0, '_index': 'faang_build_8_file', '_type': '_doc', '_source': {
+            'size': '2151112762', 'run': {'alias': '170223_NS500422_0446_AHT2MCBGXY-C-3-PecMus_S3.R2.fastq.gz',
+                                          'instrument': 'NextSeq 500', 'accession': 'SRR6713582',
+                                          'platform': 'ILLUMINA'}, 'name': 'SRR6713582_1.fastq.gz', 'type': 'fastq.gz',
+            'checksumMethod': 'md5', 'readableSize': '2.0GB', 'specimen': 'SAMN08476464', 'readCount': '53707995',
+            'submission': 'SRA658981', 'checksum': '7e176cb507a1f2ccc36f06a327cc6f46', 'species': {
+                'text': 'Gallus gallus', 'ontologyTerms': 'http://purl.obolibrary.org/obo/NCBITaxon_9031'},
+            'archive': 'ENA', 'updateDate': '2018-02-13', 'url': 'ftp.sra.ebi.ac.uk/vol1/fastq/SRR671/002/SRR6713582/'
+                                                                 'SRR6713582_1.fastq.gz', 'experiment': {
+                'target': 'open_chromatin_region', 'accession': 'SRX3687019', 'assayType': 'ATAC-seq',
+                'standardMet': 'Legacy'}, 'study': {'alias': 'PRJNA433154', 'secondaryAccession': 'SRP132746',
+                                                    'title': 'Gallus gallus ATAC-seq', 'accession': 'PRJNA433154',
+                                                    'type': 'ATAC-seq'}, 'releaseDate': '2018-02-13',
+            'baseCount': '8001231325'}, '_id': 'SRR6713582_1'}
+        return_value = {
+            'hits': {
+                'hits': [
+                    inner_value
+                ]
+            }
+        }
+        with patch('create_summary.requests') as mock_requests:
+            tmp = mock_requests.get.return_value
+            tmp.json.return_value = return_value
+            es_instance = Mock()
+            logger = Mock()
+            test_object = create_summary.CreateSummary(es_instance, logger)
+            test_object.create_file_summary()
+            self.assertEqual(mock_requests.get.call_count, 1)
+            mock_requests.get.assert_called_with('http://test.faang.org/api/file/_search/?size=100000')
+            es_instance.index.assert_called_with(body='{"standardSummary": [{"name": "Legacy", "value": 1}], '
+                                                      '"paperPublishedSummary": [{"name": "yes", "value": 0}, '
+                                                      '{"name": "no", "value": 1}], '
+                                                      '"specieSummary": [{"name": "Gallus gallus", "value": 1}], '
+                                                      '"assayTypeSummary": [{"name": "ATAC-seq", "value": 1}]}',
+                                                 doc_type='_doc', id='summary_file', index='summary_file')
