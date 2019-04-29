@@ -1,4 +1,3 @@
-import utils
 from elasticsearch import Elasticsearch
 import datetime
 from validate_sample_record import *
