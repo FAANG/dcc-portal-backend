@@ -139,9 +139,9 @@ class SyncHinxtonLondon:
 
 if __name__ == "__main__":
     # Create elasticsearch objects for each server
-    es_staging = Elasticsearch([STAGING_NODE1, STAGING_NODE2])
-    es_fallback = Elasticsearch([FALLBACK_NODE1, FALLBACK_NODE2])
-    es_production = Elasticsearch([PRODUCTION_NODE1, PRODUCTION_NODE2])
+    es_staging = Elasticsearch([STAGING_NODE1, STAGING_NODE2], timeout=60)
+    es_fallback = Elasticsearch([FALLBACK_NODE1, FALLBACK_NODE2], timeout=60)
+    es_production = Elasticsearch([PRODUCTION_NODE1, PRODUCTION_NODE2], timeout=60)
 
     # Create logger to log info
     logger = create_logging_instance('sync_hx_hh')
