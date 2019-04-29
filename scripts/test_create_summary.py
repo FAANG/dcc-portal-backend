@@ -63,3 +63,79 @@ class TestCreateSummary(unittest.TestCase):
                                                       '"breedSummary": [{"speciesName": "Bos taurus", '
                                                       '"speciesValue": [{"breedsName": "Angus", "breedsValue": 1}]}]}',
                                                  doc_type='_doc', id='summary_organism', index='summary_organism')
+
+    def test_create_specimen_summary(self):
+        inner_value = {'_score': 1.0, '_index': 'faang_build_8_specimen', '_type': '_doc', '_source': {
+            'project': 'FAANG', 'organization': [{'URL': 'http://www.baif.org.in/', 'name': 'BAIF',
+                                                  'role': 'biomaterial provider '},
+                                                 {'URL': 'http://www.baif.org.in/', 'name': 'BAIF',
+                                                  'role': 'institution '},
+                                                 {'URL': 'http://www.bbsrc.ac.uk/', 'name': 'BBSRC', 'role': 'funder '},
+                                                 {'URL': 'http://www.ccmb.res.in/',
+                                                  'name': 'Centre for Cellular and Molecular Biology',
+                                                  'role': 'biomaterial provider '},
+                                                 {'URL': 'http://www.ccmb.res.in/',
+                                                  'name': 'Centre for Cellular and Molecular Biology',
+                                                  'role': 'institution '}, {'URL': 'http://www.ebi.ac.uk/',
+                                                                            'name': 'EMBL-EBI', 'role': 'curator '},
+                                                 {'URL': 'http://www.dbtindia.nic.in/',
+                                                  'name': 'Indian Department of Biotechnology', 'role': 'funder '},
+                                                 {'URL': 'http://www.roslin.ed.ac.uk/',
+                                                  'name': 'The Roslin Institute and Royal Dick School of '
+                                                          'Veterinary Studies', 'role': 'biomaterial provider '},
+                                                 {'URL': 'http://www.roslin.ed.ac.uk/',
+                                                  'name': 'The Roslin Institute and Royal Dick School of '
+                                                          'Veterinary Studies', 'role': 'institution '}],
+            'biosampleId': 'SAMEA103886898', 'cellType': {'text': 'saliva-secreting gland',
+                                                          'ontologyTerms': 'http://purl.obolibrary.org/obo/'
+                                                                           'UBERON_0001044'},
+            'organism': {'sex': {'text': 'male', 'ontologyTerms': 'PATO_0000384'}, 'biosampleId': 'SAMEA103886572',
+                         'organism': {'text': 'Bubalus bubalis',
+                                      'ontologyTerms': 'http://purl.obolibrary.org/obo/NCBITaxon_89462'},
+                         'healthStatus': [], 'breed': {'text': 'Bhadawari',
+                                                       'ontologyTerms': 'http://purl.obolibrary.org/obo/LBO_0001046'}},
+            'alternativeId': [], 'updateDate': '2018-06-06', 'specimenFromOrganism': {'specimenCollectionDate': {
+                'text': '2015-03-31', 'unit': 'YYYY-MM-DD'}, 'numberOfPieces': {'text': None, 'unit': None},
+                'specimenCollectionProtocol': {'url': 'http://ftp.faang.ebi.ac.uk/ftp/protocols/samples/'
+                                                      'ROSLIN_SOP_Harvest_of_Large_Animal_Tissues_20160516.pdf',
+                                               'filename': 'ROSLIN_SOP_Harvest_of_Large_Animal_Tissues_20160516.pdf'},
+                'specimenSize': {'text': None, 'unit': None}, 'healthStatusAtCollection': [],
+                'developmentalStage': {'text': 'adult', 'ontologyTerms': 'http://www.ebi.ac.uk/efo/EFO_0001272'},
+                'animalAgeAtCollection': {'text': '5', 'unit': 'year'}, 'specimenPictureUrl': [], 'fastedStatus': None,
+                'organismPart': {'text': 'saliva-secreting gland',
+                                 'ontologyTerms': 'http://purl.obolibrary.org/obo/UBERON_0001044'},
+                'specimenWeight': {'text': None, 'unit': None}, 'gestationalAgeAtSampleCollection': {'text': None,
+                                                                                                     'unit': None},
+                'specimenVolume': {'text': None, 'unit': None}}, 'standardMet': 'FAANG', 'id_number': '103886898',
+            'description': 'salivary glands from an adult male, 5 years old, Bhadawari, India', 'material': {
+                'text': 'specimen from organism', 'ontologyTerms': 'http://purl.obolibrary.org/obo/OBI_0001479'},
+            'etag': '"0d6a4c87f796682502924b21467b34421"', 'availability': None, 'derivedFrom': 'SAMEA103886572',
+            'customField': [], 'releaseDate': '2016-10-18', 'name': 'BBU_RI_BHAM1_Sal'}, '_id': 'SAMEA103886898'}
+        return_value = {
+            'hits': {
+                'hits': [
+                    inner_value
+                ]
+            }
+        }
+        with patch('create_summary.requests') as mock_requests:
+            tmp = mock_requests.get.return_value
+            tmp.json.return_value = return_value
+            es_instance = Mock()
+            logger = Mock()
+            test_object = create_summary.CreateSummary(es_instance, logger)
+            test_object.create_specimen_summary()
+            self.assertEqual(mock_requests.get.call_count, 1)
+            mock_requests.get.assert_called_with('http://test.faang.org/api/specimen/_search/?size=100000')
+            es_instance.index.assert_called_with(body='{"sexSummary": [{"name": "male", "value": 1}], '
+                                                      '"paperPublishedSummary": [{"name": "yes", "value": 0}, '
+                                                      '{"name": "no", "value": 1}], '
+                                                      '"standardSummary": [{"name": "FAANG", "value": 1}], '
+                                                      '"cellTypeSummary": [{"name": "saliva-secreting gland", '
+                                                      '"value": 1}], "organismSummary": [{"name": "Bubalus bubalis", '
+                                                      '"value": 1}], "materialSummary": [{'
+                                                      '"name": "specimen from organism", "value": 1}], '
+                                                      '"breedSummary": [{"speciesName": "Bubalus bubalis", '
+                                                      '"speciesValue": [{"breedsName": "Bhadawari", '
+                                                      '"breedsValue": 1}]}]}', doc_type='_doc', id='summary_specimen',
+                                                 index='summary_specimen')
