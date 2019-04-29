@@ -7,6 +7,7 @@ to help understanding the code
 import click
 from constants import TECHNOLOGIES
 from elasticsearch import Elasticsearch
+from utils import determine_file_and_source, check_existsence
 from validate_experiment_record import *
 from validate_sample_record import *
 import constants
@@ -17,8 +18,6 @@ STANDARDS = {
     'FAANG Experiments': 'FAANG',
     'FAANG Legacy Experiments': 'Legacy'
 }
-DATA_SOURCES = ['fastq', 'sra', 'cram_index']
-DATA_TYPES = ['ftp', 'galaxy', 'aspera']
 
 logger = utils.create_logging_instance('import_ena', level=logging.INFO)
 
@@ -61,7 +60,7 @@ def main(es_hosts, es_index_prefix):
     biosample_ids = get_all_specimen_ids(hosts[0], es_index_prefix)
     if not biosample_ids:
         # TODO log to error
-        logger.error("No specimen data found in the given index, please run import_from_biosamle.py first")
+        logger.error("No specimen data found in the given index, please run import_from_biosamles.py first")
         sys.exit(1)
     known_errors = get_known_errors()
     new_errors = dict()
@@ -571,19 +570,6 @@ def main(es_hosts, es_index_prefix):
                 w.write(f"{study}\t{biosample}")
 
 
-def determine_file_and_source(record):
-    file_type = ''
-    source_type = ''
-    for data_source in DATA_SOURCES:
-        for my_type in DATA_TYPES:
-            key_to_check = f"{data_source}_{my_type}"
-            if key_to_check in record and record[key_to_check] != '':
-                file_type = my_type
-                source_type = data_source
-                return file_type, source_type
-    return file_type, source_type
-
-
 def get_ena_data():
     """
     This function will fetch data from ena FAANG data portal ruead_run result
@@ -622,16 +608,6 @@ def get_known_errors():
             known_errors.setdefault(study, {})
             known_errors[study][biosample] = 1
     return known_errors
-
-
-def check_existsence(data_to_check, field_to_check):
-    if field_to_check in data_to_check:
-        if len(data_to_check[field_to_check]) == 0:
-            return None
-        else:
-            return data_to_check[field_to_check]
-    else:
-        return None
 
 
 if __name__ == "__main__":

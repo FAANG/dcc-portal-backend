@@ -141,3 +141,30 @@ def create_summary_document_for_breeds(data):
             "speciesValue": tmp_list
         })
     return results
+
+
+def determine_file_and_source(record):
+    file_type = ''
+    source_type = ''
+    for data_source in DATA_SOURCES:
+        for my_type in DATA_TYPES:
+            key_to_check = f"{data_source}_{my_type}"
+            if key_to_check in record and record[key_to_check] != '':
+                file_type = my_type
+                source_type = data_source
+                return file_type, source_type
+    return file_type, source_type
+
+
+DATA_SOURCES = ['fastq', 'sra', 'cram_index']
+DATA_TYPES = ['ftp', 'galaxy', 'aspera']
+
+
+def check_existsence(data_to_check, field_to_check):
+    if field_to_check in data_to_check:
+        if len(data_to_check[field_to_check]) == 0:
+            return None
+        else:
+            return data_to_check[field_to_check]
+    else:
+        return None
