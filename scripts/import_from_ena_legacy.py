@@ -11,7 +11,6 @@ from validate_experiment_record import *
 from validate_sample_record import *
 import constants
 from typing import Set, Dict, List
-import pprint
 from utils import determine_file_and_source, check_existsence
 import re
 
@@ -713,7 +712,7 @@ def main(es_hosts, es_index_prefix):
                 exp_validation[exp_id] = STANDARDS[ruleset]
                 exp_es['standardMet'] = STANDARDS[ruleset]
                 body = json.dumps(exp_es)
-#                utils.insert_into_es(es, f"{es_index_prefix}_", 'experiment', exp_id, body)
+                utils.insert_into_es(es, f"{es_index_prefix}_", 'experiment', exp_id, body)
                 # index into ES so break the loop
                 break
     logger.info("finishing indexing experiments")
@@ -727,7 +726,7 @@ def main(es_hosts, es_index_prefix):
             continue
         es_file_doc['experiment']['standardMet'] = exp_validation[exp_id]
         body = json.dumps(es_file_doc)
-#        utils.insert_into_es(es, f"{es_index_prefix}_", 'file', file_id, body)
+        utils.insert_into_es(es, f"{es_index_prefix}_", 'file', file_id, body)
         indexed_files[file_id] = 1
     logger.info("finishing indexing files")
 
@@ -742,7 +741,7 @@ def main(es_hosts, es_index_prefix):
         tech_type = dict()
         for exp_id in exps:
             if exp_id in exp_validation:
-                if exp_validation[exp_id] == 'FAANG Legacy':
+                if exp_validation[exp_id] == 'Legacy':
                     dataset_standard = 'Legacy'
                 only_valid_exps[exp_id] = exps[exp_id]
                 assay_type = exps[exp_id]['assayType']
