@@ -2,7 +2,6 @@
 Test cases for get_all_etags
 """
 import unittest
-from unittest.mock import Mock
 from unittest.mock import patch
 
 import get_all_etags
