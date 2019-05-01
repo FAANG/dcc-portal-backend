@@ -76,7 +76,29 @@ class TestImportFromBiosamples(unittest.TestCase):
         self.assertEqual(import_from_biosamples.check_is_faang(item_false), False)
 
     def test_deal_with_decimal_degrees(self):
-        pass
+        item = {
+            'characteristics': {
+                'Material': [
+                    {'text': 'organism'}
+                ]
+            }
+        }
+        self.assertEqual(import_from_biosamples.deal_with_decimal_degrees(item), item)
+
+        item['characteristics']['birth location latitude'] = [{'unit': 'decimal degrees'}]
+        item['characteristics']['birth location longitude'] = [{'unit': 'decimal degrees'}]
+        self.assertEqual(import_from_biosamples.deal_with_decimal_degrees(item), item)
+
+        item['characteristics']['birth location latitude'] = [{'unit': 'decimal degree'}]
+        item['characteristics']['birth location longitude'] = [{'unit': 'decimal degree'}]
+        item['accession'] = 1
+        with patch('import_from_biosamples.requests') as mock_requests:
+            import_from_biosamples.deal_with_decimal_degrees(item)
+            mock_requests.get.assert_called_with('https://www.ebi.ac.uk/biosamples/samples/'
+                                                 '1.json?curationdomain=self.FAANG_DCC_curation')
+
+        item['characteristics']['Material'][0]['text'] = 'specimen'
+        self.assertEqual(import_from_biosamples.deal_with_decimal_degrees(item), item)
 
     def test_process_organisms(self):
         pass
