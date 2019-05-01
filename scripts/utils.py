@@ -3,9 +3,6 @@ Different function that could be used in any faang backend script
 """
 import logging
 import pprint
-import sys
-
-from constants import *
 
 
 def create_logging_instance(name, level=logging.DEBUG):
@@ -31,25 +28,6 @@ def create_logging_instance(name, level=logging.DEBUG):
     # Add handlers to the logger
     logger.addHandler(f_handler)
     return logger
-
-
-def print_current_aliases(es_staging):
-    """
-    This function will pring current aliases in format 'index_name' -> 'alias_name'
-    :param es_staging: staging elasticsearch object
-    :return: name of the current prefix or suffix in use
-    """
-    name = set()
-    aliases = es_staging.indices.get_alias(name=','.join(INDICES))
-    for index_name, alias in aliases.items():
-        alias = list(alias['aliases'].keys())[0]
-        name.add(index_name.split(alias)[0])
-        print("{} -> {}".format(index_name, alias))
-    if len(name) != 1:
-        print("There are multiple prefixes or suffixes in use, manual check is required!")
-        sys.exit(0)
-    else:
-        return list(name)[0]
 
 
 logger = create_logging_instance('utils', level=logging.INFO)
