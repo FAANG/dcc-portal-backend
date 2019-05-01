@@ -173,7 +173,33 @@ class TestImportFromBiosamples(unittest.TestCase):
             self.assertEqual(mock_logger.debug.call_count, 1)
 
     def test_parse_relationship(self):
-        pass
+        item = {}
+        self.assertEqual(import_from_biosamples.parse_relationship(item), {})
+
+        item['accession'] = 'accession'
+        item['relationships'] = [
+            {
+                'type': 'EBI equivalent BioSample',
+                'source': 'accession',
+                'target': 'target'
+            }
+        ]
+        should_return = {
+            'EBI equivalent BioSample': {'target': 1},
+            'ebiEquivalentBiosample': {'target': 1}
+        }
+        self.assertEqual(import_from_biosamples.parse_relationship(item), should_return)
+
+        item['relationships'][0]['source'] = 'source'
+        should_return = {
+            'EBI equivalent BioSample': {'source': 1},
+            'ebiEquivalentBiosample': {'source': 1}
+        }
+        self.assertEqual(import_from_biosamples.parse_relationship(item), should_return)
+
+        item['relationships'][0]['type'] = 'type'
+        self.assertEqual(import_from_biosamples.parse_relationship(item), {'type': {'target': 2}})
+
 
     def test_get_alternative_id(self):
         relationships = {
