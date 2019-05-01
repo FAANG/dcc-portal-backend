@@ -45,14 +45,15 @@ def insert_into_es(es, es_index_prefix, doc_type, doc_id, body):
     :return:
     """
     try:
-        existing_flag = es.exists(index=f'{es_index_prefix}{doc_type}', doc_type="_doc", id=doc_id)
+        existing_flag = es.exists(index=f'{es_index_prefix}_{doc_type}', doc_type="_doc", id=doc_id)
         if existing_flag:
-            es.delete(index=f'{es_index_prefix}{doc_type}', doc_type="_doc", id=doc_id)
-        es.create(index=f'{es_index_prefix}{doc_type}', doc_type="_doc", id=doc_id, body=body)
+            es.delete(index=f'{es_index_prefix}_{doc_type}', doc_type="_doc", id=doc_id)
+        es.create(index=f'{es_index_prefix}_{doc_type}', doc_type="_doc", id=doc_id, body=body)
     except Exception as e:
         # TODO logging error
-        logger.error(f"Error when try to insert into index {es_index_prefix}{doc_type}: " + str(e.args))
+        logger.error(f"Error when try to insert into index {es_index_prefix}_{doc_type}: " + str(e.args))
         pprint.pprint(body)
+
 
 def get_number_of_published_papers(data):
     """
@@ -146,3 +147,10 @@ def check_existsence(data_to_check, field_to_check):
             return data_to_check[field_to_check]
     else:
         return None
+
+
+def remove_underscore_from_end_prefix(es_index_prefix: str)->str:
+    if es_index_prefix.endswith("_"):
+        str_len = len(es_index_prefix)
+        es_index_prefix = es_index_prefix[0:str_len - 1]
+    return es_index_prefix

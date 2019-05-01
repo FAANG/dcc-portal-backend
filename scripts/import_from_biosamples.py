@@ -1,6 +1,7 @@
 from elasticsearch import Elasticsearch
 import datetime
 from validate_sample_record import *
+from utils import remove_underscore_from_end_prefix
 from get_all_etags import fetch_biosample_ids
 from columns import *
 from misc import *
@@ -74,6 +75,7 @@ def main(es_hosts, es_index_prefix):
     hosts = es_hosts.split(";")
     logger.info("Command line parameters")
     logger.info("Hosts: "+str(hosts))
+    es_index_prefix = remove_underscore_from_end_prefix(es_index_prefix)
     if es_index_prefix:
         logger.info("Index_prefix:"+es_index_prefix)
 
@@ -136,8 +138,8 @@ def main(es_hosts, es_index_prefix):
         # TODO add logging
         if union[acc]['count'] == 1:
             logger.warning(f"{acc} only in source {union[acc]['source']}")
-    clean_elasticsearch(f'{es_index_prefix}specimen', es)
-    clean_elasticsearch(f'{es_index_prefix}organism', es)
+    clean_elasticsearch(f'{es_index_prefix}_specimen', es)
+    clean_elasticsearch(f'{es_index_prefix}_organism', es)
     logger.info(f"Program ends")
 
 
@@ -150,7 +152,7 @@ def get_existing_etags(host: str, es_index_prefix) -> Dict[str, str]:
         host = host + ":9200"
     results = dict()
     for item in ("organism", "specimen"):
-        url = f'http://{host}/{es_index_prefix}{item}/_search?_source=biosampleId,etag&sort=biosampleId&size=100000'
+        url = f'http://{host}/{es_index_prefix}_{item}/_search?_source=biosampleId,etag&sort=biosampleId&size=100000'
         response = requests.get(url).json()
         for result in response['hits']['hits']:
             if 'etag' in result['_source']:

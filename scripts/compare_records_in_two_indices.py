@@ -5,7 +5,7 @@ import click
 import requests
 from typing import Set
 import constants
-
+from utils import remove_underscore_from_end_prefix
 
 @click.command()
 @click.option(
@@ -51,6 +51,8 @@ def main(es_host, es_index_1, es_index_2, es_type):
     if error_flag:
         exit()
 
+    es_index_1 = remove_underscore_from_end_prefix(es_index_1)
+    es_index_2 = remove_underscore_from_end_prefix(es_index_2)
     url_1: str = f"{es_host}/{es_index_1}_{es_type}/_search?_source=_id&size=100000"
     url_2: str = f"{es_host}/{es_index_2}_{es_type}/_search?_source=_id&size=100000"
     resp1 = get_ids(url_1)

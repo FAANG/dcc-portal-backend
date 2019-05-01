@@ -6,6 +6,7 @@
 import subprocess
 import constants
 import click
+from utils import remove_underscore_from_end_prefix
 
 
 @click.command()
@@ -31,6 +32,8 @@ def main(es_host, input_index_pattern, output_index_pattern):
         exit()
 
     host: str = f'http://{es_host}/'
+    input_index_pattern = remove_underscore_from_end_prefix(input_index_pattern)
+    output_index_pattern = remove_underscore_from_end_prefix(output_index_pattern)
 
     for es_type in constants.INDICES:
         arr = ["elasticdump", f"--input={host}{input_index_pattern}_{es_type}",

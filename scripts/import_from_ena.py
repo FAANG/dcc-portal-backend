@@ -7,7 +7,7 @@ to help understanding the code
 import click
 from constants import TECHNOLOGIES
 from elasticsearch import Elasticsearch
-from utils import determine_file_and_source, check_existsence
+from utils import determine_file_and_source, check_existsence, remove_underscore_from_end_prefix
 from validate_experiment_record import *
 from validate_sample_record import *
 import constants
@@ -48,6 +48,7 @@ def main(es_hosts, es_index_prefix):
     hosts = es_hosts.split(";")
     logger.info("Command line parameters")
     logger.info("Hosts: "+str(hosts))
+    es_index_prefix = remove_underscore_from_end_prefix(es_index_prefix)
     if es_index_prefix:
         logger.info("Index_prefix:"+es_index_prefix)
 
@@ -56,7 +57,7 @@ def main(es_hosts, es_index_prefix):
     logger.info("Retrieving data from ENA")
     data = get_ena_data()
 
-    logger.info(f"Get current specimens stored in the corresponding ES index {es_index_prefix}specimen")
+    logger.info(f"Get current specimens stored in the corresponding ES index {es_index_prefix}_specimen")
     biosample_ids = get_all_specimen_ids(hosts[0], es_index_prefix)
     if not biosample_ids:
         # TODO log to error
@@ -588,7 +589,7 @@ def get_all_specimen_ids(host, es_index_prefix):
     if not host.endswith(":9200"):
         host = host + ":9200"
     results = dict()
-    url = f'http://{host}/{es_index_prefix}specimen/_search?size=100000'
+    url = f'http://{host}/{es_index_prefix}_specimen/_search?size=100000'
     response = requests.get(url).json()
     for item in response['hits']['hits']:
         results[item['_id']] = item['_source']

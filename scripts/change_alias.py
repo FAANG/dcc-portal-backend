@@ -3,6 +3,8 @@ from elasticsearch import Elasticsearch
 import click
 import logging
 
+from utils import remove_underscore_from_end_prefix
+
 logger = logging.getLogger(__name__)
 logging.basicConfig(format='%(asctime)s\t%(levelname)s:\t%(name)s line %(lineno)s\t%(message)s', level=logging.INFO)
 logging.getLogger('elasticsearch').setLevel(logging.WARNING)
@@ -51,10 +53,7 @@ class ChangeAliases:
         if es_index_prefix:
             logger.info("Index_prefix:" + es_index_prefix)
         self.hosts = hosts
-        if es_index_prefix.endswith("_"):
-            str_len = len(es_index_prefix)
-            es_index_prefix = es_index_prefix[0:str_len-1]
-        self.es_index_prefix = es_index_prefix
+        self.es_index_prefix = remove_underscore_from_end_prefix(es_index_prefix)
         self.es = Elasticsearch(hosts)
         self.current_aliases = dict()
 
