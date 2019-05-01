@@ -148,7 +148,11 @@ class TestImportFromBiosamples(unittest.TestCase):
         pass
 
     def test_get_alternative_id(self):
-        pass
+        relationships = {
+            'sameAs': [1, 2, 3],
+            'EBI equivalent BioSample': [4, 5, 6]
+        }
+        self.assertEqual(import_from_biosamples.get_alternative_id(relationships), [1, 2, 3, 4, 5, 6])
 
     def test_add_organism_info_for_specimen(self):
         pass
