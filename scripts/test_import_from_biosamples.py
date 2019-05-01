@@ -142,7 +142,35 @@ class TestImportFromBiosamples(unittest.TestCase):
         pass
 
     def test_get_health_status(self):
-        pass
+        item1 = {
+            'characteristics': {
+                'health status': [
+                    {
+                        'text': 'text',
+                        'ontologyTerms': ['test']
+                    }
+                ]
+            }
+        }
+        item2 = {
+            'characteristics': {
+                'health status at collection': [
+                    {
+                        'text': 'text',
+                        'ontologyTerms': ['test']
+                    }
+                ]
+            }
+        }
+        value_to_return = [{'text': 'text', 'ontologyTerms': 'test'}]
+        self.assertEqual(import_from_biosamples.get_health_status(item1), value_to_return)
+        self.assertEqual(import_from_biosamples.get_health_status(item2), value_to_return)
+        with patch('import_from_biosamples.logger') as mock_logger:
+            item3 = {
+                'characteristics': {}
+            }
+            self.assertEqual(import_from_biosamples.get_health_status(item3), [])
+            self.assertEqual(mock_logger.debug.call_count, 1)
 
     def test_parse_relationship(self):
         pass

@@ -834,9 +834,7 @@ def get_health_status(item):
     elif 'health status at collection' in item['characteristics']:
         key = 'health status at collection'
     else:
-        # TODO logging
         logger.debug("Health status was not provided")
-        # print(item['characteristics'])
         return health_status
     for status in item['characteristics'][key]:
         health_status.append(
