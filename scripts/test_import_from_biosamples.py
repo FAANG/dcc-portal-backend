@@ -160,4 +160,36 @@ class TestImportFromBiosamples(unittest.TestCase):
         pass
 
     def test_clean_elasticsearch(self):
-        pass
+        return_value_to_be_cleaned = {
+            'hits': {
+                'hits': [
+                    {
+                        '_id': 1,
+                        '_source': {
+                            'standardMet': 'FAANG'
+                        }
+                    }
+                ]
+            }
+        }
+        return_value_not_to_be_cleaned = {
+            'hits': {
+                'hits': [
+                    {
+                        '_id': 1,
+                        '_source': {
+                            'standardMet': 'Legacy (basic)'
+                        }
+                    }
+                ]
+            }
+        }
+        es_instance = Mock()
+        es_instance.search.return_value = return_value_to_be_cleaned
+        import_from_biosamples.clean_elasticsearch('test', es_instance)
+        es_instance.search.assert_called_with(_source='_id,standardMet', index='test', size=100000)
+        self.assertEqual(es_instance.delete.call_count, 1)
+
+        es_instance.search.return_value = return_value_not_to_be_cleaned
+        import_from_biosamples.clean_elasticsearch('test', es_instance)
+        self.assertEqual(es_instance.delete.call_count, 1)
