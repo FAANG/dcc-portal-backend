@@ -189,8 +189,41 @@ class TestImportFromBiosamples(unittest.TestCase):
         self.assertEqual(import_from_biosamples.parse_date('2018.19.22'), '2018.19.22')
         self.assertEqual(import_from_biosamples.parse_date('2018-19-22'), '2018-19-22')
 
-    def test_insert_into_es(self):
-        pass
+    @patch('import_from_biosamples.validate_total_sample_records')
+    @patch('import_from_biosamples.utils.insert_into_es')
+    def test_insert_into_es(self, mock_insert_into_es, mock_validate_total_sample_records):
+        data = {
+            'test': {}
+        }
+        return_value = {
+            'test': {
+                'detail': {
+                    'test': {
+                        'status': 'error',
+                        'type': 'error',
+                        'message': 'error'
+                    },
+                }
+            }
+        }
+        mock_validate_total_sample_records.return_value = return_value
+        import_from_biosamples.RULESETS = ['test']
+        import_from_biosamples.logger = Mock()
+        import_from_biosamples.insert_into_es(data, 'faang_build_3_', 'organism', 'es')
+        self.assertEqual(mock_validate_total_sample_records.call_count, 1)
+        mock_validate_total_sample_records.assert_called_with({'test': {}}, 'organism', ['test'])
+        self.assertEqual(import_from_biosamples.logger.error.call_count, 1)
+        self.assertEqual(mock_insert_into_es.call_count, 1)
+        mock_insert_into_es.assert_called_with('es', 'faang_build_3_', 'organism', 'test', '{}')
+
+        return_value['test']['detail']['test']['status'] = 'not error'
+        mock_validate_total_sample_records.return_value = return_value
+        import_from_biosamples.STANDARDS['test'] = 'test'
+        import_from_biosamples.insert_into_es(data, 'faang_build_3_', 'organism', 'es')
+        self.assertEqual(mock_validate_total_sample_records.call_count, 2)
+        self.assertEqual(import_from_biosamples.logger.error.call_count, 1)
+        self.assertEqual(mock_insert_into_es.call_count, 2)
+        mock_insert_into_es.assert_called_with('es', 'faang_build_3_', 'organism', 'test', '{"standardMet": "test"}')
 
     def test_clean_elasticsearch(self):
         return_value_to_be_cleaned = {
