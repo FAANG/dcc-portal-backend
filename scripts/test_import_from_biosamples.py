@@ -154,7 +154,8 @@ class TestImportFromBiosamples(unittest.TestCase):
         pass
 
     def test_parse_date(self):
-        pass
+        self.assertEqual(import_from_biosamples.parse_date('2018.19.22'), '2018.19.22')
+        self.assertEqual(import_from_biosamples.parse_date('2018-19-22'), '2018-19-22')
 
     def test_insert_into_es(self):
         pass
