@@ -3,27 +3,40 @@ This script generates the set of empty indices
 1. es_index_prefix (CLI parameters)
 2. type of the data (defined in the global variable TYPES
 """
-
-from elasticsearch import Elasticsearch
 import os
 import click
+from elasticsearch import Elasticsearch
 
-
-TYPES = ["organism", "specimen", "dataset", "experiment", "file"]
+import sys
+sys.path.append('../scripts')
+from constants import INDICES
 
 
 # use click library to get command line parameters
 @click.command()
+@click.argument('es_index_prefix')
 @click.option(
     '--es_host',
     default="http://wp-np3-e2:9200",
     help='Specify the Elastic Search server (port should be included), default to be http://wp-np3-e2:9200.'
 )
 @click.option(
-    '--es_index_prefix',
-    help='Specify the Elastic Search index prefix'
+    '--delete_only',
+    default=False,
+    help='Indicate whether to create empty indices, i.e. if set to True, this scripts turns to delete existing indices'
 )
-def main(es_host, es_index_prefix) -> None:
+def main(es_host, es_index_prefix, delete_only) -> None:
+    """
+    Script to initialize/delete a build of indices determined by parameter es_index_prefix on Elastic Search server
+    if parameter delete_only is true, only delete any existing indices matching the prefix pattern,
+    no new indices will be created
+    """
+    """
+    :param es_host: Elastic
+    :param es_index_prefix:
+    :param delete_only:
+    :return:
+    """
     # check mandatory parameter
     es = Elasticsearch(es_host)
     if not es_index_prefix:
@@ -31,11 +44,17 @@ def main(es_host, es_index_prefix) -> None:
         exit()
 
     prefix = f"{es_host}/{es_index_prefix}"
-    for es_type in TYPES:
+    for es_type in INDICES:
         # delete the current index if existing
         flag = es.indices.exists(f"{es_index_prefix}_{es_type}")
         if flag:
             es.indices.delete(f"{es_index_prefix}_{es_type}")
+            if delete_only:
+                print(f"{es_index_prefix}_{es_type} deleted")
+
+        if delete_only:
+            continue
+
         # create index
         cmd = f"curl -X PUT '{prefix}_{es_type}' -H 'Content-Type: application/json' -d @faang_settings.json"
         print(cmd)
