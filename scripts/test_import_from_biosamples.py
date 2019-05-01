@@ -119,7 +119,21 @@ class TestImportFromBiosamples(unittest.TestCase):
         pass
 
     def test_check_existence(self):
-        pass
+        item = {
+            'characteristics': {
+                'test': [
+                    {
+                        'text': 1,
+                        'unit': 1,
+                        'ontologyTerms': [1]
+                    }
+                ]
+            }
+        }
+        self.assertEqual(import_from_biosamples.check_existence(item, 'test', 'text'), 1)
+        self.assertEqual(import_from_biosamples.check_existence(item, 'test', 'unit'), 1)
+        self.assertEqual(import_from_biosamples.check_existence(item, 'test', 'ontologyTerms'), 1)
+        self.assertEqual(import_from_biosamples.check_existence(item, 'test2', 'ontologyTerms'), None)
 
     def test_populate_basic_biosample_info(self):
         pass
