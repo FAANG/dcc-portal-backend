@@ -55,7 +55,25 @@ class TestImportFromBiosamples(unittest.TestCase):
             self.assertEqual(results, {'etag': {}})
 
     def test_check_is_faang(self):
-        pass
+        item_true = {
+            'characteristics': {
+                'project': [
+                    {
+                        'text': 'FAANG'
+                    }
+                ]
+            }
+        }
+        item_false = {
+            'characteristics': {
+                'project': [
+                    {
+                    }
+                ]
+            }
+        }
+        self.assertEqual(import_from_biosamples.check_is_faang(item_true), True)
+        self.assertEqual(import_from_biosamples.check_is_faang(item_false), False)
 
     def test_deal_with_decimal_degrees(self):
         pass
