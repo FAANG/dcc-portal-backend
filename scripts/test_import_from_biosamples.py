@@ -182,8 +182,15 @@ class TestImportFromBiosamples(unittest.TestCase):
         }
         self.assertEqual(import_from_biosamples.get_alternative_id(relationships), [1, 2, 3, 4, 5, 6])
 
-    def test_add_organism_info_for_specimen(self):
-        pass
+    @patch('import_from_biosamples.get_health_status')
+    @patch('import_from_biosamples.check_existence')
+    def test_add_organism_info_for_specimen(self, mock_check_existence, mock_get_health_status):
+        item = {
+            'accession': 'test'
+        }
+        import_from_biosamples.add_organism_info_for_specimen('test', item)
+        self.assertEqual(mock_check_existence.call_count, 6)
+        self.assertEqual(mock_get_health_status.call_count, 1)
 
     def test_parse_date(self):
         self.assertEqual(import_from_biosamples.parse_date('2018.19.22'), '2018.19.22')
