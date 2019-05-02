@@ -139,7 +139,39 @@ class TestImportFromBiosamples(unittest.TestCase):
         pass
 
     def test_extract_custom_field(self):
-        pass
+        doc = dict()
+        item = {
+            'characteristics': {}
+        }
+        material_type = 'test'
+        import_from_biosamples.logger = Mock()
+        self.assertEqual(import_from_biosamples.extract_custom_field(doc, item, material_type), {})
+        self.assertEqual(import_from_biosamples.logger.error.call_count, 1)
+
+        item['characteristics'] = {
+            'test1': 'test1',
+            'test2': ['test2'],
+            'test3': {
+                'text': 'text',
+                'unit': 'unit',
+                'ontologyTerms': 'ontologyTerms'
+            }
+        }
+        material_type = 'organism'
+        should_be_equal = {
+            'customField': [
+                {'name': 'test1', 'value': 'test1'},
+                {'name': 'test2', 'value': 'test2'},
+                {
+                    'name': 'test3',
+                    'ontologyTerms': 'ontologyTerms',
+                    'unit': 'unit',
+                    'value': 'text'
+                }
+            ]
+        }
+        self.assertEqual(import_from_biosamples.extract_custom_field(doc, item, material_type), should_be_equal)
+
 
     def test_get_health_status(self):
         item1 = {

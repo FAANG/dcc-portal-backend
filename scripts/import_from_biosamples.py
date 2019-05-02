@@ -792,8 +792,8 @@ def extract_custom_field(doc, item, material_type):
     """
     characteristics = item['characteristics'].copy()
     if material_type not in known_columns:
-        # TODO logging to error
-        sys.exit(0)
+        logger.error(f"{material_type} not in known_columns")
+        return doc
     for column in common_columns + known_columns[material_type]:
         if column in characteristics:
             characteristics.pop(column)
