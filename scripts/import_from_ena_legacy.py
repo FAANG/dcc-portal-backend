@@ -70,7 +70,7 @@ SPECIES_DICT = {
   "9823": "Sus scrofa",
   "9940": "Ovis aries",
   "9796": "Equus caballus",
-  "9925":"Capra hircus"
+  "9925": "Capra hircus"
 }
 SPECIES_TAXOMONY_LIST = list(SPECIES_DICT.keys())
 
@@ -114,10 +114,6 @@ FIELD_LIST = [
     'cram_index_aspera', 'cram_index_galaxy', 'project_name'
 ]
 
-# logger = utils.create_logging_instance('import_ena_legacy', level=logging.INFO)
-logger = logging.getLogger(__name__)
-logging.basicConfig(format='%(asctime)s\t%(levelname)s:\t%(name)s line %(lineno)s\t%(message)s', level=logging.INFO)
-
 
 def get_biosamples_records_from_es(host, es_index_prefix, es_type):
     """
@@ -125,7 +121,6 @@ def get_biosamples_records_from_es(host, es_index_prefix, es_type):
     :param host: elasticsearch python instance
     :param es_index_prefix: the name of the index set
     :param es_type: type of record, either organism or specimen
-    :return:
     """
     global BIOSAMPLES_RECORDS
     url = f'http://{host}/{es_index_prefix}_{es_type}/_search?size=100000'
@@ -142,7 +137,7 @@ def get_faang_datasets(host: str, es_index_prefix: str) -> Set[str]:
     Get the id list of existing datasets with FAANG standard stored in the Elastic Search
     :param host: the Elastic Search server address
     :param es_index_prefix: the Elastic Search dataset index
-    :return: set of dataset id
+    :return: set of FAANG dataset id
     """
     url = f"http://{host}/{es_index_prefix}_dataset/_search?_source=standardMet"
     response = requests.get(url).json()
@@ -158,21 +153,6 @@ def get_faang_datasets(host: str, es_index_prefix: str) -> Set[str]:
     return datasets
 
 
-def parse_date(date_str: str) -> str:
-    """
-    extract YYYY-MM-DD from ISO date string used by BioSamples
-    :param date_str:
-    :return:
-    """
-    if date_str:
-        match = re.search(r'(\d+-\d+-\d+)T', date_str)
-        if match:
-            return match.group(1)
-        else:
-            return date_str
-    return None
-
-
 def retrieve_biosamples_record(es, es_index_prefix, biosample_id):
     """
     retrieve biosample record on the fly which referenced in the non-FAANG ENA study and store into ES
@@ -180,9 +160,9 @@ def retrieve_biosamples_record(es, es_index_prefix, biosample_id):
     0: already existing in ES, nothing done in this function
     200: successfully retrieved record
     all other values: error to retrieve the record
-    :param es:
-    :param es_index_prefix:
-    :param biosample_id:
+    :param es: Elastic search python instance
+    :param es_index_prefix: Elastic search index prefix
+    :param biosample_id: BioSanples id
     :return: status code
     """
 
@@ -281,21 +261,21 @@ def retrieve_biosamples_record(es, es_index_prefix, biosample_id):
         CACHED_MATERIAL[biosample_id]['material'] = default_material_value
 
     es_doc = dict()
-    # record labelled as FAANG does not guarantee to be in ES as it may fail the validation,
+    # sample record labelled as FAANG does not guarantee to be in ES as it may fail the validation,
     # but should not be dealt with here
 
     if 'project' in data['characteristics'] and data['characteristics']['project'][0]['text'] == 'FAANG':
-        pass
-        # return -1
+        return -1
     es_doc['biosampleId'] = biosample_id
     es_doc['name'] = data['name']
     es_doc['material'] = CACHED_MATERIAL[biosample_id]['material']
 
     is_ebi_record = False
+    # id_number is an artificial value which make it possible to sort BioSamples records using numeric order
     if biosample_id[0:5] == 'SAMEA':
         es_doc['id_number'] = biosample_id[5:]
         is_ebi_record = True
-    else:
+    else:  # non EBI BioSamples record, indicating by using - sign
         match = re.search(r'\d+', biosample_id)
         if match:
             es_doc['id_number'] = -int(match.group(0))
@@ -307,17 +287,19 @@ def retrieve_biosamples_record(es, es_index_prefix, biosample_id):
 
     species_key = get_field_name(data, 'organism', 'Organism')
 
-    # https://www.ncbi.nlm.nih.gov/biosample/docs/attributes/?format=xml
-    # NCBI uses attributes, like EBI uses characteristics, <Name>field name</Name>
-    # FAANG mandatory field  => NCBI attribute(s)      EBI
-    # organism part => tissue                organism part
-    # cell type => cell type                 cell type
-    # breed => breed                         breed
-    # sex => sex                             sex
-    # developmental stage => development stage     developmental stage
+    """
+    https://www.ncbi.nlm.nih.gov/biosample/docs/attributes/?format=xml
+    NCBI uses attributes, like EBI uses characteristics, <Name>field name</Name>
+    FAANG mandatory field  => NCBI attribute(s)      EBI
+    organism part => tissue                organism part
+    cell type => cell type                 cell type
+    breed => breed                         breed
+    sex => sex                             sex
+    developmental stage => development stage     developmental stage
+    """
 
     found_fields = set()
-    es_type = None
+
     if CACHED_MATERIAL[biosample_id]['material']['text'] == 'organism':
         es_type = 'organism'
         es_doc, found_fields = extract_field_info(data, es_doc, found_fields, 'sex', 'sex')
@@ -363,6 +345,7 @@ def retrieve_biosamples_record(es, es_index_prefix, biosample_id):
     # as no project = FAANG (otherwise already dealt with by import biosample), the standard is always basic
     es_doc['standardMet'] = 'Legacy (basic)'
     # animal only gets assigned during dealing with the relationship derived from
+    # https://stackoverflow.com/questions/1592565/determine-if-variable-is-defined-in-python
     try:
         animal
     except NameError:
@@ -411,12 +394,12 @@ def extract_field_info(data, es_doc, found_fields, result_field_name, target_fie
     """
     extract data for particular field :param target_field_name from the BioSamples API record :param data
     and save into the document :param es_doc as field :param result_field_name while adding into found_fields
-    :param data:
-    :param es_doc:
-    :param found_fields:
-    :param result_field_name:
-    :param target_field_name:
-    :param es_section:
+    :param data: BioSamples API records
+    :param es_doc: Elastic search document
+    :param found_fields: list of fields which have been found in the BioSamples record
+    :param result_field_name: the field name to store the extract information in the es_doc
+    :param target_field_name: the field name to be search in the BioSamples record
+    :param es_section: indicate which section the field belongs to in the es_doc, if in the root, set to None
     :return:
     """
     if target_field_name in data['characteristics']:
@@ -473,7 +456,6 @@ def main(es_hosts, es_index_prefix):
     Main function that will import legacy data (not FAANG labelled) from ena
     :param es_hosts: elasticsearch hosts where the data import into
     :param es_index_prefix: the index prefix points to a particular version of data
-    :return:
     """
     logger.info('Start')
     hosts = es_hosts.split(";")
@@ -635,7 +617,8 @@ def main(es_hosts, es_index_prefix):
                     }
                     experiments[exp_id] = exp_es
 
-                # dataset (study) has mutliple experiments/runs/files/specimens_list so collection information into datasets
+                # dataset (study) has mutliple experiments/runs/files/specimens_list
+                # so collection information into datasets
                 # and process it after iteration of all files
                 dataset_id = record['study_accession']
                 es_doc_dataset = dict()
@@ -692,7 +675,7 @@ def main(es_hosts, es_index_prefix):
         if dataset_id == 'tmp':
             continue
         if dataset_id in datasets['tmp'] and 'experiment' in datasets['tmp'][dataset_id]:
-             num_exps = len(list(datasets['tmp'][dataset_id]["experiment"].keys()))
+            num_exps = len(list(datasets['tmp'][dataset_id]["experiment"].keys()))
         printed_index = index + 1
         logger.info(f"{printed_index} {dataset_id} has {num_exps} experiments to be processed")
     # datasets contains one artificial value set with the key as 'tmp', so need to -1
@@ -704,10 +687,7 @@ def main(es_hosts, es_index_prefix):
         exp_es = experiments[exp_id]
         for ruleset in RULESETS:
             if validation_results[ruleset]['detail'][exp_id]['status'] == 'error':
-                # TODO logging to error
-                # logger.info(f"{exp_id}\t{exps_in_dataset[exp_id]}\tExperiment\terror\t"
-                #            f"{validation_results[ruleset]['detail'][exp_id]['message']}")
-                pass
+                logger.info(f"{exp_id}\tExperiment\terror\t{validation_results[ruleset]['detail'][exp_id]['message']}")
             else:
                 # only indexing when meeting standard
                 exp_validation[exp_id] = STANDARDS[ruleset]
@@ -795,55 +775,7 @@ def main(es_hosts, es_index_prefix):
         utils.insert_into_es(es, es_index_prefix, 'dataset', dataset_id, body)
     logger.info("finishing indexing datasets")
 
-def get_ena_data():
-    """
-    This function will fetch data from ena FAANG data portal ruead_run result
-    :return: json representation of data from ena
-    """
-    response = requests.get('https://www.ebi.ac.uk/ena/portal/api/search/?result=read_run&format=JSON&limit=0'
-                            '&dataPortal=faang&fields=all').json()
-    return response
-
-
-def get_all_specimen_ids(host, es_index_prefix):
-    """
-    This function return dict with all information from the corresponding specimens
-    :return: A dict with keys as BioSamples id and values as the data stored in ES
-    """
-    if not host.endswith(":9200"):
-        host = host + ":9200"
-    results = dict()
-    url = f'http://{host}/{es_index_prefix}_specimen/_search?size=100000'
-    response = requests.get(url).json()
-    for item in response['hits']['hits']:
-        results[item['_id']] = item['_source']
-    return results
-
-
-def get_known_errors():
-    """
-    This function will read file with association from study to biosample
-    :return: dictionary with study as a key and biosample as a values
-    """
-    known_errors = dict()
-    with open('ena_not_in_biosample.txt', 'r') as f:
-        for line in f:
-            line = line.rstrip()
-            study, biosample = line.split("\t")
-            known_errors.setdefault(study, {})
-            known_errors[study][biosample] = 1
-    return known_errors
-
-
-def check_existsence(data_to_check, field_to_check):
-    if field_to_check in data_to_check:
-        if len(data_to_check[field_to_check]) == 0:
-            return None
-        else:
-            return data_to_check[field_to_check]
-    else:
-        return None
-
 
 if __name__ == "__main__":
+    logger = utils.create_logging_instance('import_ena_legacy', level=logging.INFO)
     main()
