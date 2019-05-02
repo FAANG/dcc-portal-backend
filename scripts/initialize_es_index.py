@@ -1,14 +1,11 @@
 """
 This script generates the set of empty indices
 1. es_index_prefix (CLI parameters)
-2. type of the data (defined in the global variable TYPES
+2. type of the data (defined in the global variable TYPES)
 """
 import os
 import click
 from elasticsearch import Elasticsearch
-
-import sys
-sys.path.append('../scripts')
 from constants import INDICES
 
 
@@ -32,9 +29,9 @@ def main(es_host, es_index_prefix, delete_only) -> None:
     no new indices will be created
     """
     """
-    :param es_host: Elastic
-    :param es_index_prefix:
-    :param delete_only:
+    :param es_host: Elastic search host
+    :param es_index_prefix: 
+    :param delete_only: indicates whether it just deletes existing indices (True) or initialize as well (False)
     :return:
     """
     # check mandatory parameter
@@ -56,13 +53,14 @@ def main(es_host, es_index_prefix, delete_only) -> None:
             continue
 
         # create index
-        cmd = f"curl -X PUT '{prefix}_{es_type}' -H 'Content-Type: application/json' -d @faang_settings.json"
+        cmd = f"curl -X PUT '{prefix}_{es_type}' -H 'Content-Type: application/json' " \
+            f"-d @../elasticsearch/faang_settings.json"
         print(cmd)
         os.system(cmd)
         print()
         # put the mapping
         cmd = f"curl -X PUT '{prefix}_{es_type}/_mapping/_doc' -H 'Content-Type: application/json' " \
-            f"-d @{es_type}.mapping.json"
+            f"-d @../elasticsearch/{es_type}.mapping.json"
         print(cmd)
         os.system(cmd)
         print()
