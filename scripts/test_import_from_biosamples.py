@@ -40,8 +40,35 @@ class TestImportFromBiosamples(unittest.TestCase):
     def test_fetch_records_by_project_via_etag(self):
         pass
 
-    def test_fetch_records_by_project(self):
-        pass
+    @patch('import_from_biosamples.check_is_faang')
+    def test_fetch_records_by_project(self, mock_check_is_faang):
+        mock_check_is_faang.return_value = False
+        import_from_biosamples.logger = Mock()
+        import_from_biosamples.ETAGS_CACHE = {1: 1}
+        with patch('import_from_biosamples.requests') as mock_requests:
+            tmp = mock_requests.get.return_value
+            tmp.json.return_value = {
+                '_embedded': {
+                    'samples': [
+                        {
+                            'characteristics': {
+                                'Material': [
+                                    {'text': 'organism'}
+                                ]
+                            },
+                            'accession': 1
+                        }
+                    ]
+                },
+                '_links': {}
+            }
+            import_from_biosamples.fetch_records_by_project()
+            self.assertEqual(mock_requests.get.call_count, 1)
+            self.assertEqual(import_from_biosamples.logger.info.call_count, 2)
+
+            mock_check_is_faang.return_value = True
+            import_from_biosamples.fetch_records_by_project()
+            self.assertEqual(import_from_biosamples.logger.info.call_count, 5)
 
     def test_fetch_single_record(self):
         with patch('import_from_biosamples.requests') as mock_requests:
@@ -254,7 +281,6 @@ class TestImportFromBiosamples(unittest.TestCase):
 
         item['relationships'][0]['type'] = 'type'
         self.assertEqual(import_from_biosamples.parse_relationship(item), {'type': {'target': 2}})
-
 
     def test_get_alternative_id(self):
         relationships = {
