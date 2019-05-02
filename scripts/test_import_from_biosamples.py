@@ -136,7 +136,31 @@ class TestImportFromBiosamples(unittest.TestCase):
         self.assertEqual(import_from_biosamples.check_existence(item, 'test2', 'ontologyTerms'), None)
 
     def test_populate_basic_biosample_info(self):
-        pass
+        doc = dict()
+        item = {
+            'name': 'name',
+            'accession': 'SAMEA12345',
+            'etag': 'etag',
+            'organization': [
+                {}
+            ],
+            'release': '2019-01-01',
+            'update': '2019-01-01'
+        }
+        should_be_equal = {
+            'name': 'name',
+            'biosampleId': 'SAMEA12345',
+            'description': None,
+            'etag': 'etag',
+            'id_number': '12345',
+            'material': {'ontologyTerms': None, 'text': None},
+            'organization': [{'URL': None, 'name': None, 'role': None}],
+            'project': None,
+            'releaseDate': '2019-01-01',
+            'updateDate': '2019-01-01',
+            'availability': None
+        }
+        self.assertEqual(import_from_biosamples.populate_basic_biosample_info(doc, item), should_be_equal)
 
     def test_extract_custom_field(self):
         doc = dict()
@@ -171,7 +195,6 @@ class TestImportFromBiosamples(unittest.TestCase):
             ]
         }
         self.assertEqual(import_from_biosamples.extract_custom_field(doc, item, material_type), should_be_equal)
-
 
     def test_get_health_status(self):
         item1 = {
