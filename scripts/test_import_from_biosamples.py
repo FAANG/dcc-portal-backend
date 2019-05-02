@@ -151,8 +151,29 @@ class TestImportFromBiosamples(unittest.TestCase):
         item['characteristics']['Material'][0]['text'] = 'specimen'
         self.assertEqual(import_from_biosamples.deal_with_decimal_degrees(item), item)
 
-    def test_process_organisms(self):
-        pass
+    @patch('import_from_biosamples.add_organism_info_for_specimen')
+    @patch('import_from_biosamples.get_alternative_id')
+    @patch('import_from_biosamples.parse_relationship')
+    @patch('import_from_biosamples.get_health_status')
+    @patch('import_from_biosamples.extract_custom_field')
+    @patch('import_from_biosamples.populate_basic_biosample_info')
+    @patch('import_from_biosamples.check_existence')
+    @patch('import_from_biosamples.insert_into_es')
+    def test_process_organisms(self, mock_insert_into_es, mock_check_existence, mock_populate_basic_biosample_info,
+                               mock_extract_custom_field, mock_get_health_status, mock_parse_relationship,
+                               mock_get_alternative_id, mock_add_organism_info_for_specimen):
+        es_instance = Mock()
+        es_index_prefix = 'test'
+        import_from_biosamples.ORGANISM = {'test': {'characteristics': {}}}
+        import_from_biosamples.process_organisms(es_instance, es_index_prefix)
+        self.assertEqual(mock_check_existence.call_count, 22)
+        self.assertEqual(mock_insert_into_es.call_count, 1)
+        self.assertEqual(mock_populate_basic_biosample_info.call_count, 1)
+        self.assertEqual(mock_extract_custom_field.call_count, 1)
+        self.assertEqual(mock_get_health_status.call_count, 1)
+        self.assertEqual(mock_parse_relationship.call_count, 1)
+        self.assertEqual(mock_get_alternative_id.call_count, 1)
+        self.assertEqual(mock_add_organism_info_for_specimen.call_count, 1)
 
     def test_process_specimens(self):
         pass
