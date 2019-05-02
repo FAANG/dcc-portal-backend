@@ -2,8 +2,7 @@
 Test cases for import_from_biosamples
 """
 import unittest
-from unittest.mock import Mock
-from unittest.mock import patch
+from unittest.mock import patch, Mock, mock_open
 
 import import_from_biosamples
 
@@ -37,8 +36,33 @@ class TestImportFromBiosamples(unittest.TestCase):
                 'etag&sort=biosampleId&size=100000')
             self.assertEqual(results, {1: 1, 2: 2})
 
-    def test_fetch_records_by_project_via_etag(self):
-        pass
+    @patch('import_from_biosamples.check_is_faang')
+    @patch('import_from_biosamples.fetch_single_record')
+    @patch('builtins.open', new_callable=mock_open, read_data="test\ttest")
+    def test_fetch_records_by_project_via_etag(self, mock_file, mock_fetch_single_record, mock_check_is_faang):
+        import_from_biosamples.logger = Mock()
+        import_from_biosamples.fetch_records_by_project_via_etag({'test': 'test'})
+        self.assertEqual(mock_file.call_count, 1)
+        self.assertEqual(import_from_biosamples.logger.info.call_count, 2)
+        mock_file.assert_called_with('etag_list_2019-05-02.txt', 'r')
+
+        mock_fetch_single_record.return_value = {}
+        mock_check_is_faang.return_value = False
+        import_from_biosamples.fetch_records_by_project_via_etag({'test2': 'test2'})
+        self.assertEqual(import_from_biosamples.logger.info.call_count, 4)
+
+        mock_fetch_single_record.return_value = {
+            'characteristics': {
+                'Material': [
+                    {
+                        'text': 'organism'
+                    }
+                ]
+            }
+        }
+        mock_check_is_faang.return_value = True
+        import_from_biosamples.fetch_records_by_project_via_etag({'test2': 'test2'})
+        self.assertEqual(import_from_biosamples.logger.info.call_count, 7)
 
     @patch('import_from_biosamples.check_is_faang')
     def test_fetch_records_by_project(self, mock_check_is_faang):
