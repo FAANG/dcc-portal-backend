@@ -122,7 +122,19 @@ def create_summary_document_for_breeds(data):
     return results
 
 
+DATA_SOURCES = ['fastq', 'sra', 'cram_index']
+DATA_TYPES = ['ftp', 'galaxy', 'aspera']
+
+
 def determine_file_and_source(record):
+    """
+    predict the combination of data source and data type to use for file information
+    for data source, the preference in the order of fastq, sra, cram_index
+    for file type, the preference in the order of ftp, galaxy, aspera
+    the order is from the observation of data availabilities in those fields, so subject to change
+    :param record: one data record from ENA API
+    :return: the predicted file type and source type, if not found, return two empty strings
+    """
     file_type = ''
     source_type = ''
     for data_source in DATA_SOURCES:
@@ -135,11 +147,13 @@ def determine_file_and_source(record):
     return file_type, source_type
 
 
-DATA_SOURCES = ['fastq', 'sra', 'cram_index']
-DATA_TYPES = ['ftp', 'galaxy', 'aspera']
-
-
 def check_existsence(data_to_check, field_to_check):
+    """
+    Check whether a field exists in the data record and return the corresponding value
+    :param data_to_check: the record data
+    :param field_to_check: the name of the field
+    :return: if exists, return the value holding for the field, if not, return None
+    """
     if field_to_check in data_to_check:
         if len(data_to_check[field_to_check]) == 0:
             return None
@@ -150,6 +164,11 @@ def check_existsence(data_to_check, field_to_check):
 
 
 def remove_underscore_from_end_prefix(es_index_prefix: str)->str:
+    """
+    Remove the last underscore from index prefix if existing
+    :param es_index_prefix: the index prefix may having underscore at the end
+    :return: the 'cleaned' index prefix
+    """
     if es_index_prefix.endswith("_"):
         str_len = len(es_index_prefix)
         es_index_prefix = es_index_prefix[0:str_len - 1]

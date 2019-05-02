@@ -70,3 +70,18 @@ def convert_readable(size_to_convert):
     if i == 0:
         return f"{size_to_convert}B"
     return f"{round(size_to_convert, 2)}{units[i]}"
+
+
+def parse_date(date_str: str) -> str:
+    """
+    extract YYYY-MM-DD from ISO date string used by BioSamples
+    :param date_str: ISO date string
+    :return: parsed date
+    """
+    if date_str:
+        match = re.search(r'(\d+-\d+-\d+)T', date_str)
+        if match:
+            return match.group(1)
+        else:
+            return date_str
+    return None

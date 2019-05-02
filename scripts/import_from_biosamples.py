@@ -922,19 +922,6 @@ def add_organism_info_for_specimen(accession, item):
     ORGANISM_FOR_SPECIMEN[accession]['healthStatus'] = get_health_status(item)
 
 
-def parse_date(date_str):
-    """
-    This function parses date
-    :param date_str: date to parse
-    :return: parsed date
-    """
-    # TODO logging to error if date doesn't exist
-    parsed_date = re.search(r"(\d+-\d+-\d+)T", date_str)
-    if parsed_date:
-        date_str = parsed_date.groups()[0]
-    return date_str
-
-
 def insert_into_es(data, index_prefix, my_type, es):
     """
     This function will update current index with new data
