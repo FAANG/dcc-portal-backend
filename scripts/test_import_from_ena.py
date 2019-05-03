@@ -11,8 +11,12 @@ class TestImportFromEna(unittest.TestCase):
     def test_determine_file_and_source(self):
         pass
 
-    def test_get_ena_data(self):
-        pass
+    @patch('import_from_ena.requests')
+    def test_get_ena_data(self, mock_requests):
+        import_from_ena.get_ena_data()
+        self.assertEqual(mock_requests.get.call_count, 1)
+        mock_requests.get.assert_called_with('https://www.ebi.ac.uk/ena/portal/api/search/'
+                                             '?result=read_run&format=JSON&limit=0&dataPortal=faang&fields=all')
 
     @patch('import_from_ena.requests')
     def test_get_all_specimen_ids(self, mock_requests):
