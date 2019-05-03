@@ -17,8 +17,11 @@ class TestImportFromEna(unittest.TestCase):
     def test_get_all_specimen_ids(self):
         pass
 
-    def test_get_known_errors(self):
-        pass
+    @patch('builtins.open', new_callable=mock_open, read_data="test\ttest")
+    def test_get_known_errors(self, mock_file):
+        result = import_from_ena.get_known_errors()
+        mock_file.assert_called_with('ena_not_in_biosample.txt', 'r')
+        self.assertEqual(result, {'test': {'test': 1}})
 
     def test_check_existsence(self):
         item = {
