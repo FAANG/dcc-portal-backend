@@ -303,8 +303,30 @@ class TestImportFromBiosamples(unittest.TestCase):
         self.assertEqual(mock_get_alternative_id.call_count, 1)
         self.assertEqual(mock_insert_into_es.call_count, 1)
 
-    def test_process_cell_lines(self):
-        pass
+    @patch('import_from_biosamples.insert_into_es')
+    @patch('import_from_biosamples.get_alternative_id')
+    @patch('import_from_biosamples.extract_custom_field')
+    @patch('import_from_biosamples.populate_basic_biosample_info')
+    @patch('import_from_biosamples.get_filename_from_url')
+    @patch('import_from_biosamples.check_existence')
+    @patch('import_from_biosamples.parse_relationship')
+    def test_process_cell_lines(self, mock_parse_relationship, mock_check_existence, mock_get_filename_from_url,
+                                mock_populate_basic_biosample_info, mock_extract_custom_field, mock_get_alternative_id,
+                                mock_insert_into_es):
+        es_instance = Mock()
+        es_index_prefix = 'test'
+        mock_parse_relationship.return_value = {
+            'derivedFrom': ['test']
+        }
+        import_from_biosamples.CELL_LINE = {'test': {'characteristics': {}}}
+        import_from_biosamples.process_cell_lines(es_instance, es_index_prefix)
+        self.assertEqual(mock_parse_relationship.call_count, 1)
+        self.assertEqual(mock_check_existence.call_count, 22)
+        self.assertEqual(mock_get_filename_from_url.call_count, 1)
+        self.assertEqual(mock_populate_basic_biosample_info.call_count, 1)
+        self.assertEqual(mock_extract_custom_field.call_count, 1)
+        self.assertEqual(mock_get_alternative_id.call_count, 1)
+        self.assertEqual(mock_insert_into_es.call_count, 1)
 
     def test_check_existence(self):
         item = {
