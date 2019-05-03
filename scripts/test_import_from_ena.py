@@ -9,7 +9,12 @@ import import_from_ena
 
 class TestImportFromEna(unittest.TestCase):
     def test_determine_file_and_source(self):
-        pass
+        record = {
+            'fastq_ftp': 'test'
+        }
+        self.assertEqual(import_from_ena.determine_file_and_source(record), ('ftp', 'fastq'))
+        record = {}
+        self.assertEqual(import_from_ena.determine_file_and_source(record), ('', ''))
 
     @patch('import_from_ena.requests')
     def test_get_ena_data(self, mock_requests):
