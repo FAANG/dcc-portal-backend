@@ -3,6 +3,7 @@ Test cases for import_from_biosamples
 """
 import unittest
 from unittest.mock import patch, Mock, mock_open
+from datetime import date
 
 import import_from_biosamples
 
@@ -44,7 +45,8 @@ class TestImportFromBiosamples(unittest.TestCase):
         import_from_biosamples.fetch_records_by_project_via_etag({'test': 'test'})
         self.assertEqual(mock_file.call_count, 1)
         self.assertEqual(import_from_biosamples.logger.info.call_count, 2)
-        mock_file.assert_called_with('etag_list_2019-05-02.txt', 'r')
+        today = date.today().strftime('%Y-%m-%d')
+        mock_file.assert_called_with(f'etag_list_{today}.txt', 'r')
 
         mock_fetch_single_record.return_value = {}
         mock_check_is_faang.return_value = False
@@ -225,7 +227,7 @@ class TestImportFromBiosamples(unittest.TestCase):
         self.assertEqual(mock_parse_relationship.call_count, 1)
         self.assertEqual(mock_check_existence.call_count, 4)
         self.assertEqual(mock_get_filename_from_url.call_count, 1)
-        # self.assertEqual(mock_fetch_single_record.call_count, 1)
+        self.assertEqual(mock_fetch_single_record.call_count, 0)
         self.assertEqual(mock_populate_basic_biosample_info.call_count, 1)
         self.assertEqual(mock_extract_custom_field.call_count, 1)
         self.assertEqual(mock_get_alternative_id.call_count, 1)
@@ -258,8 +260,48 @@ class TestImportFromBiosamples(unittest.TestCase):
         self.assertEqual(mock_insert_into_es.call_count, 1)
         self.assertEqual(mock_populate_basic_biosample_info.call_count, 1)
 
-    def test_process_pool_specimen(self):
-        pass
+    @patch('import_from_biosamples.insert_into_es')
+    @patch('import_from_biosamples.get_alternative_id')
+    @patch('import_from_biosamples.extract_custom_field')
+    @patch('import_from_biosamples.populate_basic_biosample_info')
+    @patch('import_from_biosamples.get_filename_from_url')
+    @patch('import_from_biosamples.check_existence')
+    @patch('import_from_biosamples.parse_relationship')
+    def test_process_pool_specimen(self, mock_parse_relationship, mock_check_existence, mock_get_filename_from_url,
+                                   mock_populate_basic_biosample_info, mock_extract_custom_field,
+                                   mock_get_alternative_id, mock_insert_into_es):
+        es_instance = Mock()
+        es_index_prefix = 'test'
+        mock_parse_relationship.return_value = {
+            'derivedFrom': {
+                'test': 'test'
+            }
+        }
+        import_from_biosamples.POOL_SPECIMEN = {'test': {'characteristics': {}}}
+        import_from_biosamples.SPECIMEN_FROM_ORGANISM = {'test': {}}
+        import_from_biosamples.SPECIMEN_ORGANISM_RELATIONSHIP = {'test': 'test'}
+        import_from_biosamples.ORGANISM_FOR_SPECIMEN = {'test': {
+            'organism': {
+                'text': 'text',
+                'ontologyTerms': 'ontologyTerms'
+            },
+            'sex': {
+                'text': 'text',
+                'ontologyTerms': 'ontologyTerms'
+            },
+            'breed': {
+                'text': 'text',
+                'ontologyTerms': 'ontologyTerms'
+            }
+        }}
+        import_from_biosamples.process_pool_specimen(es_instance, es_index_prefix)
+        self.assertEqual(mock_parse_relationship.call_count, 1)
+        self.assertEqual(mock_check_existence.call_count, 9)
+        self.assertEqual(mock_get_filename_from_url.call_count, 1)
+        self.assertEqual(mock_populate_basic_biosample_info.call_count, 1)
+        self.assertEqual(mock_extract_custom_field.call_count, 1)
+        self.assertEqual(mock_get_alternative_id.call_count, 1)
+        self.assertEqual(mock_insert_into_es.call_count, 1)
 
     def test_process_cell_lines(self):
         pass
