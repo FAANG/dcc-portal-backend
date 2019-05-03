@@ -45,8 +45,8 @@ def main(es_host, es_index_1, es_index_2, es_type):
         print("mandatory parameter es_type is not provided")
         error_flag = True
     else:
-        if es_type not in constants.INDICES:
-            print("Unrecognized type which must be one of {}".format(",".join(constants.INDICES)))
+        if es_type not in constants.TYPES:
+            print("Unrecognized type which must be one of {}".format(",".join(constants.TYPES)))
             error_flag = True
     if error_flag:
         exit()

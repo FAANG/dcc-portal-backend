@@ -35,7 +35,7 @@ def main(es_host, input_index_pattern, output_index_pattern):
     input_index_pattern = remove_underscore_from_end_prefix(input_index_pattern)
     output_index_pattern = remove_underscore_from_end_prefix(output_index_pattern)
 
-    for es_type in constants.INDICES:
+    for es_type in constants.TYPES:
         arr = ["elasticdump", f"--input={host}{input_index_pattern}_{es_type}",
                f"--output={host}{output_index_pattern}_{es_type}", "--type=data"]
         cmd = " ".join(arr)

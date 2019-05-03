@@ -24,10 +24,6 @@ ORGANISM_FOR_SPECIMEN = dict()
 SPECIMEN_ORGANISM_RELATIONSHIP = dict()
 ORGANISM_REFERRED_BY_SPECIMEN = dict()
 RULESETS = ["FAANG Samples", "FAANG Legacy Samples"]
-STANDARDS = {
-    'FAANG Samples': 'FAANG',
-    'FAANG Legacy Samples': 'Legacy'
-}
 TOTAL_RECORDS_TO_UPDATE = 0
 ETAGS_CACHE = dict()
 
@@ -525,7 +521,7 @@ def process_cell_cultures(es, es_index_prefix):
             if 'derivedFrom' in tmp:
                 organism_accession = list(tmp['derivedFrom'].keys())[0]
                 candidate = fetch_single_record(organism_accession)
-                if(candidate['characteristics']['Material'][0]['text'] == 'specimen from organism'):
+                if candidate['characteristics']['Material'][0]['text'] == 'specimen from organism':
                     tmp2 = parse_relationship(candidate)
                     organism_accession = list(tmp2['derivedFrom'].keys())[0]
         SPECIMEN_ORGANISM_RELATIONSHIP[accession] = organism_accession
@@ -941,7 +937,7 @@ def insert_into_es(data, index_prefix, my_type, es):
                 logger.error(f"{biosample_id}\t{validation_results[ruleset]['detail'][biosample_id]['type']}\t"
                              f"{'error'}\t{validation_results[ruleset]['detail'][biosample_id]['message']}")
             else:
-                es_doc['standardMet'] = STANDARDS[ruleset]
+                es_doc['standardMet'] = constants.STANDARDS[ruleset]
                 break
         body = json.dumps(es_doc)
 
@@ -960,7 +956,7 @@ def clean_elasticsearch(index, es):
         if hit['_id'] not in INDEXED_SAMPLES:
             # Legacy (basic) data imported in import_from_ena_legacy, not here, so not cleaned
             to_be_cleaned = True
-            if 'standardMet' in hit['_source'] and hit['_source']['standardMet'] == 'Legacy (basic)':
+            if 'standardMet' in hit['_source'] and hit['_source']['standardMet'] == constants.STANDARD_BASIC:
                 to_be_cleaned = False
             if to_be_cleaned:
                 es.delete(index=index, doc_type='_doc', id=hit['_id'])

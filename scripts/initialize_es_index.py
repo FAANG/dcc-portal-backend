@@ -6,7 +6,7 @@ This script generates the set of empty indices
 import os
 import click
 from elasticsearch import Elasticsearch
-from constants import INDICES
+from constants import TYPES
 
 
 # use click library to get command line parameters
@@ -41,7 +41,7 @@ def main(es_host, es_index_prefix, delete_only) -> None:
         exit()
 
     prefix = f"{es_host}/{es_index_prefix}"
-    for es_type in INDICES:
+    for es_type in TYPES:
         # delete the current index if existing
         flag = es.indices.exists(f"{es_index_prefix}_{es_type}")
         if flag:

@@ -1,13 +1,15 @@
-from constants import INDICES, STAGING_NODE1
+from constants import TYPES, STAGING_NODE1
 from elasticsearch import Elasticsearch
 import click
 import logging
+from utils import create_logging_instance
 
 from utils import remove_underscore_from_end_prefix
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(format='%(asctime)s\t%(levelname)s:\t%(name)s line %(lineno)s\t%(message)s', level=logging.INFO)
-logging.getLogger('elasticsearch').setLevel(logging.WARNING)
+# logger = logging.getLogger(__name__)
+# logging.basicConfig(format='%(asctime)s\t%(levelname)s:\t%(name)s line %(lineno)s\t%(message)s', level=logging.INFO)
+# logging.getLogger('elasticsearch').setLevel(logging.WARNING)
+logger = create_logging_instance('change_alias', level=logging.INFO)
 
 
 @click.command()
@@ -65,7 +67,7 @@ class ChangeAliases:
         # no prefix parameter given, display current aliases
         if not self.es_index_prefix:
             logger.info("Current aliases in use: ")
-            duplicate = set(INDICES)
+            duplicate = set(TYPES)
             for alias, index in self.current_aliases.items():
                 logger.info("{} -> {}".format(alias, index))
                 duplicate.remove(alias)
@@ -74,7 +76,7 @@ class ChangeAliases:
         else:
             # generate the indices list according to the given index prefix
             index_to_match = dict()
-            for alias in INDICES:
+            for alias in TYPES:
                 index_to_match[f"{self.es_index_prefix}_{alias}"] = alias
             # get all indices from the given host
             all_indices = self.get_all_indices()
@@ -147,7 +149,7 @@ class ChangeAliases:
         for index in result.keys():
             aliases = result[index]['aliases'].keys()
             for alias in aliases:
-                if alias in INDICES:
+                if alias in TYPES:
                     self.current_aliases[alias] = index
 
 

@@ -10,7 +10,7 @@ The indices are specified by the combination value of
 import requests
 from typing import Dict
 import click
-from constants import INDICES
+from constants import TYPES
 
 
 # use click library to get command line parameters
@@ -43,15 +43,15 @@ def main(es_host, es_index_prefix, serial) -> None:
     # values are the corresponding number of record in the index
     numbers: Dict[str, int] = read_number_from_es(es_host)
     # making header line
-    header = "\t".join(INDICES)
+    header = "\t".join(TYPES)
     print("\t"+header)
     # generate all combinations of indices and look up in the numbers dict
     # There will be {serial} rows and each row will have 1+number of types columns
     for i in range(1, serial+1):
         index_base = f"{es_index_prefix}_{str(i)}"
         print(index_base, end='')
-        for type in INDICES:
-            index = f"{index_base}_{type}"
+        for es_type in TYPES:
+            index = f"{index_base}_{es_type}"
             count = 0
             if index in numbers:
                 count = numbers[index]

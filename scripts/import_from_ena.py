@@ -5,19 +5,14 @@ https://github.com/FAANG/faang-metadata/blob/master/rulesets/faang_experiments.m
 to help understanding the code
 """
 import click
-from constants import TECHNOLOGIES
+from constants import TECHNOLOGIES, STANDARDS, STAGING_NODE1, STANDARD_LEGACY, STANDARD_FAANG
 from elasticsearch import Elasticsearch
 from utils import determine_file_and_source, check_existsence, remove_underscore_from_end_prefix
 from validate_experiment_record import *
 from validate_sample_record import *
-import constants
 
 
 RULESETS = ["FAANG Experiments", "FAANG Legacy Experiments"]
-STANDARDS = {
-    'FAANG Experiments': 'FAANG',
-    'FAANG Legacy Experiments': 'Legacy'
-}
 
 logger = utils.create_logging_instance('import_ena', level=logging.INFO)
 
@@ -25,7 +20,7 @@ logger = utils.create_logging_instance('import_ena', level=logging.INFO)
 @click.command()
 @click.option(
     '--es_hosts',
-    default=constants.STAGING_NODE1,
+    default=STAGING_NODE1,
     help='Specify the Elastic Search server(s) (port could be included), e.g. wp-np3-e2:9200. '
          'If multiple servers are provided, please use ";" to separate them, e.g. "wp-np3-e2;wp-np3-e3"'
 )
@@ -486,7 +481,7 @@ def main(es_hosts, es_index_prefix):
                 # only indexing when meeting standard
                 exp_validation[exp_id] = STANDARDS[ruleset]
                 exp_es['standardMet'] = STANDARDS[ruleset]
-                if exp_es['standardMet'] == 'FAANG':
+                if exp_es['standardMet'] == STANDARD_FAANG:
                     exp_es['versionLastStandardMet'] = ruleset_version
                 body = json.dumps(exp_es)
                 utils.insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
@@ -511,13 +506,13 @@ def main(es_hosts, es_index_prefix):
         es_doc_dataset = datasets[dataset_id]
         exps = datasets['tmp'][dataset_id]["experiment"]
         only_valid_exps = dict()
-        dataset_standard = 'FAANG'
+        dataset_standard = STANDARD_FAANG
         experiment_type = dict()
         tech_type = dict()
         for exp_id in exps:
             if exp_id in exp_validation:
-                if exp_validation[exp_id] == 'FAANG Legacy':
-                    dataset_standard = 'Legacy'
+                if exp_validation[exp_id] == STANDARD_LEGACY:
+                    dataset_standard = STANDARD_LEGACY
                 only_valid_exps[exp_id] = exps[exp_id]
                 assay_type = exps[exp_id]['assayType']
                 tech_type.setdefault(TECHNOLOGIES[assay_type], 0)

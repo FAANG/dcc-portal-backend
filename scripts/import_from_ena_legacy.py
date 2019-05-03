@@ -5,7 +5,7 @@ https://github.com/FAANG/faang-metadata/blob/master/rulesets/faang_experiments.m
 to help understanding the code
 """
 import click
-from constants import TECHNOLOGIES
+from constants import TECHNOLOGIES, STANDARDS, CATEGORIES, SPECIES_DICT, EXPERIMENT_TARGETS
 from elasticsearch import Elasticsearch
 from validate_experiment_record import *
 from validate_sample_record import *
@@ -18,64 +18,8 @@ import re
 # in FAANG ruleset each technology has mandatory fields in the corresponding section, which is not expected in the
 # general ENA datasets, so only validate against Legacy standard
 RULESETS = ["FAANG Legacy Experiments"]
-STANDARDS = {
-    'FAANG Experiments': 'FAANG',
-    'FAANG Legacy Experiments': 'Legacy'
-}
-# different submitter use different terms for the same technology
-# this summarize the current values observed in ENA
-CATEGORIES = {
-    "Whole genome sequence": "WGS",
-    "whole genome sequencing": "WGS",
-    "WGS": "WGS",
-    "Whole Genome Shotgun Sequence": "WGS",
 
-    "ChIP-Seq": "ChIP-Seq",
-    "ChIP-seq": "ChIP-Seq",
-    "ChIP-seq Histones": "ChIP-Seq",
-
-    "Hi-C": "Hi-C",
-
-    "ATAC-seq": "ATAC-seq",
-
-    "RNA-Seq": "RNA-Seq",
-    "RNA seq": "RNA-Seq",
-    "miRNA-Seq": "RNA-Seq",
-    "ssRNA-seq": "RNA-Seq",
-    "strand-specific RNA sequencing": "RNA-Seq",
-    "Transcriptome profiling": "RNA-Seq",
-    "RNA sequencing": "RNA-Seq",
-
-    "Bisulfite-Seq": "BS-Seq",
-    "Bisulfite Sequencing": "BS-Seq",
-    "BS-Seq": "BS-Seq",
-    "Whole Genome Bisulfite Sequencing": "BS-Seq",
-    "WGBS": "BS-Seq",
-    "Reduced Representation Bisulfite Sequencing": "BS-Seq",
-    "RRBS": "BS-Seq",
-
-    "DNase": "DNase",
-
-    "MiSeq": "Other",
-    "GeneChip": "Other",
-    "MeDIP-Seq": "Other",
-    "MeDIP": "Other",
-    "methylated DNA immunoprecipitation-sequencing": "Other",
-    "RIP-Seq": "Other"
-}
-
-SPECIES_DICT = {
-  "9031": "Gallus gallus",
-  "9913": "Bos taurus",
-  "9823": "Sus scrofa",
-  "9940": "Ovis aries",
-  "9796": "Equus caballus",
-  "9925": "Capra hircus"
-}
-SPECIES_TAXOMONY_LIST = list(SPECIES_DICT.keys())
-
-DATA_SOURCES = ['fastq', 'sra', 'cram_index']
-DATA_TYPES = ['ftp', 'galaxy', 'aspera']
+SPECIES_TAXONOMY_LIST = list(SPECIES_DICT.keys())
 
 # holds all sample records from ES
 BIOSAMPLES_RECORDS = dict()
@@ -84,6 +28,7 @@ BIOSAMPLES_RECORDS = dict()
 # confirmed (boolean), material (dict), accession (str)
 CACHED_MATERIAL = dict()
 
+# control which assay types to be imported
 ASSAY_TYPES_TO_BE_IMPORTED = {
     "ATAC-seq": "ATAC-seq",
     "BS-Seq": "methylation profiling by high throughput sequencing",
@@ -92,15 +37,6 @@ ASSAY_TYPES_TO_BE_IMPORTED = {
     # "RNA-Seq" => "",
     "WGS": "whole genome sequencing assay",
     "ChIP-Seq": "ChIP-seq"
-}
-EXPERIMENT_TARGETS = {
-    "ATAC-seq": "open_chromatin_region",
-    "BS-Seq": "DNA methylation",
-    "Hi-C": "chromatin",
-    "DNase": "open_chromatin_region",
-    "RNA-Seq": "Unknown ",
-    "WGS": "input DNA",
-    "ChIP-Seq": "Unknown"
 }
 # value of all is not allowed in the general ena data portal, not like FAANG, so need to list fields
 # which we want to retrieve
@@ -148,7 +84,7 @@ def get_faang_datasets(host: str, es_index_prefix: str) -> Set[str]:
     url = f"{url}&size={total_number}"
     response = requests.get(url).json()
     for hit in response['hits']['hits']:
-        if hit['_source']['standardMet'] == 'FAANG':
+        if hit['_source']['standardMet'] == constants.STANDARD_FAANG:
             datasets.add(hit['_id'])
     return datasets
 
@@ -264,7 +200,10 @@ def retrieve_biosamples_record(es, es_index_prefix, biosample_id):
     # sample record labelled as FAANG does not guarantee to be in ES as it may fail the validation,
     # but should not be dealt with here
 
-    if 'project' in data['characteristics'] and data['characteristics']['project'][0]['text'] == 'FAANG':
+    # this is a tag used in the ruleset, not a standard, just happening to share the same value
+    # therefore not replacing with constant
+    if 'project' in data['characteristics'] and data['characteristics']['project'][0]['text'] \
+            == 'FAANG':
         return -1
     es_doc['biosampleId'] = biosample_id
     es_doc['name'] = data['name']
@@ -343,7 +282,7 @@ def retrieve_biosamples_record(es, es_index_prefix, biosample_id):
     else:
         es_doc['updateDate'] = None
     # as no project = FAANG (otherwise already dealt with by import biosample), the standard is always basic
-    es_doc['standardMet'] = 'Legacy (basic)'
+    es_doc['standardMet'] = constants.STANDARD_BASIC
     # animal only gets assigned during dealing with the relationship derived from
     # https://stackoverflow.com/questions/1592565/determine-if-variable-is-defined-in-python
     try:
@@ -478,7 +417,7 @@ def main(es_hosts, es_index_prefix):
 
     # strings used to build ENA API query
     field_str = ",".join(FIELD_LIST)
-    species_str = ",".join(SPECIES_TAXOMONY_LIST)
+    species_str = ",".join(SPECIES_TAXONOMY_LIST)
 
     logger.info("Retrieving data from ENA")
     # collect all data from ENA API and saved into local dict which has keys as study accession
@@ -498,6 +437,8 @@ def main(es_hosts, es_index_prefix):
             study_accession = hit['study_accession']
             if study_accession in existing_faang_datasets:  # already in the data portal
                 continue
+            # not replaced with constants.STANDARD_FAANG because they are separate concepts,
+            # here is a tag used in the ruleset, not a standard
             if hit['project_name'] == 'FAANG':  # labelled as FAANG which is supposed to be deal with import_from _ena
                 continue
             todo.setdefault(term, list())
@@ -717,13 +658,13 @@ def main(es_hosts, es_index_prefix):
         es_doc_dataset = datasets[dataset_id]
         exps = datasets['tmp'][dataset_id]["experiment"]
         only_valid_exps = dict()
-        dataset_standard = 'FAANG'
+        dataset_standard = constants.STANDARD_FAANG
         experiment_type = dict()
         tech_type = dict()
         for exp_id in exps:
             if exp_id in exp_validation:
-                if exp_validation[exp_id] == 'Legacy':
-                    dataset_standard = 'Legacy'
+                if exp_validation[exp_id] == constants.STANDARD_LEGACY:
+                    dataset_standard = constants.STANDARD_LEGACY
                 only_valid_exps[exp_id] = exps[exp_id]
                 assay_type = exps[exp_id]['assayType']
                 tech_type.setdefault(TECHNOLOGIES[assay_type], 0)
