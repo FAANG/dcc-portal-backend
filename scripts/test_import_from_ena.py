@@ -14,8 +14,23 @@ class TestImportFromEna(unittest.TestCase):
     def test_get_ena_data(self):
         pass
 
-    def test_get_all_specimen_ids(self):
-        pass
+    @patch('import_from_ena.requests')
+    def test_get_all_specimen_ids(self, mock_requests):
+        tmp =mock_requests.get.return_value
+        tmp.json.return_value = {
+            'hits': {
+                'hits': [
+                    {
+                        '_id': '_id',
+                        '_source': '_source'
+                    }
+                ]
+            }
+        }
+        results = import_from_ena.get_all_specimen_ids('wp-np3-e2', 'faang_build_3_')
+        self.assertEqual(results, {'_id': '_source'})
+        self.assertEqual(mock_requests.get.call_count, 1)
+        mock_requests.get.assert_called_with('http://wp-np3-e2:9200/faang_build_3_specimen/_search?size=100000')
 
     @patch('builtins.open', new_callable=mock_open, read_data="test\ttest")
     def test_get_known_errors(self, mock_file):
