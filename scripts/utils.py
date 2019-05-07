@@ -5,20 +5,25 @@ import logging
 import pprint
 
 
-def create_logging_instance(name, level=logging.DEBUG):
+def create_logging_instance(name, level=logging.DEBUG, to_file=True):
     """
     This function will create logger instance that will log information to {name}.log file
     Log example: 29-Mar-19 11:54:33 - DEBUG - This is a debug message
     :param name: name of the logger and file
     :param level: level of the logging
+    :param to_file: indicates whether write to the file (True, default value) or the screen (False)
     :return: logger instance
     """
     # Create a custom logger
     logger = logging.getLogger(name)
 
     # Create handlers
-    f_handler = logging.FileHandler('{}.log'.format(name))
-    f_handler.setLevel(level)
+    if to_file:
+        f_handler = logging.FileHandler('{}.log'.format(name))
+    else:
+        f_handler = logging.StreamHandler()
+#    f_handler = logging.FileHandler('{}.log'.format(name))
+    # f_handler.setLevel(level)
 
     # Create formatters and add it to handlers
     f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - line %(lineno)s - %(message)s',
@@ -27,6 +32,7 @@ def create_logging_instance(name, level=logging.DEBUG):
 
     # Add handlers to the logger
     logger.addHandler(f_handler)
+    logger.setLevel(level)
     return logger
 
 
@@ -122,10 +128,6 @@ def create_summary_document_for_breeds(data):
     return results
 
 
-DATA_SOURCES = ['fastq', 'sra', 'cram_index']
-DATA_TYPES = ['ftp', 'galaxy', 'aspera']
-
-
 def determine_file_and_source(record):
     """
     predict the combination of data source and data type to use for file information
@@ -135,10 +137,12 @@ def determine_file_and_source(record):
     :param record: one data record from ENA API
     :return: the predicted file type and source type, if not found, return two empty strings
     """
+    data_sources = ['fastq', 'sra', 'cram_index']
+    data_types = ['ftp', 'galaxy', 'aspera']
     file_type = ''
     source_type = ''
-    for data_source in DATA_SOURCES:
-        for my_type in DATA_TYPES:
+    for data_source in data_sources:
+        for my_type in data_types:
             key_to_check = f"{data_source}_{my_type}"
             if key_to_check in record and record[key_to_check] != '':
                 file_type = my_type

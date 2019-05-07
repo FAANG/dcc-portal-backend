@@ -27,8 +27,7 @@ RULESETS = ["FAANG Samples", "FAANG Legacy Samples"]
 TOTAL_RECORDS_TO_UPDATE = 0
 ETAGS_CACHE = dict()
 
-logger = utils.create_logging_instance('import_biosample', level=logging.INFO)
-
+logger = utils.create_logging_instance('import_biosamples', level=logging.INFO)
 
 @click.command()
 @click.option(
@@ -150,9 +149,13 @@ def get_existing_etags(host: str, es_index_prefix) -> Dict[str, str]:
     for item in ("organism", "specimen"):
         url = f'http://{host}/{es_index_prefix}_{item}/_search?_source=biosampleId,etag&sort=biosampleId&size=100000'
         response = requests.get(url).json()
-        for result in response['hits']['hits']:
-            if 'etag' in result['_source']:
-                results[result['_source']['biosampleId']] = result['_source']['etag']
+        try:
+            for result in response['hits']['hits']:
+                if 'etag' in result['_source']:
+                    results[result['_source']['biosampleId']] = result['_source']['etag']
+        except KeyError:
+            logger.error(f"Failing to get hits from result {url}")
+            exit()
     return results
 
 

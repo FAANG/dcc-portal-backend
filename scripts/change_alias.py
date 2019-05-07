@@ -2,14 +2,12 @@ from constants import TYPES, STAGING_NODE1
 from elasticsearch import Elasticsearch
 import click
 import logging
-from utils import create_logging_instance
-
-from utils import remove_underscore_from_end_prefix
+from utils import create_logging_instance, remove_underscore_from_end_prefix
 
 # logger = logging.getLogger(__name__)
 # logging.basicConfig(format='%(asctime)s\t%(levelname)s:\t%(name)s line %(lineno)s\t%(message)s', level=logging.INFO)
 # logging.getLogger('elasticsearch').setLevel(logging.WARNING)
-logger = create_logging_instance('change_alias', level=logging.INFO)
+logger = create_logging_instance('change_alias', level=logging.INFO, to_file=False)
 
 
 @click.command()
@@ -43,13 +41,14 @@ class ChangeAliases:
     We use this schema with indices: faang_build_{build number}_{index name}
     Currently master indices has build number 3
     """
-    def __init__(self, es_hosts:str, es_index_prefix:str):
+    def __init__(self, es_hosts: str, es_index_prefix: str):
         """
         Initialize the tool
         :param es_hosts: Elastic Search host names as a string separated by ";"
         :param es_index_prefix: the index prefix which indicates the build of indices
         """
         hosts = es_hosts.split(";")
+        logger.info('')
         logger.info("Command line parameters")
         logger.info("Hosts: " + str(hosts))
         if es_index_prefix:
@@ -75,9 +74,10 @@ class ChangeAliases:
                 logger.warning(f"Some alias {str(duplicate)} has no corresponding index")
         else:
             # generate the indices list according to the given index prefix
+            # keys are indices to look for, values are the corresponding alias
             index_to_match = dict()
-            for alias in TYPES:
-                index_to_match[f"{self.es_index_prefix}_{alias}"] = alias
+            for es_type in TYPES:
+                index_to_match[f"{self.es_index_prefix}_{es_type}"] = es_type
             # get all indices from the given host
             all_indices = self.get_all_indices()
             # the action list which contains all actions required to make the desired changes
@@ -89,15 +89,16 @@ class ChangeAliases:
                     alias = index_to_match[index]
                     # check whether the alias has been already assigned
                     if alias in self.current_aliases:
-                        current_alias = self.current_aliases[alias]
+                        current_index_used_for_alias = self.current_aliases[alias]
                         # already points to the wanted index
-                        if current_alias == index:
-                            logger.info(f"Alias {alias} has already been set to {current_alias}, nothing changed")
+                        if current_index_used_for_alias == index:
+                            logger.info(f"Alias {alias} has already been set to {current_index_used_for_alias}, "
+                                        f"nothing changed")
                             index_to_match.pop(index)
                             continue
                         # not then remove the old alias
                         else:
-                            remove_action = {"index": current_alias, "alias": alias}
+                            remove_action = {"index": current_index_used_for_alias, "alias": alias}
                             actions.append({"remove": remove_action})
                     add_action = {"index": index, "alias": alias}
                     actions.append({"add": add_action})
