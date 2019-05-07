@@ -4,13 +4,13 @@ Remove the oldest local etag cache files
 import click
 import subprocess
 
+
 @click.command()
 @click.option(
     '--number_to_keep',
     default="5",
     help='Specify how many etag cache files will be kept locally, default to be 5'
 )
-
 def main(number_to_keep):
     """
     The main function

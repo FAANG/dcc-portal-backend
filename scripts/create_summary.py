@@ -3,6 +3,7 @@ import requests
 import json
 
 from utils import *
+from constants import STAGING_NODE1, STAGING_NODE2, MALES, FEMALES
 
 
 class CreateSummary:

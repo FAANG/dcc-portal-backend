@@ -3,25 +3,27 @@ Different function that could be used in any faang backend script
 """
 import logging
 import pprint
-import sys
-
-from constants import *
 
 
-def create_logging_instance(name, level=logging.DEBUG):
+def create_logging_instance(name, level=logging.DEBUG, to_file=True):
     """
     This function will create logger instance that will log information to {name}.log file
     Log example: 29-Mar-19 11:54:33 - DEBUG - This is a debug message
     :param name: name of the logger and file
     :param level: level of the logging
+    :param to_file: indicates whether write to the file (True, default value) or the screen (False)
     :return: logger instance
     """
     # Create a custom logger
     logger = logging.getLogger(name)
 
     # Create handlers
-    f_handler = logging.FileHandler('{}.log'.format(name))
-    f_handler.setLevel(level)
+    if to_file:
+        f_handler = logging.FileHandler('{}.log'.format(name))
+    else:
+        f_handler = logging.StreamHandler()
+#    f_handler = logging.FileHandler('{}.log'.format(name))
+    # f_handler.setLevel(level)
 
     # Create formatters and add it to handlers
     f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - line %(lineno)s - %(message)s',
@@ -30,26 +32,8 @@ def create_logging_instance(name, level=logging.DEBUG):
 
     # Add handlers to the logger
     logger.addHandler(f_handler)
+    logger.setLevel(level)
     return logger
-
-
-def print_current_aliases(es_staging):
-    """
-    This function will pring current aliases in format 'index_name' -> 'alias_name'
-    :param es_staging: staging elasticsearch object
-    :return: name of the current prefix or suffix in use
-    """
-    name = set()
-    aliases = es_staging.indices.get_alias(name=','.join(INDICES))
-    for index_name, alias in aliases.items():
-        alias = list(alias['aliases'].keys())[0]
-        name.add(index_name.split(alias)[0])
-        print("{} -> {}".format(index_name, alias))
-    if len(name) != 1:
-        print("There are multiple prefixes or suffixes in use, manual check is required!")
-        sys.exit(0)
-    else:
-        return list(name)[0]
 
 
 logger = create_logging_instance('utils', level=logging.INFO)
@@ -67,14 +51,15 @@ def insert_into_es(es, es_index_prefix, doc_type, doc_id, body):
     :return:
     """
     try:
-        existing_flag = es.exists(index=f'{es_index_prefix}{doc_type}', doc_type="_doc", id=doc_id)
+        existing_flag = es.exists(index=f'{es_index_prefix}_{doc_type}', doc_type="_doc", id=doc_id)
         if existing_flag:
-            es.delete(index=f'{es_index_prefix}{doc_type}', doc_type="_doc", id=doc_id)
-        es.create(index=f'{es_index_prefix}{doc_type}', doc_type="_doc", id=doc_id, body=body)
+            es.delete(index=f'{es_index_prefix}_{doc_type}', doc_type="_doc", id=doc_id)
+        es.create(index=f'{es_index_prefix}_{doc_type}', doc_type="_doc", id=doc_id, body=body)
     except Exception as e:
         # TODO logging error
-        logger.error(f"Error when try to insert into index {es_index_prefix}{doc_type}: " + str(e.args))
+        logger.error(f"Error when try to insert into index {es_index_prefix}_{doc_type}: " + str(e.args))
         pprint.pprint(body)
+
 
 def get_number_of_published_papers(data):
     """
@@ -141,3 +126,54 @@ def create_summary_document_for_breeds(data):
             "speciesValue": tmp_list
         })
     return results
+
+
+def determine_file_and_source(record):
+    """
+    predict the combination of data source and data type to use for file information
+    for data source, the preference in the order of fastq, sra, cram_index
+    for file type, the preference in the order of ftp, galaxy, aspera
+    the order is from the observation of data availabilities in those fields, so subject to change
+    :param record: one data record from ENA API
+    :return: the predicted file type and source type, if not found, return two empty strings
+    """
+    data_sources = ['fastq', 'sra', 'cram_index']
+    data_types = ['ftp', 'galaxy', 'aspera']
+    file_type = ''
+    source_type = ''
+    for data_source in data_sources:
+        for my_type in data_types:
+            key_to_check = f"{data_source}_{my_type}"
+            if key_to_check in record and record[key_to_check] != '':
+                file_type = my_type
+                source_type = data_source
+                return file_type, source_type
+    return file_type, source_type
+
+
+def check_existsence(data_to_check, field_to_check):
+    """
+    Check whether a field exists in the data record and return the corresponding value
+    :param data_to_check: the record data
+    :param field_to_check: the name of the field
+    :return: if exists, return the value holding for the field, if not, return None
+    """
+    if field_to_check in data_to_check:
+        if len(data_to_check[field_to_check]) == 0:
+            return None
+        else:
+            return data_to_check[field_to_check]
+    else:
+        return None
+
+
+def remove_underscore_from_end_prefix(es_index_prefix: str)->str:
+    """
+    Remove the last underscore from index prefix if existing
+    :param es_index_prefix: the index prefix may having underscore at the end
+    :return: the 'cleaned' index prefix
+    """
+    if es_index_prefix.endswith("_"):
+        str_len = len(es_index_prefix)
+        es_index_prefix = es_index_prefix[0:str_len - 1]
+    return es_index_prefix

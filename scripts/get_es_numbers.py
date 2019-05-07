@@ -10,9 +10,7 @@ The indices are specified by the combination value of
 import requests
 from typing import Dict
 import click
-
-
-TYPES = ["organism", "specimen", "dataset", "experiment", "file"]
+from constants import TYPES
 
 
 # use click library to get command line parameters
@@ -52,8 +50,8 @@ def main(es_host, es_index_prefix, serial) -> None:
     for i in range(1, serial+1):
         index_base = f"{es_index_prefix}_{str(i)}"
         print(index_base, end='')
-        for type in TYPES:
-            index = f"{index_base}_{type}"
+        for es_type in TYPES:
+            index = f"{index_base}_{es_type}"
             count = 0
             if index in numbers:
                 count = numbers[index]

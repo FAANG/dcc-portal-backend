@@ -4,6 +4,8 @@ import json
 
 from misc import *
 
+logger = utils.create_logging_instance('validate_experiment', logging.INFO)
+
 
 def validate_total_experiment_records(target_dict, rulesets):
     total_results = dict()
@@ -44,7 +46,7 @@ def validate_record(data, ruleset):
             w.write(f"{converted_data}\n")
         w.write("]\n")
     try:
-        command = f'curl -F "format=json" -F "rule_set_name={ruleset}" -F "file_format=JSON"' + \
+        command = f'curl -s -F "format=json" -F "rule_set_name={ruleset}" -F "file_format=JSON"' + \
                   f' -F "metadata_file=@{tmp_out_file}" "https://www.ebi.ac.uk/vg/faang/validate" > validation.json'
         os.system(command)
     except:

@@ -7,6 +7,7 @@ import utils
 
 logger = utils.create_logging_instance('misc', level=logging.INFO)
 
+
 def to_lower_camel_case(str_to_convert):
     """
     This function will convert any string with spaces or underscores to lower camel case string
@@ -17,8 +18,8 @@ def to_lower_camel_case(str_to_convert):
         raise TypeError("The method only take str as its input")
     str_to_convert = str_to_convert.replace("_", " ")
     tmp = re.split(r'\s|-', str_to_convert)
-    return "".join([item.lower() for i,item in enumerate(tmp) if i == 0] +
-                   [item.capitalize() for i,item in enumerate(tmp) if i != 0])
+    return "".join([item.lower() for i, item in enumerate(tmp) if i == 0] +
+                   [item.capitalize() for i, item in enumerate(tmp) if i != 0])
 
 
 def from_lower_camel_case(str_to_convert):
@@ -69,3 +70,18 @@ def convert_readable(size_to_convert):
     if i == 0:
         return f"{size_to_convert}B"
     return f"{round(size_to_convert, 2)}{units[i]}"
+
+
+def parse_date(date_str: str) -> str:
+    """
+    extract YYYY-MM-DD from ISO date string used by BioSamples
+    :param date_str: ISO date string
+    :return: parsed date
+    """
+    if date_str:
+        match = re.search(r'(\d+-\d+-\d+)T', date_str)
+        if match:
+            return match.group(1)
+        else:
+            return date_str
+    return None

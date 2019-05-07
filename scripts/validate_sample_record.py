@@ -4,9 +4,10 @@ import json
 import os
 from misc import *
 import logging
+import utils
 
 
-logger = logging.getLogger(__name__)
+logger = utils.create_logging_instance('validate_sample', logging.INFO)
 
 
 def get_ruleset_version():
@@ -72,7 +73,7 @@ def validate_record(data, my_type, ruleset):
             w.write(f"{converted_data}\n")
         w.write("]\n")
     try:
-        command = f'curl -F "format=json" -F "rule_set_name={ruleset}" -F "file_format=JSON"' + \
+        command = f'curl -s -F "format=json" -F "rule_set_name={ruleset}" -F "file_format=JSON"' + \
                   f' -F "metadata_file=@{tmp_out_file}" "https://www.ebi.ac.uk/vg/faang/validate" > validation.json'
         os.system(command)
     except Exception as e:
