@@ -108,8 +108,8 @@ class ChangeAliases:
                 # no actions could be two scenarios 1) already pointed to the wanted indices
                 # 2) wanted indices not existing
                 if index_to_match:
-                    print(f"No matching existing indices have been found, please use command "
-                        f"'curl {self.hosts[0]}/_cat/indices?v' to check all existing indices")
+                    logger.warning(f"No matching existing indices have been found, please use "
+                                   f"command 'curl {self.hosts[0]}/_cat/indices?v' to check all existing indices")
                 exit()
             # use API to update aliases
             payload = {"actions": actions}
@@ -138,7 +138,6 @@ class ChangeAliases:
     def get_current_aliases(self):
         """
         This function will pring current aliases in format 'index_name' -> 'alias_name'
-        :param es_staging: staging elasticsearch object
         :return: name of the current prefix or suffix in use
         """
         # could not use the method below which raises error when one specified alias does not exist,
@@ -156,5 +155,3 @@ class ChangeAliases:
 
 if __name__ == "__main__":
     main()
-
-

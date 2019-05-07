@@ -29,6 +29,7 @@ ETAGS_CACHE = dict()
 
 logger = utils.create_logging_instance('import_biosamples', level=logging.INFO)
 
+
 @click.command()
 @click.option(
     '--es_hosts',

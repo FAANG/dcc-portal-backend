@@ -286,6 +286,7 @@ def retrieve_biosamples_record(es, es_index_prefix, biosample_id):
     # animal only gets assigned during dealing with the relationship derived from
     # https://stackoverflow.com/questions/1592565/determine-if-variable-is-defined-in-python
     try:
+        # noinspection PyUnboundLocalVariable
         animal
     except NameError:
         pass
