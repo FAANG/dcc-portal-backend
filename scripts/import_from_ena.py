@@ -38,7 +38,6 @@ logger = utils.create_logging_instance('import_ena', level=logging.INFO)
          'faang_build_1_ then the indices will be faang_build_1_experiment etc.'
          'If not provided, then work on the aliases, e.g. experiment'
 )
-# TODO check single or double quotes
 def main(es_hosts, es_index_prefix):
     """
     Main function that will import data from ena
@@ -61,7 +60,6 @@ def main(es_hosts, es_index_prefix):
     logger.info(f"Get current specimens stored in the corresponding ES index {es_index_prefix}specimen")
     biosample_ids = get_all_specimen_ids(hosts[0], es_index_prefix)
     if not biosample_ids:
-        # TODO log to error
         logger.error("No specimen data found in the given index, please run import_from_biosamle.py first")
         sys.exit(1)
     known_errors = get_known_errors()
