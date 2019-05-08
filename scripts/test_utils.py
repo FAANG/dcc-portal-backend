@@ -17,21 +17,6 @@ class TestUtils(unittest.TestCase):
         logger = utils.create_logging_instance('test')
         self.assertEqual(logger.name, 'test')
 
-    def test_print_current_aliases(self):
-        es_staging = Mock()
-        es_staging.indices.get_alias.return_value = {'faang_build_3_organism': {'aliases': {'organism': {}}},
-                                                     'faang_build_3_file': {'aliases': {'file': {}}},
-                                                     'faang_build_3_specimen': {'aliases': {'specimen': {}}},
-                                                     'faang_build_3_dataset': {'aliases': {'dataset': {}}},
-                                                     'faang_build_3_experiment': {'aliases': {'experiment': {}}}}
-        with patch('sys.stdout', new=io.StringIO()) as fake_stdout:
-            utils.print_current_aliases(es_staging)
-        self.assertIn('faang_build_3_experiment -> experiment', fake_stdout.getvalue())
-        self.assertIn('faang_build_3_organism -> organism', fake_stdout.getvalue())
-        self.assertIn('faang_build_3_file -> file', fake_stdout.getvalue())
-        self.assertIn('faang_build_3_specimen -> specimen', fake_stdout.getvalue())
-        self.assertIn('faang_build_3_dataset -> dataset', fake_stdout.getvalue())
-
     def test_get_number_of_published_papers(self):
         data = [
             {

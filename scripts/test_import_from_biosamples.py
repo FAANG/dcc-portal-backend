@@ -31,7 +31,7 @@ class TestImportFromBiosamples(unittest.TestCase):
         with patch('import_from_biosamples.requests') as mock_requests:
             tmp = mock_requests.get.return_value
             tmp.json.return_value = return_value
-            results = import_from_biosamples.get_existing_etags('wp-np3-e2:9200', 'faang_build_3_')
+            results = import_from_biosamples.get_existing_etags('wp-np3-e2:9200', 'faang_build_3')
             mock_requests.get.assert_called_with(
                 'http://wp-np3-e2:9200/faang_build_3_specimen/_search?_source=biosampleId,'
                 'etag&sort=biosampleId&size=100000')
@@ -515,7 +515,7 @@ class TestImportFromBiosamples(unittest.TestCase):
 
         return_value['test']['detail']['test']['status'] = 'not error'
         mock_validate_total_sample_records.return_value = return_value
-        import_from_biosamples.STANDARDS['test'] = 'test'
+        import_from_biosamples.constants.STANDARDS['test'] = 'test'
         import_from_biosamples.insert_into_es(data, 'faang_build_3_', 'organism', 'es')
         self.assertEqual(mock_validate_total_sample_records.call_count, 2)
         self.assertEqual(import_from_biosamples.logger.error.call_count, 1)

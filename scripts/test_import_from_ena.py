@@ -187,7 +187,7 @@ class TestImportFromEna(unittest.TestCase):
                 ]
             }
         }
-        results = import_from_ena.get_all_specimen_ids('wp-np3-e2', 'faang_build_3_')
+        results = import_from_ena.get_all_specimen_ids('wp-np3-e2', 'faang_build_3')
         self.assertEqual(results, {'_id': '_source'})
         self.assertEqual(mock_requests.get.call_count, 1)
         mock_requests.get.assert_called_with('http://wp-np3-e2:9200/faang_build_3_specimen/_search?size=100000')
