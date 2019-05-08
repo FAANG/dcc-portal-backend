@@ -2,6 +2,7 @@ from elasticsearch import Elasticsearch
 from datetime import date, timedelta
 
 from utils import *
+from constants import *
 
 
 class SyncHinxtonLondon:
