@@ -64,9 +64,9 @@ class TestImportFromBiosamples(unittest.TestCase):
             }
         }
         mock_check_is_faang.return_value = True
+        import_from_biosamples.TOTAL_RECORDS_TO_UPDATE = 0
         import_from_biosamples.fetch_records_by_project_via_etag({'test2': 'test2'})
-        # self.assertEqual(mock_logger.info.call_count, 3)
-        self.assertEqual(mock_logger.info.call_args_list[1], 'test')
+        self.assertEqual(mock_logger.info.call_count, 3)
 
     @patch('import_from_biosamples.logger')
     @patch('import_from_biosamples.check_is_faang')
