@@ -4,7 +4,6 @@ from decouple import config
 import asyncio
 import aiohttp
 import time
-import sys
 
 # Global sets for ids
 ORGANISMS = {}
@@ -143,9 +142,6 @@ async def check_specimen_for_dataset(session, my_id, articles_list):
 def update_records(records_dict, array_type, es):
     print_statement("Starting to update {} records:".format(array_type))
     for index, item_id in enumerate(records_dict):
-        if index % 100 == 0:
-            ratio = round(index / len(records_dict) * 100)
-            sys.stdout.write(f"{ratio} %\r")
         body = {"doc": {"paperPublished": "true", "publishedArticles": [
             {'pubmedId': item['pmcid'], 'doi': item['doi'], 'title': item['title'], 'year': item['year'],
              'journal': item['journal']} for item in records_dict[item_id]]}}
@@ -155,7 +151,6 @@ def update_records(records_dict, array_type, es):
         except ValueError:
             print("ValueError {}".format(item_id))
             continue
-    sys.stdout.flush()
 
 
 def add_new_pair(target_dict, id_to_check, target_list):

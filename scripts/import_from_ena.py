@@ -5,21 +5,14 @@ https://github.com/FAANG/faang-metadata/blob/master/rulesets/faang_experiments.m
 to help understanding the code
 """
 import click
-import utils
-from constants import TECHNOLOGIES
+from constants import TECHNOLOGIES, STANDARDS, STAGING_NODE1, STANDARD_LEGACY, STANDARD_FAANG
 from elasticsearch import Elasticsearch
+from utils import determine_file_and_source, check_existsence, remove_underscore_from_end_prefix
 from validate_experiment_record import *
 from validate_sample_record import *
-import constants
 
 
 RULESETS = ["FAANG Experiments", "FAANG Legacy Experiments"]
-STANDARDS = {
-    'FAANG Experiments': 'FAANG',
-    'FAANG Legacy Experiments': 'Legacy'
-}
-DATA_SOURCES = ['fastq', 'sra', 'cram_index']
-DATA_TYPES = ['ftp', 'galaxy', 'aspera']
 
 logger = utils.create_logging_instance('import_ena', level=logging.INFO)
 
@@ -27,7 +20,7 @@ logger = utils.create_logging_instance('import_ena', level=logging.INFO)
 @click.command()
 @click.option(
     '--es_hosts',
-    default=constants.STAGING_NODE1,
+    default=STAGING_NODE1,
     help='Specify the Elastic Search server(s) (port could be included), e.g. wp-np3-e2:9200. '
          'If multiple servers are provided, please use ";" to separate them, e.g. "wp-np3-e2;wp-np3-e3"'
 )
@@ -38,6 +31,7 @@ logger = utils.create_logging_instance('import_ena', level=logging.INFO)
          'faang_build_1_ then the indices will be faang_build_1_experiment etc.'
          'If not provided, then work on the aliases, e.g. experiment'
 )
+# TODO check single or double quotes
 def main(es_hosts, es_index_prefix):
     """
     Main function that will import data from ena
@@ -49,6 +43,7 @@ def main(es_hosts, es_index_prefix):
     hosts = es_hosts.split(";")
     logger.info("Command line parameters")
     logger.info("Hosts: "+str(hosts))
+    es_index_prefix = remove_underscore_from_end_prefix(es_index_prefix)
     if es_index_prefix:
         logger.info("Index_prefix:"+es_index_prefix)
 
@@ -57,10 +52,11 @@ def main(es_hosts, es_index_prefix):
     logger.info("Retrieving data from ENA")
     data = get_ena_data()
 
-    logger.info(f"Get current specimens stored in the corresponding ES index {es_index_prefix}specimen")
+    logger.info(f"Get current specimens stored in the corresponding ES index {es_index_prefix}_specimen")
     biosample_ids = get_all_specimen_ids(hosts[0], es_index_prefix)
     if not biosample_ids:
-        logger.error("No specimen data found in the given index, please run import_from_biosamle.py first")
+        # TODO log to error
+        logger.error("No specimen data found in the given index, please run import_from_biosamles.py first")
         sys.exit(1)
     known_errors = get_known_errors()
     new_errors = dict()
@@ -485,7 +481,7 @@ def main(es_hosts, es_index_prefix):
                 # only indexing when meeting standard
                 exp_validation[exp_id] = STANDARDS[ruleset]
                 exp_es['standardMet'] = STANDARDS[ruleset]
-                if exp_es['standardMet'] == 'FAANG':
+                if exp_es['standardMet'] == STANDARD_FAANG:
                     exp_es['versionLastStandardMet'] = ruleset_version
                 body = json.dumps(exp_es)
                 utils.insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
@@ -510,13 +506,13 @@ def main(es_hosts, es_index_prefix):
         es_doc_dataset = datasets[dataset_id]
         exps = datasets['tmp'][dataset_id]["experiment"]
         only_valid_exps = dict()
-        dataset_standard = 'FAANG'
+        dataset_standard = STANDARD_FAANG
         experiment_type = dict()
         tech_type = dict()
         for exp_id in exps:
             if exp_id in exp_validation:
-                if exp_validation[exp_id] == 'FAANG Legacy':
-                    dataset_standard = 'Legacy'
+                if exp_validation[exp_id] == STANDARD_LEGACY:
+                    dataset_standard = STANDARD_LEGACY
                 only_valid_exps[exp_id] = exps[exp_id]
                 assay_type = exps[exp_id]['assayType']
                 tech_type.setdefault(TECHNOLOGIES[assay_type], 0)
@@ -570,19 +566,6 @@ def main(es_hosts, es_index_prefix):
                 w.write(f"{study}\t{biosample}")
 
 
-def determine_file_and_source(record):
-    file_type = ''
-    source_type = ''
-    for data_source in DATA_SOURCES:
-        for my_type in DATA_TYPES:
-            key_to_check = f"{data_source}_{my_type}"
-            if key_to_check in record and record[key_to_check] != '':
-                file_type = my_type
-                source_type = data_source
-                return file_type, source_type
-    return file_type, source_type
-
-
 def get_ena_data():
     """
     This function will fetch data from ena FAANG data portal ruead_run result
@@ -601,7 +584,7 @@ def get_all_specimen_ids(host, es_index_prefix):
     if not host.endswith(":9200"):
         host = host + ":9200"
     results = dict()
-    url = f'http://{host}/{es_index_prefix}specimen/_search?size=100000'
+    url = f'http://{host}/{es_index_prefix}_specimen/_search?size=100000'
     response = requests.get(url).json()
     for item in response['hits']['hits']:
         results[item['_id']] = item['_source']
@@ -610,7 +593,7 @@ def get_all_specimen_ids(host, es_index_prefix):
 
 def get_known_errors():
     """
-    This function will read file with associtation from study to biosample
+    This function will read file with association from study to biosample
     :return: dictionary with study as a key and biosample as a values
     """
     known_errors = dict()
@@ -621,16 +604,6 @@ def get_known_errors():
             known_errors.setdefault(study, {})
             known_errors[study][biosample] = 1
     return known_errors
-
-
-def check_existsence(data_to_check, field_to_check):
-    if field_to_check in data_to_check:
-        if len(data_to_check[field_to_check]) == 0:
-            return None
-        else:
-            return data_to_check[field_to_check]
-    else:
-        return None
 
 
 if __name__ == "__main__":

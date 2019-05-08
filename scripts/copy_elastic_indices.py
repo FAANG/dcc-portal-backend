@@ -4,32 +4,44 @@
 # for example, faang_ parameter means that the matched indice would be faang_organism, faang_specimen etc.
 # The script copy all indices matching the first parameter to the new indices generating from the second parameter
 import subprocess
-import sys
+import constants
+import click
+from utils import remove_underscore_from_end_prefix
 
 
-def usage():
-    print("Usage: python copy_elastic_indice.py <input index pattern> <output index pattern> [prefix|suffix]")
-    exit()
+@click.command()
+@click.option(
+    '--es_host',
+    default=constants.STAGING_NODE1,
+    help='Specify the Elastic Search server(s) (port could be included), e.g. wp-np3-e2:9200. '
+)
+@click.option(
+    '--input_index_pattern',
+    help='Specify the pattern of source indices, e.g. faang_build_1. '
+)
+@click.option(
+    '--output_index_pattern',
+    help='Specify the pattern of destination indices, e.g. faang_build_2. '
+)
+def main(es_host, input_index_pattern, output_index_pattern):
+    if not input_index_pattern:
+        print("Mandatory parameter input_index_pattern is not provided")
+        exit()
+    if not output_index_pattern:
+        print("Mandatory parameter output_index_pattern is not provided")
+        exit()
+
+    host: str = f'http://{es_host}/'
+    input_index_pattern = remove_underscore_from_end_prefix(input_index_pattern)
+    output_index_pattern = remove_underscore_from_end_prefix(output_index_pattern)
+
+    for es_type in constants.TYPES:
+        arr = ["elasticdump", f"--input={host}{input_index_pattern}_{es_type}",
+               f"--output={host}{output_index_pattern}_{es_type}", "--type=data"]
+        cmd = " ".join(arr)
+        print(cmd)
+        subprocess.run(arr)
 
 
-len_argv = len(sys.argv)
-if len_argv != 3 and len_argv != 4:
-    print(len_argv)
-    usage()
-
-host: str = 'http://wp-np3-e2:9200/'
-# define the expected alias in the set
-required_alias = {
-    'organism': 1,
-    'specimen': 1,
-    "dataset": 1,
-    "experiment": 1,
-    "file": 1
-}
-
-for index in required_alias.keys():
-    arr = ["elasticdump", "--input=" + host + sys.argv[1] + index, "--output=" + host + sys.argv[2] + index,
-           "--type=data"]
-    cmd = " ".join(arr)
-    print(cmd)
-    subprocess.run(arr)
+if __name__ == "__main__":
+    main()

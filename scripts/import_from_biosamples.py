@@ -1,7 +1,7 @@
-import utils
 from elasticsearch import Elasticsearch
 import datetime
 from validate_sample_record import *
+from utils import remove_underscore_from_end_prefix
 from get_all_etags import fetch_biosample_ids
 from columns import *
 from misc import *
@@ -24,14 +24,10 @@ ORGANISM_FOR_SPECIMEN = dict()
 SPECIMEN_ORGANISM_RELATIONSHIP = dict()
 ORGANISM_REFERRED_BY_SPECIMEN = dict()
 RULESETS = ["FAANG Samples", "FAANG Legacy Samples"]
-STANDARDS = {
-    'FAANG Samples': 'FAANG',
-    'FAANG Legacy Samples': 'Legacy'
-}
 TOTAL_RECORDS_TO_UPDATE = 0
 ETAGS_CACHE = dict()
 
-logger = utils.create_logging_instance('import_biosample', level=logging.INFO)
+logger = utils.create_logging_instance('import_biosamples', level=logging.INFO)
 
 
 @click.command()
@@ -75,6 +71,7 @@ def main(es_hosts, es_index_prefix):
     hosts = es_hosts.split(";")
     logger.info("Command line parameters")
     logger.info("Hosts: "+str(hosts))
+    es_index_prefix = remove_underscore_from_end_prefix(es_index_prefix)
     if es_index_prefix:
         logger.info("Index_prefix:"+es_index_prefix)
 
@@ -137,8 +134,8 @@ def main(es_hosts, es_index_prefix):
         # TODO add logging
         if union[acc]['count'] == 1:
             logger.warning(f"{acc} only in source {union[acc]['source']}")
-    clean_elasticsearch(f'{es_index_prefix}specimen', es)
-    clean_elasticsearch(f'{es_index_prefix}organism', es)
+    clean_elasticsearch(f'{es_index_prefix}_specimen', es)
+    clean_elasticsearch(f'{es_index_prefix}_organism', es)
     logger.info(f"Program ends")
 
 
@@ -151,11 +148,15 @@ def get_existing_etags(host: str, es_index_prefix) -> Dict[str, str]:
         host = host + ":9200"
     results = dict()
     for item in ("organism", "specimen"):
-        url = f'http://{host}/{es_index_prefix}{item}/_search?_source=biosampleId,etag&sort=biosampleId&size=100000'
+        url = f'http://{host}/{es_index_prefix}_{item}/_search?_source=biosampleId,etag&sort=biosampleId&size=100000'
         response = requests.get(url).json()
-        for result in response['hits']['hits']:
-            if 'etag' in result['_source']:
-                results[result['_source']['biosampleId']] = result['_source']['etag']
+        try:
+            for result in response['hits']['hits']:
+                if 'etag' in result['_source']:
+                    results[result['_source']['biosampleId']] = result['_source']['etag']
+        except KeyError:
+            logger.error(f"Failing to get hits from result {url}")
+            exit()
     return results
 
 
@@ -524,7 +525,7 @@ def process_cell_cultures(es, es_index_prefix):
             if 'derivedFrom' in tmp:
                 organism_accession = list(tmp['derivedFrom'].keys())[0]
                 candidate = fetch_single_record(organism_accession)
-                if(candidate['characteristics']['Material'][0]['text'] == 'specimen from organism'):
+                if candidate['characteristics']['Material'][0]['text'] == 'specimen from organism':
                     tmp2 = parse_relationship(candidate)
                     organism_accession = list(tmp2['derivedFrom'].keys())[0]
         SPECIMEN_ORGANISM_RELATIONSHIP[accession] = organism_accession
@@ -919,19 +920,6 @@ def add_organism_info_for_specimen(accession, item):
     ORGANISM_FOR_SPECIMEN[accession]['healthStatus'] = get_health_status(item)
 
 
-def parse_date(date_str):
-    """
-    This function parses date
-    :param date_str: date to parse
-    :return: parsed date
-    """
-    # TODO logging to error if date doesn't exist
-    parsed_date = re.search(r"(\d+-\d+-\d+)T", date_str)
-    if parsed_date:
-        date_str = parsed_date.groups()[0]
-    return date_str
-
-
 def insert_into_es(data, index_prefix, my_type, es):
     """
     This function will update current index with new data
@@ -951,7 +939,7 @@ def insert_into_es(data, index_prefix, my_type, es):
                 logger.error(f"{biosample_id}\t{validation_results[ruleset]['detail'][biosample_id]['type']}\t"
                              f"{'error'}\t{validation_results[ruleset]['detail'][biosample_id]['message']}")
             else:
-                es_doc['standardMet'] = STANDARDS[ruleset]
+                es_doc['standardMet'] = constants.STANDARDS[ruleset]
                 break
         body = json.dumps(es_doc)
 
@@ -970,7 +958,7 @@ def clean_elasticsearch(index, es):
         if hit['_id'] not in INDEXED_SAMPLES:
             # Legacy (basic) data imported in import_from_ena_legacy, not here, so not cleaned
             to_be_cleaned = True
-            if 'standardMet' in hit['_source'] and hit['_source']['standardMet'] == 'Legacy (basic)':
+            if 'standardMet' in hit['_source'] and hit['_source']['standardMet'] == constants.STANDARD_BASIC:
                 to_be_cleaned = False
             if to_be_cleaned:
                 es.delete(index=index, doc_type='_doc', id=hit['_id'])

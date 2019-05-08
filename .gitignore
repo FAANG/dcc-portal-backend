@@ -26,7 +26,8 @@ ena_not_in_biosample.txt
 scripts/ena_not_in_biosample.txt
 scripts/predict*.txt
 scripts/etag*.txt
-
+# local credentail file
+scripts/super_user_biosamples.py
 # middle file
 scripts/*.log
 scripts/*.txt

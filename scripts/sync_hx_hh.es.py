@@ -2,6 +2,7 @@ from elasticsearch import Elasticsearch
 from datetime import date, timedelta
 
 from utils import *
+from constants import *
 
 
 class SyncHinxtonLondon:
@@ -119,10 +120,10 @@ class SyncHinxtonLondon:
                                               f"{self.yesterday}_summary_specimen," +
                                               f"{self.yesterday}_faang_build_3_dataset," +
                                               f"{self.yesterday}_protocol_samples3," +
-                                              f"{self.yesterday}_summary_file" +
-                                              f"{self.yesterday}_faang_build_3_organism" +
-                                              f"{self.yesterday}_summary_organism" +
-                                              f"{self.yesterday}_faang_build_3_experiment" +
+                                              f"{self.yesterday}_summary_file," +
+                                              f"{self.yesterday}_faang_build_3_organism," +
+                                              f"{self.yesterday}_summary_organism," +
+                                              f"{self.yesterday}_faang_build_3_experiment," +
                                               f"{self.yesterday}_protocol_files3")
         self.es_production.indices.delete(index=f"{self.yesterday}_faang_build_3_specimen," +
                                                 f"{self.yesterday}_faang_build_3_file," +
@@ -130,18 +131,18 @@ class SyncHinxtonLondon:
                                                 f"{self.yesterday}_summary_specimen," +
                                                 f"{self.yesterday}_faang_build_3_dataset," +
                                                 f"{self.yesterday}_protocol_samples3," +
-                                                f"{self.yesterday}_summary_file" +
-                                                f"{self.yesterday}_faang_build_3_organism" +
-                                                f"{self.yesterday}_summary_organism" +
-                                                f"{self.yesterday}_faang_build_3_experiment" +
+                                                f"{self.yesterday}_summary_file," +
+                                                f"{self.yesterday}_faang_build_3_organism," +
+                                                f"{self.yesterday}_summary_organism," +
+                                                f"{self.yesterday}_faang_build_3_experiment," +
                                                 f"{self.yesterday}_protocol_files3")
 
 
 if __name__ == "__main__":
     # Create elasticsearch objects for each server
-    es_staging = Elasticsearch([STAGING_NODE1, STAGING_NODE2])
-    es_fallback = Elasticsearch([FALLBACK_NODE1, FALLBACK_NODE2])
-    es_production = Elasticsearch([PRODUCTION_NODE1, PRODUCTION_NODE2])
+    es_staging = Elasticsearch([STAGING_NODE1, STAGING_NODE2], timeout=60)
+    es_fallback = Elasticsearch([FALLBACK_NODE1, FALLBACK_NODE2], timeout=60)
+    es_production = Elasticsearch([PRODUCTION_NODE1, PRODUCTION_NODE2], timeout=60)
 
     # Create logger to log info
     logger = create_logging_instance('sync_hx_hh')
