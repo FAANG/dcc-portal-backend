@@ -12,6 +12,7 @@ import fetch_articles
 class TestFetchArticles(unittest.TestCase):
     def test_print_statement_with_true(self):
         with patch('sys.stdout', new=io.StringIO()) as fake_stdout:
+            fetch_articles.PRINT_PROGRESS = True
             fetch_articles.print_statement('test')
         self.assertIn('test', fake_stdout.getvalue())
 
