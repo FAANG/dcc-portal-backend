@@ -206,8 +206,7 @@ def fetch_records_by_project_via_etag(etags):
         if counts:
             logger.warning("Some records with wrong material type have been found")
             logger.warning(counts)
-        #sys.exit(0)
-        return
+        sys.exit(0)
     for k, v in counts.items():
         logger.info(f"There are {v} {k} records needing update")
 

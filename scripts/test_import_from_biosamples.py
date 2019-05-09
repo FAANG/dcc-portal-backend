@@ -43,16 +43,16 @@ class TestImportFromBiosamples(unittest.TestCase):
     @patch('builtins.open', new_callable=mock_open, read_data="test\ttest")
     def test_fetch_records_by_project_via_etag(self, mock_file, mock_fetch_single_record, mock_check_is_faang,
                                                mock_logger):
-        # import_from_biosamples.fetch_records_by_project_via_etag({'test': 'test'})
-        # self.assertEqual(mock_file.call_count, 1)
-        # self.assertEqual(mock_logger.info.call_count, 2)
-        # today = date.today().strftime('%Y-%m-%d')
-        # mock_file.assert_called_with(f'etag_list_{today}.txt', 'r')
-        #
-        # mock_fetch_single_record.return_value = {}
-        # mock_check_is_faang.return_value = False
-        # import_from_biosamples.fetch_records_by_project_via_etag({'test2': 'test2'})
-        # self.assertEqual(mock_logger.info.call_count, 4)
+        import_from_biosamples.fetch_records_by_project_via_etag({'test': 'test'})
+        self.assertEqual(mock_file.call_count, 1)
+        self.assertEqual(mock_logger.info.call_count, 2)
+        today = date.today().strftime('%Y-%m-%d')
+        mock_file.assert_called_with(f'etag_list_{today}.txt', 'r')
+
+        mock_fetch_single_record.return_value = {}
+        mock_check_is_faang.return_value = False
+        import_from_biosamples.fetch_records_by_project_via_etag({'test2': 'test2'})
+        self.assertEqual(mock_logger.info.call_count, 4)
 
         mock_fetch_single_record.return_value = {
             'characteristics': {
@@ -66,8 +66,7 @@ class TestImportFromBiosamples(unittest.TestCase):
         mock_check_is_faang.return_value = True
         import_from_biosamples.TOTAL_RECORDS_TO_UPDATE = 0
         import_from_biosamples.fetch_records_by_project_via_etag({'test2': 'test2'})
-        self.assertEqual(mock_logger.info.call_args_list[-1], 'test')
-        # self.assertEqual(mock_logger.info.call_count, 3)
+        self.assertEqual(mock_logger.info.call_count, 7)
 
     @patch('import_from_biosamples.logger')
     @patch('import_from_biosamples.check_is_faang')
