@@ -394,7 +394,11 @@ def main(es_hosts, es_index_prefix):
                         'libraryGenerationProtocol': {
                             'url': library_generation_protocol,
                             'filename': library_generation_protocol_filename
-                        }
+                        },
+                        'readStrand': record['read_strand'],
+                        'rnaPurity260280ratio': record['rna_purity_280_ratio'],
+                        'rnaPurity260230ratio': record['rna_purity_230_ratio'],
+                        'rnaIntegrityNumber': record['rna_integrity_num']
                     }
                 experiments[exp_id] = exp_es
 
