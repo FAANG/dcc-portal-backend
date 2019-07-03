@@ -90,7 +90,7 @@ def convert(item, my_type):
     item_to_test = dict(item)
     # remove the fields not in ruleset, i.e. could not be validated
     for field_name in ['releaseDate', 'updateDate', 'organization', 'biosampleId', 'name', 'standardMet',
-                       'versionLastStandardMet', 'etag', 'id_number', "custom field"]:
+                       'versionLastStandardMet', 'etag', 'id_number', "custom field", "allDeriveFromSpecimens"]:
         if field_name in item_to_test:
             del item_to_test[field_name]
     result = dict()

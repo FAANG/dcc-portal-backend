@@ -119,6 +119,9 @@
         }
       }
     },
+    "allDeriveFromSpecimens": {
+      "type": "keyword"
+    },
     "availability": {
       "type": "keyword"
     },
