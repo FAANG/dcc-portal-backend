@@ -83,6 +83,7 @@ TECHNOLOGIES: Dict[str, str] = {
     'microRNA profiling by high throughput sequencing': 'RNA-seq',
     'RNA-seq of coding RNA': 'RNA-seq',
     'RNA-seq of non coding RNA': 'RNA-seq',
+    'RNA-seq of total RNA': 'RNA-seq',
     'transcription profiling by high throughput sequencing': 'RNA-seq',
     'whole genome sequencing assay': 'WGS'
 }

@@ -23,9 +23,20 @@ POOL_SPECIMEN = dict()
 ORGANISM_FOR_SPECIMEN = dict()
 SPECIMEN_ORGANISM_RELATIONSHIP = dict()
 ORGANISM_REFERRED_BY_SPECIMEN = dict()
+ALL_DERIVED_SPECIMEN = dict()
 RULESETS = ["FAANG Samples", "FAANG Legacy Samples"]
 TOTAL_RECORDS_TO_UPDATE = 0
 ETAGS_CACHE = dict()
+
+MATERIAL_TYPES = {
+    "organism": "OBI_0100026",
+    "specimen from organism": "OBI_0001479",
+    "cell specimen": "OBI_0001468",
+    "pool of specimens": "OBI_0302716",
+    "cell culture": "OBI_0001876",
+    "cell line": "CLO_0000031"
+}
+ALL_MATERIAL_TYPES = dict()
 
 logger = utils.create_logging_instance('import_biosamples', level=logging.INFO)
 
@@ -53,6 +64,7 @@ def main(es_hosts, es_index_prefix):
     :return:
     """
     global ETAGS_CACHE
+    global ALL_MATERIAL_TYPES
     today = date.today().strftime('%Y-%m-%d')
     cache_filename = f"etag_list_{today}.txt"
     if not os.path.isfile(cache_filename):
@@ -67,6 +79,37 @@ def main(es_hosts, es_index_prefix):
     except FileNotFoundError:
         logger.error(f"Could not find the local etag cache file etag_list_{today}.txt")
         sys.exit(1)
+
+    for base_material in MATERIAL_TYPES.keys():
+        ALL_MATERIAL_TYPES[base_material] = base_material
+        host = f"http://www.ebi.ac.uk/ols/api/terms?id={MATERIAL_TYPES[base_material]}"
+        request = requests.get(host)
+
+        response = request.json()
+        num = response['page']['totalElements']
+        detail = None
+        if num:
+            if num > 20:
+                host = host + "&size=" + str(num)
+                request = requests.get(host)
+                response = request.json()
+            terms = response['_embedded']['terms']
+            for term in terms:
+                if term['is_defining_ontology']:
+                    detail = term
+                    break
+        host = f"http://www.ebi.ac.uk/ols/api/ontologies/{detail['ontology_name']}/children?" \
+            f"id={MATERIAL_TYPES[base_material]}"
+        response = requests.get(host).json()
+        num = response['page']['totalElements']
+        if num:
+            if num > 20:
+                host = host + "&size=" + str(num)
+                request = requests.get(host)
+                response = request.json()
+            terms = response['_embedded']['terms']
+            for term in terms:
+                ALL_MATERIAL_TYPES[term['label']] = base_material
 
     hosts = es_hosts.split(";")
     logger.info("Command line parameters")
@@ -97,22 +140,23 @@ def main(es_hosts, es_index_prefix):
         logger.critical("Did not obtain any records from BioSamples")
         sys.exit(0)
 
-    logger.info(f"Indexing organism starts at {datetime.datetime.now()}")
+    # the order of importation could not be changed due to derive from
+    logger.info("Indexing organism starts")
     process_organisms(es, es_index_prefix)
 
-    logger.info(f"Indexing specimen from organism starts at {datetime.datetime.now()}")
+    logger.info("Indexing specimen from organism starts")
     process_specimens(es, es_index_prefix)
 
-    logger.info(f"Indexing cell specimens starts at {datetime.datetime.now()}")
+    logger.info("Indexing cell specimens starts")
     process_cell_specimens(es, es_index_prefix)
 
-    logger.info(f"Indexing cell culture starts at {datetime.datetime.now()}")
+    logger.info("Indexing cell culture starts")
     process_cell_cultures(es, es_index_prefix)
 
-    logger.info(f"Indexing pool of specimen starts at {datetime.datetime.now()}")
+    logger.info("Indexing pool of specimen starts")
     process_pool_specimen(es, es_index_prefix)
 
-    logger.info(f"Indexing cell line starts at {datetime.datetime.now()}")
+    logger.info("Indexing cell line starts")
     process_cell_lines(es, es_index_prefix)
 
     all_organism_list = list(ORGANISM.keys())
@@ -178,6 +222,10 @@ def fetch_records_by_project_via_etag(etags):
                 if not check_is_faang(single):
                     continue
                 material = single['characteristics']['Material'][0]['text']
+                if material in ALL_MATERIAL_TYPES and material != ALL_MATERIAL_TYPES[material]:
+                    material = ALL_MATERIAL_TYPES[material]
+                    single['characteristics']['Material'][0]['text'] = material
+                    single['characteristics']['Material'][0]['ontologyTerms'][0] = MATERIAL_TYPES[material]
                 if material == 'organism':
                     ORGANISM[data[0]] = single
                     # this may seem to be duplicate, however necessary: any unrecognized material type will be stored
@@ -236,6 +284,10 @@ def fetch_records_by_project():
         if not check_is_faang(biosample):
             continue
         material = biosample['characteristics']['Material'][0]['text']
+        if material in ALL_MATERIAL_TYPES and material != ALL_MATERIAL_TYPES[material]:
+            material = ALL_MATERIAL_TYPES[material]
+            biosample['characteristics']['Material'][0]['text'] = material
+            biosample['characteristics']['Material'][0]['ontologyTerms'][0] = MATERIAL_TYPES[material]
         if material == 'organism':
             ORGANISM[biosample['accession']] = biosample
         elif material == 'specimen from organism':
@@ -307,10 +359,10 @@ def deal_with_decimal_degrees(item):
 
 # all functions beginning with "process_" need to refer to the ruleset at
 # https://github.com/FAANG/faang-metadata/blob/master/rulesets/faang_samples.metadata_rules.json
-def process_organisms(es, es_index_prefix):
+def process_organisms(es, es_index_prefix) -> None:
     """
-    Function prepares json file that should be inserted into elasticsearch
-    :return: dictionary with data that should be inserted into elasticsearch
+    Process the data for all organisms according to ruleset
+    which extracts the data and insert into elasticsearch
     """
     converted = dict()
     for accession, item in ORGANISM.items():
@@ -378,7 +430,12 @@ def process_organisms(es, es_index_prefix):
     insert_into_es(converted, es_index_prefix, 'organism', es)
 
 
-def process_specimens(es, es_index_prefix):
+def process_specimens(es, es_index_prefix) -> None:
+    """
+    Process the data for all specimen from organism record
+    :param es: Elasticsearch object
+    :param es_index_prefix: the index prefix (build version)
+    """
     converted = dict()
     for accession, item in SPECIMEN_FROM_ORGANISM.items():
         doc_for_update = dict()
@@ -466,7 +523,12 @@ def process_specimens(es, es_index_prefix):
     insert_into_es(converted, es_index_prefix, 'specimen', es)
 
 
-def process_cell_specimens(es, es_index_prefix):
+def process_cell_specimens(es, es_index_prefix) -> None:
+    """
+    Process the data for all cell specimen records
+    :param es: Elasticsearch object
+    :param es_index_prefix: the index prefix (build version)
+    """
     converted = dict()
     for accession, item in CELL_SPECIMEN.items():
         doc_for_update = dict()
@@ -483,6 +545,10 @@ def process_cell_specimens(es, es_index_prefix):
                 organism_accession = list(tmp['derivedFrom'].keys())[0]
         SPECIMEN_ORGANISM_RELATIONSHIP[accession] = organism_accession
         doc_for_update['derivedFrom'] = specimen_from_organism_accession
+        # cell specimen can only derive from specimen from organism
+        doc_for_update['allDeriveFromSpecimens'] = specimen_from_organism_accession
+        ALL_DERIVED_SPECIMEN[accession] = list()
+        ALL_DERIVED_SPECIMEN[accession].append(specimen_from_organism_accession)
         doc_for_update.setdefault('cellSpecimen', {})
         doc_for_update['cellSpecimen']['markers'] = check_existence(item, 'markers', 'text')
         doc_for_update['cellSpecimen']['purificationProtocol'] = {
@@ -509,7 +575,12 @@ def process_cell_specimens(es, es_index_prefix):
     insert_into_es(converted, es_index_prefix, 'specimen', es)
 
 
-def process_cell_cultures(es, es_index_prefix):
+def process_cell_cultures(es, es_index_prefix) -> None:
+    """
+    Process the data for all cell culture records
+    :param es: Elasticsearch object
+    :param es_index_prefix: the index prefix (build version)
+    """
     converted = dict()
     for accession, item in CELL_CULTURE.items():
         doc_for_update = dict()
@@ -518,16 +589,29 @@ def process_cell_cultures(es, es_index_prefix):
         filename = get_filename_from_url(url, accession)
         derived_from_accession = list(relationships['derivedFrom'].keys())[0]
         organism_accession = ''
+        ALL_DERIVED_SPECIMEN[accession] = list()
+        # derived_from_accession is a specimen (not sure about type) already been processed
         if derived_from_accession in SPECIMEN_ORGANISM_RELATIONSHIP:
             organism_accession = SPECIMEN_ORGANISM_RELATIONSHIP[derived_from_accession]
+            tmp_set = set()
+            if derived_from_accession in ALL_DERIVED_SPECIMEN:
+                tmp_set = set(ALL_DERIVED_SPECIMEN[derived_from_accession])
+            tmp_set.add(derived_from_accession)
+            ALL_DERIVED_SPECIMEN[accession] = list(tmp_set)
         else:
             tmp = parse_relationship(fetch_single_record(derived_from_accession))
+            tmp_set = set()
+            tmp_set.add(derived_from_accession)
             if 'derivedFrom' in tmp:
                 organism_accession = list(tmp['derivedFrom'].keys())[0]
                 candidate = fetch_single_record(organism_accession)
                 if candidate['characteristics']['Material'][0]['text'] == 'specimen from organism':
+                    tmp_set.add(organism_accession)
                     tmp2 = parse_relationship(candidate)
                     organism_accession = list(tmp2['derivedFrom'].keys())[0]
+            ALL_DERIVED_SPECIMEN[accession] = list(tmp_set)
+        doc_for_update['allDeriveFromSpecimens'] = ALL_DERIVED_SPECIMEN[accession]
+
         SPECIMEN_ORGANISM_RELATIONSHIP[accession] = organism_accession
         doc_for_update['derivedFrom'] = derived_from_accession
         doc_for_update.setdefault('cellCulture', {})
@@ -561,7 +645,12 @@ def process_cell_cultures(es, es_index_prefix):
     insert_into_es(converted, es_index_prefix, 'specimen', es)
 
 
-def process_pool_specimen(es, es_index_prefix):
+def process_pool_specimen(es, es_index_prefix) -> None:
+    """
+    Process the data for all pool of specimen records
+    :param es: Elasticsearch object
+    :param es_index_prefix: the index prefix (build version)
+    """
     global SPECIMEN_FROM_ORGANISM
     global SPECIMEN_ORGANISM_RELATIONSHIP
     converted = dict()
@@ -609,6 +698,8 @@ def process_pool_specimen(es, es_index_prefix):
         if 'derivedFrom' in relationships:
             derived_from = list(relationships['derivedFrom'].keys())
             doc_for_update['derivedFrom'] = derived_from
+            doc_for_update['allDeriveFromSpecimens'] = derived_from
+
             for acc in derived_from:
                 if acc not in SPECIMEN_FROM_ORGANISM:
                     tmp_specimen = fetch_single_record(acc)
@@ -665,7 +756,12 @@ def process_pool_specimen(es, es_index_prefix):
     insert_into_es(converted, es_index_prefix, 'specimen', es)
 
 
-def process_cell_lines(es, es_index_prefix):
+def process_cell_lines(es, es_index_prefix) -> None:
+    """
+    Process the data for all cell line records
+    :param es: Elasticsearch object
+    :param es_index_prefix: the index prefix (build version)
+    """
     converted = dict()
     for accession, item in CELL_LINE.items():
         doc_for_update = dict()
@@ -718,13 +814,25 @@ def process_cell_lines(es, es_index_prefix):
             'text': check_existence(item, 'cell type', 'text'),
             'ontologyTerms': check_existence(item, 'cell type', 'ontologyTerms')
         }
+        tmp_set = set()
         if 'derivedFrom' in relationships:
-            doc_for_update['derivedFrom'] = relationships['derivedFrom'][0]
+
+            derive_from_accession = relationships['derivedFrom'][0]
+            doc_for_update['derivedFrom'] = derive_from_accession
+            candidate = fetch_single_record(derive_from_accession)
+            if candidate['characteristics']['Material'][0]['text'] != 'organism':
+                if derive_from_accession in ALL_DERIVED_SPECIMEN:
+                    tmp_set = set(ALL_DERIVED_SPECIMEN[derive_from_accession])
+                tmp_set.add(derive_from_accession)
+        ALL_DERIVED_SPECIMEN[accession] = list(tmp_set)
+        doc_for_update['allDeriveFromSpecimens'] = ALL_DERIVED_SPECIMEN[accession]
+
         doc_for_update['alternativeId'] = get_alternative_id(relationships)
         doc_for_update.setdefault('organism', {})
         for field_name in ['organism', 'sex', 'breed']:
             doc_for_update['organism'][field_name] = doc_for_update['cellLine'][field_name]
         converted[accession] = doc_for_update
+        print(doc_for_update)
     insert_into_es(converted, es_index_prefix, 'specimen', es)
 
 
@@ -835,9 +943,7 @@ def get_health_status(item):
     elif 'health status at collection' in item['characteristics']:
         key = 'health status at collection'
     else:
-        # TODO logging
         logger.debug("Health status was not provided")
-        # print(item['characteristics'])
         return health_status
     for status in item['characteristics'][key]:
         health_status.append(
@@ -937,7 +1043,6 @@ def insert_into_es(data, index_prefix, my_type, es):
         es_doc = data[biosample_id]
         for ruleset in RULESETS:
             if validation_results[ruleset]['detail'][biosample_id]['status'] == 'error':
-                # TODO logging to error
                 logger.error(f"{biosample_id}\t{validation_results[ruleset]['detail'][biosample_id]['type']}\t"
                              f"{'error'}\t{validation_results[ruleset]['detail'][biosample_id]['message']}")
             else:
@@ -954,11 +1059,10 @@ def clean_elasticsearch(index, es):
     :param index: name of index to check
     :param es: elasticsearch object
     """
-    # TODO only remove records with FAANG or FAANG Legacy standard, not basic
     data = es.search(index=index, size=100000, _source="_id,standardMet")
     for hit in data['hits']['hits']:
         if hit['_id'] not in INDEXED_SAMPLES:
-            # Legacy (basic) data imported in import_from_ena_legacy, not here, so not cleaned
+            # Legacy (basic) data imported in import_from_ena_legacy, not here, so could not be cleaned
             to_be_cleaned = True
             if 'standardMet' in hit['_source'] and hit['_source']['standardMet'] == constants.STANDARD_BASIC:
                 to_be_cleaned = False
