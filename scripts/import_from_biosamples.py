@@ -98,7 +98,8 @@ def main(es_hosts, es_index_prefix):
                 if term['is_defining_ontology']:
                     detail = term
                     break
-        host = f"http://www.ebi.ac.uk/ols/api/ontologies/{detail['ontology_name']}/children?id={MATERIAL_TYPES[base_material]}"
+        host = f"http://www.ebi.ac.uk/ols/api/ontologies/{detail['ontology_name']}/children?" \
+            f"id={MATERIAL_TYPES[base_material]}"
         response = requests.get(host).json()
         num = response['page']['totalElements']
         if num:
@@ -826,7 +827,6 @@ def process_cell_lines(es, es_index_prefix) -> None:
         ALL_DERIVED_SPECIMEN[accession] = list(tmp_set)
         doc_for_update['allDeriveFromSpecimens'] = ALL_DERIVED_SPECIMEN[accession]
 
-
         doc_for_update['alternativeId'] = get_alternative_id(relationships)
         doc_for_update.setdefault('organism', {})
         for field_name in ['organism', 'sex', 'breed']:
@@ -943,9 +943,7 @@ def get_health_status(item):
     elif 'health status at collection' in item['characteristics']:
         key = 'health status at collection'
     else:
-        # TODO logging
         logger.debug("Health status was not provided")
-        # print(item['characteristics'])
         return health_status
     for status in item['characteristics'][key]:
         health_status.append(
@@ -1045,7 +1043,6 @@ def insert_into_es(data, index_prefix, my_type, es):
         es_doc = data[biosample_id]
         for ruleset in RULESETS:
             if validation_results[ruleset]['detail'][biosample_id]['status'] == 'error':
-                # TODO logging to error
                 logger.error(f"{biosample_id}\t{validation_results[ruleset]['detail'][biosample_id]['type']}\t"
                              f"{'error'}\t{validation_results[ruleset]['detail'][biosample_id]['message']}")
             else:
@@ -1062,11 +1059,10 @@ def clean_elasticsearch(index, es):
     :param index: name of index to check
     :param es: elasticsearch object
     """
-    # TODO only remove records with FAANG or FAANG Legacy standard, not basic
     data = es.search(index=index, size=100000, _source="_id,standardMet")
     for hit in data['hits']['hits']:
         if hit['_id'] not in INDEXED_SAMPLES:
-            # Legacy (basic) data imported in import_from_ena_legacy, not here, so not cleaned
+            # Legacy (basic) data imported in import_from_ena_legacy, not here, so could not be cleaned
             to_be_cleaned = True
             if 'standardMet' in hit['_source'] and hit['_source']['standardMet'] == constants.STANDARD_BASIC:
                 to_be_cleaned = False
