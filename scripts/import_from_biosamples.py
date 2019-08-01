@@ -275,12 +275,10 @@ def unify_field_names(biosample):
         "sex": "Sex",
         "organism": "Organism"
     }
-    for field_name in mapped_fields.keys():
-        if field_name in biosample['characteristics']:
-            new_field_name = mapped_fields[field_name]
-            if new_field_name not in biosample['characteristics']:
-                # remove field name by pop method which returns the corresponding value
-                biosample['characteristics'][new_field_name] = biosample['characteristics'].pop(field_name, None)
+    for field_name, new_field_name in mapped_fields.items():
+        if field_name in biosample['characteristics'] and new_field_name not in biosample['characteristics']:
+            # remove field name by pop method which returns the corresponding value
+            biosample['characteristics'][new_field_name] = biosample['characteristics'].pop(field_name, None)
 
     return biosample
 
