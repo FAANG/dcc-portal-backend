@@ -13,7 +13,8 @@ def main():
         for my_id in biosample_ids:
             if my_id not in ETAG_IDS:
                 resp = requests.get("http://www.ebi.ac.uk/biosamples/samples/{}".format(my_id)).headers
-                ETAG.append("{}\t{}".format(my_id, resp['ETag']))
+                if 'ETag' in resp and resp['ETag']:
+                    ETAG.append("{}\t{}".format(my_id, resp['ETag']))
 
 
 async def fetch_all_etags(ids):
@@ -28,7 +29,9 @@ async def fetch_all_etags(ids):
 async def fetch_etag(session, my_id):
     url = "http://www.ebi.ac.uk/biosamples/samples/{}".format(my_id)
     resp = await session.get(url)
-    ETAG.append("{}\t{}".format(my_id, resp.headers.get('ETag')))
+    etag_value = resp.headers.get('ETag')
+    if etag_value:
+        ETAG.append("{}\t{}".format(my_id, etag_value))
     ETAG_IDS.append(my_id)
 
 

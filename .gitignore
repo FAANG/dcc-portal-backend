@@ -35,6 +35,11 @@ scripts/*.xlsx
 scripts/*.json
 # legacy perl scripts
 scripts/legacy_perl/*
+
+# local investigation scripts
+scripts/decimal_degrees.py
+scripts/navigate_ena.py
+
 # PyCharm files
 .idea/
 # python middle file

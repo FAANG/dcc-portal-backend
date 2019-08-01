@@ -217,7 +217,7 @@ def fetch_records_by_project_via_etag(etags):
                 INDEXED_SAMPLES[data[0]] = 1
                 continue
             else:
-                single = fetch_single_record(data[0])
+                single = unify_field_names(fetch_single_record(data[0]))
                 single['etag'] = data[1]
                 if not check_is_faang(single):
                     continue
@@ -262,6 +262,27 @@ def fetch_records_by_project_via_etag(etags):
     logger.info(f"Finish comparing etags and retrieving necessary records at {datetime.datetime.now()}")
 
 
+def unify_field_names(biosample):
+    """
+    BioSamples started to unify the fields name to make sure 1) all lowercase and 2) no underscores
+    all lowercase conflicts with FAANG ruleset, e.g. material in BioSamples and Material in FAANG ruleset
+    this method provides an automatical way to convert to FAANG standard
+    :param biosample: biosample record retrieved from BioSamples API
+    :return: converted BioSamples record
+    """
+    mapped_fields = {
+        "material": "Material",
+        "sex": "Sex",
+        "organism": "Organism"
+    }
+    for field_name, new_field_name in mapped_fields.items():
+        if field_name in biosample['characteristics'] and new_field_name not in biosample['characteristics']:
+            # remove field name by pop method which returns the corresponding value
+            biosample['characteristics'][new_field_name] = biosample['characteristics'].pop(field_name, None)
+
+    return biosample
+
+
 def fetch_records_by_project():
     global TOTAL_RECORDS_TO_UPDATE
     biosamples = list()
@@ -270,9 +291,10 @@ def fetch_records_by_project():
     url = 'https://www.ebi.ac.uk/biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG'
     logger.info("Size of local etag cache: "+str(len(ETAGS_CACHE)))
     while url:
+        logger.info(f"Fetching data from {url}")
         response = requests.get(url).json()
         for biosample in response['_embedded']['samples']:
-            biosample = deal_with_decimal_degrees(biosample)
+            biosample = unify_field_names(biosample)
             biosample['etag'] = ETAGS_CACHE[biosample['accession']]
             biosamples.append(biosample)
         if 'next' in response['_links']:
@@ -289,6 +311,7 @@ def fetch_records_by_project():
             biosample['characteristics']['Material'][0]['text'] = material
             biosample['characteristics']['Material'][0]['ontologyTerms'][0] = MATERIAL_TYPES[material]
         if material == 'organism':
+            biosample = deal_with_decimal_degrees(biosample)
             ORGANISM[biosample['accession']] = biosample
         elif material == 'specimen from organism':
             SPECIMEN_FROM_ORGANISM[biosample['accession']] = biosample
@@ -316,7 +339,7 @@ def fetch_single_record(biosample_id):
     """
     url_schema = 'https://www.ebi.ac.uk/biosamples/samples/{}.json?curationdomain=self.FAANG_DCC_curation'
     url = url_schema.format(biosample_id)
-    result = requests.get(url).json()
+    result = unify_field_names(requests.get(url).json())
     result['etag'] = ETAGS_CACHE[biosample_id]
     return result
 
@@ -348,7 +371,9 @@ def deal_with_decimal_degrees(item):
                     item['characteristics']['birth location longitude'][0]['unit'] == 'decimal degree':
                 url = "https://www.ebi.ac.uk/biosamples/samples/{}.json?curationdomain=self.FAANG_DCC_curation".format(
                     item['accession'])
-                return requests.get(url).json()
+                biosample = requests.get(url).json()
+                biosample['etag'] = ETAGS_CACHE[biosample['accession']]
+                return biosample
             else:
                 return item
         except KeyError:
@@ -832,7 +857,6 @@ def process_cell_lines(es, es_index_prefix) -> None:
         for field_name in ['organism', 'sex', 'breed']:
             doc_for_update['organism'][field_name] = doc_for_update['cellLine'][field_name]
         converted[accession] = doc_for_update
-        print(doc_for_update)
     insert_into_es(converted, es_index_prefix, 'specimen', es)
 
 
@@ -1044,7 +1068,7 @@ def insert_into_es(data, index_prefix, my_type, es):
         for ruleset in RULESETS:
             if validation_results[ruleset]['detail'][biosample_id]['status'] == 'error':
                 logger.error(f"{biosample_id}\t{validation_results[ruleset]['detail'][biosample_id]['type']}\t"
-                             f"{'error'}\t{validation_results[ruleset]['detail'][biosample_id]['message']}")
+                             f"{'error'}\t{ruleset}\t{validation_results[ruleset]['detail'][biosample_id]['message']}")
             else:
                 es_doc['standardMet'] = constants.STANDARDS[ruleset]
                 break

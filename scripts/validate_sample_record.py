@@ -56,7 +56,6 @@ def get_validation_results(total_results, part, my_type, rulesets):
 
 def validate_record(data, my_type, ruleset):
     tmp_out_file = f"{my_type}_records_python.json"
-    logger.info(my_type)
     with open(tmp_out_file, 'w') as w:
         w.write("[\n")
         for index, item in enumerate(data):

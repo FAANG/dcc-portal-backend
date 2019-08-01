@@ -34,7 +34,8 @@ ASSAY_TYPES_TO_BE_IMPORTED = {
     "BS-Seq": "methylation profiling by high throughput sequencing",
     "Hi-C": "Hi-C",
     "DNase": "DNase-Hypersensitivity seq",
-    # "RNA-Seq" => "",
+    "RNA-Seq": "transcription profiling by high throughput sequencing",
+    "miRNA": "microRNA profiling by high throughput sequencing",
     "WGS": "whole genome sequencing assay",
     "ChIP-Seq": "ChIP-seq"
 }
@@ -428,6 +429,7 @@ def main(es_hosts, es_index_prefix):
         category = CATEGORIES[term]
         if category not in ASSAY_TYPES_TO_BE_IMPORTED:
             continue
+        logger.info(f"term {term} in category {category}")
         url = f"https://www.ebi.ac.uk/ena/portal/api/search/?result=read_run&format=JSON&limit=0&" \
             f"query=library_strategy%3D%22{term}%22%20AND%20tax_eq({species_str})&fields={field_str}"
         response = requests.get(url)
