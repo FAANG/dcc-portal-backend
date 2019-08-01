@@ -145,5 +145,6 @@ EXPERIMENT_TARGETS = {
     "DNase": "open_chromatin_region",
     "RNA-Seq": "Unknown ",
     "WGS": "input DNA",
-    "ChIP-Seq": "Unknown"
+    "ChIP-Seq": "Unknown",
+    "RNA-Seq": "Unknown"
 }
