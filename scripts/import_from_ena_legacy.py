@@ -30,13 +30,14 @@ CACHED_MATERIAL = dict()
 
 # control which assay types to be imported
 ASSAY_TYPES_TO_BE_IMPORTED = {
-    # "ATAC-seq": "ATAC-seq",
-    # "BS-Seq": "methylation profiling by high throughput sequencing",
-    # "Hi-C": "Hi-C",
-    # "DNase": "DNase-Hypersensitivity seq",
-    "RNA-Seq": "transcription profiling by high throughput sequencing"
-#     "WGS": "whole genome sequencing assay",
-#     "ChIP-Seq": "ChIP-seq"
+    "ATAC-seq": "ATAC-seq",
+    "BS-Seq": "methylation profiling by high throughput sequencing",
+    "Hi-C": "Hi-C",
+    "DNase": "DNase-Hypersensitivity seq",
+    "RNA-Seq": "transcription profiling by high throughput sequencing",
+    "miRNA": "microRNA profiling by high throughput sequencing",
+    "WGS": "whole genome sequencing assay",
+    "ChIP-Seq": "ChIP-seq"
 }
 # value of all is not allowed in the general ena data portal, not like FAANG, so need to list fields
 # which we want to retrieve
