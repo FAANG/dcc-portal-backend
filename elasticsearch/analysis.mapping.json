@@ -1,0 +1,111 @@
+{
+  "dynamic": "strict",
+  "date_detection": false,
+  "properties": {
+    "accession": {
+      "type": "keyword"
+    },
+    "title": {
+      "type": "keyword"
+    },
+    "alias": {
+      "type": "keyword"
+    },
+    "description": {
+      "type": "keyword"
+    },
+    "standardMet": {
+      "type": "keyword"
+    },
+    "versionLastStandardMet": {
+      "type": "keyword"
+    },
+    "releaseDate": {
+      "type": "keyword"
+    },
+    "updateDate": {
+      "type": "keyword"
+    },
+    "organism": {
+      "properties": {
+        "text": {
+          "type": "keyword",
+          "fields": {
+            "autocomp": {
+              "type": "text",
+              "analyzer": "autocomp"
+            }
+          }
+        },
+        "ontologyTerms": {
+          "type": "keyword"
+        }
+      }
+    },
+
+    "type": {
+      "type": "keyword"
+    },
+    "datasetAccession": {
+      "type": "keyword"
+    },
+    "sampleAccession": {
+      "type": "keyword"
+    },
+    "experimentAccessions": {
+      "type": "keyword"
+    },
+    "runAccessions": {
+      "type": "keyword"
+    },
+    "fileNames": {
+      "type": "keyword"
+    },
+    "fileTypes": {
+      "type": "keyword"
+    },
+    "fileSizes": {
+      "type": "keyword"
+    },
+    "fileChecksumMethods": {
+      "type": "keyword"
+    },
+    "fileChecksums": {
+      "type": "keyword"
+    },
+    "analysisDate": {
+      "type": "keyword"
+    },
+    "analysisCentre": {
+      "type": "keyword"
+    },
+
+
+    "assayType": {
+      "type": "keyword"
+    },
+    "analysisProtocol": {
+      "properties": {
+        "url": {
+          "type": "keyword"
+        },
+        "filename": {
+          "type": "keyword"
+        }
+      }
+    },
+    "analysisType": {
+      "type": "keyword"
+    },
+    "referenceGenome": {
+      "type": "keyword"
+    },
+
+    "analysisLink": {
+      "type": "keyword"
+    },
+    "analysisCodeRepository": {
+      "type": "keyword"
+    }
+  }
+}
