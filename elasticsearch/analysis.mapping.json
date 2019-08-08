@@ -5,6 +5,9 @@
     "accession": {
       "type": "keyword"
     },
+    "project": {
+      "type": "keyword"
+    },
     "title": {
       "type": "keyword"
     },
@@ -49,7 +52,7 @@
     "datasetAccession": {
       "type": "keyword"
     },
-    "sampleAccession": {
+    "sampleAccessions": {
       "type": "keyword"
     },
     "experimentAccessions": {
@@ -67,10 +70,10 @@
     "fileSizes": {
       "type": "keyword"
     },
-    "fileChecksumMethods": {
+    "checksumMethods": {
       "type": "keyword"
     },
-    "fileChecksums": {
+    "checksums": {
       "type": "keyword"
     },
     "analysisDate": {
@@ -98,6 +101,9 @@
       "type": "keyword"
     },
     "referenceGenome": {
+      "type": "keyword"
+    },
+    "analysisCenter": {
       "type": "keyword"
     },
 

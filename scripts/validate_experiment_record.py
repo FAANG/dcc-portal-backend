@@ -207,6 +207,7 @@ def parse_validation_results(entities):
         result.setdefault('detail', {})
         result['detail'].setdefault(id, {})
         result['detail'][id]['status'] = status
+
         backup_msg = ''
         tag = status + 's'
         status = status.upper()

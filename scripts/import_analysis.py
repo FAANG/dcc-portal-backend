@@ -5,6 +5,7 @@ from utils import check_existsence, remove_underscore_from_end_prefix
 from validate_experiment_record import *
 from validate_sample_record import *
 import pprint
+import validate_analysis_record
 
 RULESETS = ["FAANG Analyses", "FAANG Legacy Analyses"]
 FILE_SERVER_TYPES = ['ftp', 'galaxy', 'aspera']
@@ -34,7 +35,6 @@ def main(es_hosts, es_index_prefix):
     :param es_index_prefix: the index prefix points to a particular version of data
     :return:
     """
-
     hosts = es_hosts.split(";")
     logger.info("Command line parameters")
     logger.info("Hosts: "+str(hosts))
@@ -42,9 +42,9 @@ def main(es_hosts, es_index_prefix):
     if es_index_prefix:
         logger.info("Index_prefix:"+es_index_prefix)
 
-#    es = Elasticsearch(hosts)
+    es = Elasticsearch(hosts)
 
-    url = "https://www.ebi.ac.uk/ena/portal/api/search/?result=analysis&format=JSON&limit=2&fields=all&dataPortal=faang"
+    url = "https://www.ebi.ac.uk/ena/portal/api/search/?result=analysis&format=JSON&limit=0&fields=all&dataPortal=faang"
     data = requests.get(url).json()
     analyses = dict()
     for record in data:
@@ -72,25 +72,26 @@ def main(es_hosts, es_index_prefix):
                 es_doc.setdefault('fileNames', list())
                 es_doc.setdefault('fileTypes', list())
                 es_doc.setdefault('fileSizes', list())
-                es_doc.setdefault('fileChecksumMethods', list())
-                es_doc.setdefault('fileChecksums', list())
+                es_doc.setdefault('checksumMethods', list())
+                es_doc.setdefault('checksums', list())
                 es_doc['fileNames'].append(fullname)
                 es_doc['fileTypes'].append(suffix)
                 es_doc['fileSizes'].append(sizes[i])
-                es_doc['fileChecksumMethods'].append('md5')
-                es_doc['fileChecksums'].append(checksums[i])
+                es_doc['checksumMethods'].append('md5')
+                es_doc['checksums'].append(checksums[i])
         es_doc['accession'] = record['analysis_accession']
         es_doc['title'] = record['analysis_title']
         es_doc['alias'] = record['analysis_alias']
         es_doc['releaseDate'] = record['first_public']
         es_doc['updateDate'] = record['last_updated']
+        es_doc['project'] = record['project_name']
         es_doc.setdefault('organism', dict())
         es_doc['organism']['text'] = record['scientific_name']
         es_doc['organism']['ontologyTerms'] = f"http://purl.obolibrary.org/obo/NCBITaxon_{record['tax_id']}"
-        es_doc['type'] = record['analysis_type']
 
         es_doc['datasetAccession'] = record['study_accession']
-        es_doc['sampleAccession'] = record['sample_accession']
+        es_doc.setdefault('sampleAccessions', list())
+        es_doc['sampleAccessions'] = record['sample_accession']
 
         es_doc.setdefault('experimentAccessions', list())
         es_doc.setdefault('runAccessions', list())
@@ -98,10 +99,8 @@ def main(es_hosts, es_index_prefix):
         # es_doc['runAccessions'].append()
 
         # es_doc['description'] = record['analysis_alias']
-        # es_doc['standardMet'] = record['analysis_alias']
-        # es_doc['versionLastStandardMet'] = record['analysis_alias']
         # es_doc['analysisDate'] = record['analysis_alias']
-        es_doc['analysisCentre'] = record['center_name']
+        es_doc['analysisCenter'] = record['center_name']
         # es_doc['assayType'] = record['center_name']
         # es_doc.setdefault('analysisProtocol', dict())
         # es_doc['analysisProtocol']['url'] = record['']
@@ -112,7 +111,24 @@ def main(es_hosts, es_index_prefix):
         # es_doc['analysisCodeRepository'] = record['analysis_alias']
         analyses[record['analysis_accession']] = es_doc
 
-    pprint.pprint(es_doc)
+    validator = validate_analysis_record.validate_analysis_record(analyses, RULESETS)
+    validation_results = validator.validate()
+    analysis_validation = dict()
+    for analysis_accession, analysis_es in analyses.items():
+        for ruleset in RULESETS:
+            if validation_results[ruleset]['detail'][analysis_accession]['status'] == 'error':
+                logger.info(f"{analysis_accession}\tAnalysis\terror\t"
+                            f"{validation_results[ruleset]['detail'][analysis_accession]['message']}")
+            else:
+                # only indexing when meeting standard
+                analysis_validation[analysis_accession] = STANDARDS[ruleset]
+                analysis_es['standardMet'] = STANDARDS[ruleset]
+                if analysis_es['standardMet'] == STANDARD_FAANG:
+                    analysis_es['versionLastStandardMet'] = validator.get_ruleset_version()
+                body = json.dumps(analysis_es)
+                utils.insert_into_es(es, es_index_prefix, 'analysis', analysis_accession, body)
+                # index into ES so break the loop
+                break
 
 
 if __name__ == "__main__":
