@@ -114,7 +114,7 @@ CATEGORIES = {
 
     "RNA-Seq": "RNA-Seq",
     "RNA seq": "RNA-Seq",
-    "miRNA-Seq": "RNA-Seq",
+    "miRNA-Seq": "miRNA",
     "ssRNA-seq": "RNA-Seq",
     "strand-specific RNA sequencing": "RNA-Seq",
     "Transcriptome profiling": "RNA-Seq",
@@ -143,7 +143,8 @@ EXPERIMENT_TARGETS = {
     "BS-Seq": "DNA methylation",
     "Hi-C": "chromatin",
     "DNase": "open_chromatin_region",
-    "RNA-Seq": "Unknown ",
+    "RNA-Seq": "Unknown",
     "WGS": "input DNA",
-    "ChIP-Seq": "Unknown"
+    "ChIP-Seq": "Unknown",
+    "miRNA": "Unknown"
 }
