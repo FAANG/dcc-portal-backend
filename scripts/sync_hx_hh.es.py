@@ -1,5 +1,6 @@
 from elasticsearch import Elasticsearch
 from datetime import date, timedelta
+import os
 
 from utils import *
 from constants import *
@@ -32,6 +33,11 @@ class SyncHinxtonLondon:
         self.today = date.today().strftime('%Y-%m-%d')
         self.yesterday = (date.today() - timedelta(1)).strftime('%Y-%m-%d')
         self.snapshot_name = "snapshot_{}".format(self.today)
+        self.from_path = '/nfs/public/rw/reseq-info/elastic_search_staging/' \
+                         'snapshot_repo/es6_faang_repo/'
+        self.to_path = '/nfs/public/rw/reseq-info/elastic_search/' \
+                       'snapshot_repo/es6_faang_repo/'
+        self.es_server_production = 'wp-p1m-e2'
 
     def run_sync(self):
         """
@@ -39,6 +45,7 @@ class SyncHinxtonLondon:
         """
         self.create_snapshot('es6_faang_repo')
         self.create_snapshot('es6_faang_repo_production')
+        self.rsync_snapshot()
         self.restore_snapshot()
         self.change_aliases()
         self.delete_old_indices()
@@ -50,13 +57,19 @@ class SyncHinxtonLondon:
         """
         self.logger.info('Creating snapshot')
         parameters = {
-            "indices": "file,organism,specimen,dataset,experiment,protocol_files,protocol_samples,summary_specimen,"
+            "indices": "file,organism,specimen,dataset,experiment,"
+                       "protocol_files,protocol_samples,summary_specimen,"
                        "summary_organism,summary_file,summary_dataset",
             "ignore_unavailable": True,
             "include_global_state": False
         }
-        self.es_staging.snapshot.create(repository=rep_type, snapshot=self.snapshot_name, body=parameters,
-                                        wait_for_completion=True)
+        self.es_staging.snapshot.create(
+            repository=rep_type, snapshot=self.snapshot_name,
+            body=parameters, wait_for_completion=True)
+
+    def rsync_snapshot(self):
+        os.system("rsync --archive --delete-during {} {}:{}".format(
+            self.from_path, self.es_server_production, self.to_path))
 
     def restore_snapshot(self):
         """
@@ -66,44 +79,71 @@ class SyncHinxtonLondon:
         parameters = {
             "ignore_unavailable": True,
             "include_aliases": False,
-            "rename_pattern": "(protocol_files|protocol_samples|faang_build_3_organism|faang_build_3_specimen"
-                              "|faang_build_3_dataset|faang_build_3_file|faang_build_3_experiment|summary_specimen"
+            "rename_pattern": "(protocol_files|protocol_samples|"
+                              "faang_build_3_organism|faang_build_3_specimen"
+                              "|faang_build_3_dataset|faang_build_3_file|"
+                              "faang_build_3_experiment|summary_specimen"
                               "|summary_organism|summary_file|summary_dataset)",
             "rename_replacement": "{}_$1".format(self.today)
         }
-        self.es_fallback.snapshot.restore(repository='es6_faang_repo_production',
-                                          snapshot=self.snapshot_name, body=parameters)
-        self.es_production.snapshot.restore(repository='es6_faang_repo_production',
-                                            snapshot=self.snapshot_name, body=parameters)
+        self.es_fallback.snapshot.restore(
+            repository='es6_faang_repo_production',
+            snapshot=self.snapshot_name, body=parameters)
+        self.es_production.snapshot.restore(
+            repository='es6_faang_repo_production',
+            snapshot=self.snapshot_name, body=parameters)
 
     def change_aliases(self):
         """
-        This function will change aliases to poing to new indices on production and fallback servers
+        This function will change aliases to poing to new indices on production
+        and fallback servers
         """
         self.logger.info('Changing aliases')
         actions = {"actions": [
-            {"remove": {"index": "{}_faang_build_3_file".format(self.yesterday), "alias": "file"}},
-            {"add": {"index": "{}_faang_build_3_file".format(self.today), "alias": "file"}},
-            {"remove": {"index": "{}_faang_build_3_organism".format(self.yesterday), "alias": "organism"}},
-            {"add": {"index": "{}_faang_build_3_organism".format(self.today), "alias": "organism"}},
-            {"remove": {"index": "{}_faang_build_3_specimen".format(self.yesterday), "alias": "specimen"}},
-            {"add": {"index": "{}_faang_build_3_specimen".format(self.today), "alias": "specimen"}},
-            {"remove": {"index": "{}_faang_build_3_dataset".format(self.yesterday), "alias": "dataset"}},
-            {"add": {"index": "{}_faang_build_3_dataset".format(self.today), "alias": "dataset"}},
-            {"remove": {"index": "{}_faang_build_3_experiment".format(self.yesterday), "alias": "experiment"}},
-            {"add": {"index": "{}_faang_build_3_experiment".format(self.today), "alias": "experiment"}},
-            {"remove": {"index": "{}_protocol_files3".format(self.yesterday), "alias": "protocol_files"}},
-            {"add": {"index": "{}_protocol_files3".format(self.today), "alias": "protocol_files"}},
-            {"remove": {"index": "{}_protocol_samples3".format(self.yesterday), "alias": "protocol_samples"}},
-            {"add": {"index": "{}_protocol_samples3".format(self.today), "alias": "protocol_samples"}},
-            {"remove": {"index": "{}_summary_specimen".format(self.yesterday), "alias": "summary_specimen"}},
-            {"add": {"index": "{}_summary_specimen".format(self.today), "alias": "summary_specimen"}},
-            {"remove": {"index": "{}_summary_organism".format(self.yesterday), "alias": "summary_organism"}},
-            {"add": {"index": "{}_summary_organism".format(self.today), "alias": "summary_organism"}},
-            {"remove": {"index": "{}_summary_file".format(self.yesterday), "alias": "summary_file"}},
-            {"add": {"index": "{}_summary_file".format(self.today), "alias": "summary_file"}},
-            {"remove": {"index": "{}_summary_dataset".format(self.yesterday), "alias": "summary_dataset"}},
-            {"add": {"index": "{}_summary_dataset".format(self.today), "alias": "summary_dataset"}}
+            {"remove": {"index": "{}_faang_build_3_file".format(self.yesterday),
+                        "alias": "file"}},
+            {"add": {"index": "{}_faang_build_3_file".format(self.today),
+                     "alias": "file"}},
+            {"remove": {"index": "{}_faang_build_3_organism".format(
+                self.yesterday), "alias": "organism"}},
+            {"add": {"index": "{}_faang_build_3_organism".format(self.today),
+                     "alias": "organism"}},
+            {"remove": {"index": "{}_faang_build_3_specimen".format(
+                self.yesterday), "alias": "specimen"}},
+            {"add": {"index": "{}_faang_build_3_specimen".format(self.today),
+                     "alias": "specimen"}},
+            {"remove": {"index": "{}_faang_build_3_dataset".format(
+                self.yesterday), "alias": "dataset"}},
+            {"add": {"index": "{}_faang_build_3_dataset".format(self.today),
+                     "alias": "dataset"}},
+            {"remove": {"index": "{}_faang_build_3_experiment".format(
+                self.yesterday), "alias": "experiment"}},
+            {"add": {"index": "{}_faang_build_3_experiment".format(self.today),
+                     "alias": "experiment"}},
+            {"remove": {"index": "{}_protocol_files3".format(self.yesterday),
+                        "alias": "protocol_files"}},
+            {"add": {"index": "{}_protocol_files3".format(self.today),
+                     "alias": "protocol_files"}},
+            {"remove": {"index": "{}_protocol_samples3".format(self.yesterday),
+                        "alias": "protocol_samples"}},
+            {"add": {"index": "{}_protocol_samples3".format(self.today),
+                     "alias": "protocol_samples"}},
+            {"remove": {"index": "{}_summary_specimen".format(self.yesterday),
+                        "alias": "summary_specimen"}},
+            {"add": {"index": "{}_summary_specimen".format(self.today),
+                     "alias": "summary_specimen"}},
+            {"remove": {"index": "{}_summary_organism".format(self.yesterday),
+                        "alias": "summary_organism"}},
+            {"add": {"index": "{}_summary_organism".format(self.today),
+                     "alias": "summary_organism"}},
+            {"remove": {"index": "{}_summary_file".format(self.yesterday),
+                        "alias": "summary_file"}},
+            {"add": {"index": "{}_summary_file".format(self.today),
+                     "alias": "summary_file"}},
+            {"remove": {"index": "{}_summary_dataset".format(self.yesterday),
+                        "alias": "summary_dataset"}},
+            {"add": {"index": "{}_summary_dataset".format(self.today),
+                     "alias": "summary_dataset"}}
         ]
         }
         self.es_fallback.indices.update_aliases(body=actions)
@@ -111,42 +151,47 @@ class SyncHinxtonLondon:
 
     def delete_old_indices(self):
         """
-        This function will delete old indices from fallback and production directories
+        This function will delete old indices from fallback and production
+        directories
         """
         self.logger.info('Deleting old indices')
-        self.es_fallback.indices.delete(index=f"{self.yesterday}_faang_build_3_specimen," +
-                                              f"{self.yesterday}_faang_build_3_file," +
-                                              f"{self.yesterday}_summary_dataset," +
-                                              f"{self.yesterday}_summary_specimen," +
-                                              f"{self.yesterday}_faang_build_3_dataset," +
-                                              f"{self.yesterday}_protocol_samples3," +
-                                              f"{self.yesterday}_summary_file," +
-                                              f"{self.yesterday}_faang_build_3_organism," +
-                                              f"{self.yesterday}_summary_organism," +
-                                              f"{self.yesterday}_faang_build_3_experiment," +
-                                              f"{self.yesterday}_protocol_files3")
-        self.es_production.indices.delete(index=f"{self.yesterday}_faang_build_3_specimen," +
-                                                f"{self.yesterday}_faang_build_3_file," +
-                                                f"{self.yesterday}_summary_dataset," +
-                                                f"{self.yesterday}_summary_specimen," +
-                                                f"{self.yesterday}_faang_build_3_dataset," +
-                                                f"{self.yesterday}_protocol_samples3," +
-                                                f"{self.yesterday}_summary_file," +
-                                                f"{self.yesterday}_faang_build_3_organism," +
-                                                f"{self.yesterday}_summary_organism," +
-                                                f"{self.yesterday}_faang_build_3_experiment," +
-                                                f"{self.yesterday}_protocol_files3")
+        self.es_fallback.indices.delete(
+            index=f"{self.yesterday}_faang_build_3_specimen," +
+                  f"{self.yesterday}_faang_build_3_file," +
+                  f"{self.yesterday}_summary_dataset," +
+                  f"{self.yesterday}_summary_specimen," +
+                  f"{self.yesterday}_faang_build_3_dataset," +
+                  f"{self.yesterday}_protocol_samples3," +
+                  f"{self.yesterday}_summary_file," +
+                  f"{self.yesterday}_faang_build_3_organism," +
+                  f"{self.yesterday}_summary_organism," +
+                  f"{self.yesterday}_faang_build_3_experiment," +
+                  f"{self.yesterday}_protocol_files3")
+        self.es_production.indices.delete(
+            index=f"{self.yesterday}_faang_build_3_specimen," +
+                  f"{self.yesterday}_faang_build_3_file," +
+                  f"{self.yesterday}_summary_dataset," +
+                  f"{self.yesterday}_summary_specimen," +
+                  f"{self.yesterday}_faang_build_3_dataset," +
+                  f"{self.yesterday}_protocol_samples3," +
+                  f"{self.yesterday}_summary_file," +
+                  f"{self.yesterday}_faang_build_3_organism," +
+                  f"{self.yesterday}_summary_organism," +
+                  f"{self.yesterday}_faang_build_3_experiment," +
+                  f"{self.yesterday}_protocol_files3")
 
 
 if __name__ == "__main__":
     # Create elasticsearch objects for each server
     es_staging = Elasticsearch([STAGING_NODE1, STAGING_NODE2], timeout=60)
     es_fallback = Elasticsearch([FALLBACK_NODE1, FALLBACK_NODE2], timeout=60)
-    es_production = Elasticsearch([PRODUCTION_NODE1, PRODUCTION_NODE2], timeout=60)
+    es_production = Elasticsearch([PRODUCTION_NODE1, PRODUCTION_NODE2],
+                                  timeout=60)
 
     # Create logger to log info
     logger = create_logging_instance('sync_hx_hh')
 
     # Create object and run syncing
-    sync_object = SyncHinxtonLondon(es_staging, es_fallback, es_production, logger)
+    sync_object = SyncHinxtonLondon(es_staging, es_fallback, es_production,
+                                    logger)
     sync_object.run_sync()
