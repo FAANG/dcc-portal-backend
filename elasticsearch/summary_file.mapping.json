@@ -11,7 +11,27 @@
         }
       }
     },
+    "standardSummaryFAANGOnly": {
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "value": {
+          "type": "keyword"
+        }
+      }
+    },
     "paperPublishedSummary": {
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "value": {
+          "type": "keyword"
+        }
+      }
+    },
+    "paperPublishedSummaryFAANGOnly": {
       "properties": {
         "name": {
           "type": "keyword"
@@ -31,7 +51,27 @@
         }
       }
     },
+    "specieSummaryFAANGOnly": {
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "value": {
+          "type": "keyword"
+        }
+      }
+    },
     "assayTypeSummary": {
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "value": {
+          "type": "keyword"
+        }
+      }
+    },
+    "assayTypeSummaryFAANGOnly": {
       "properties": {
         "name": {
           "type": "keyword"
