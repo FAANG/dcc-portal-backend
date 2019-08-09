@@ -3,12 +3,11 @@ import json
 import os
 import sys
 from typing import Dict, List
-import logging
 import utils
 from misc import from_lower_camel_case
 
 
-logger = utils.create_logging_instance("validate_record", level=logging.INFO, to_file=False)
+logger = utils.create_logging_instance("validate_record")
 
 
 class validate_record():
@@ -16,7 +15,7 @@ class validate_record():
         self.record_type = record_type
         self.records = records
         self.rulesets = rulesets
-        self.batch_size = 600
+        self.batch_size = batch_size
 
     def get_record_type(self):
         return self.record_type
@@ -29,7 +28,7 @@ class validate_record():
         """
         raise NotImplemented
 
-    def parse(self, data, attrs: List, mapping_field_names: Dict) -> List:
+    def parse(self, data: Dict, attrs: List, mapping_field_names: Dict) -> List:
         for key, value in data.items():
             if isinstance(value, list):
                 matched = from_lower_camel_case(key)
@@ -57,41 +56,42 @@ class validate_record():
                 attrs.append(tmp)
         return attrs
 
-    def parse_hash(self, hash, key):
+    def parse_hash(self, hash_value, key):
         if key == 'rnaPreparation3AdapterLigationProtocol':
             key = "rna preparation 3' adapter ligation protocol"
         if key == 'rnaPreparation5AdapterLigationProtocol':
             key = "rna preparation 5' adapter ligation protocol"
         tmp = dict()
-        if 'ontologyTerms' in hash:
-            if len(hash['ontologyTerms']) > 0:
-                tmp = self.parse_ontology_term(hash['ontologyTerms'])
-        if 'unit' in hash:
-            tmp['units'] = hash['unit']
-        if 'url' in hash:
-            tmp['value'] = hash['url']
-            tmp['uri'] = hash['url']
+        if 'ontologyTerms' in hash_value:
+            if len(hash_value['ontologyTerms']) > 0:
+                tmp = self.parse_ontology_term(hash_value['ontologyTerms'])
+        if 'unit' in hash_value:
+            tmp['units'] = hash_value['unit']
+        if 'url' in hash_value:
+            tmp['value'] = hash_value['url']
+            tmp['uri'] = hash_value['url']
             key = from_lower_camel_case(key)
         else:
             key = from_lower_camel_case(key)
-            if 'text' in hash:
-                tmp['value'] = hash['text']
+            if 'text' in hash_value:
+                tmp['value'] = hash_value['text']
             else:
                 tmp['value'] = None
         tmp['name'] = key
         return tmp
 
     def parse_ontology_term(self, ontology_term):
-        id = ontology_term.split("/")[-1].replace(":", "_")
-        if id == 'UBERON_0000468':
-            id = 'OBI_0100026'
+        ontology_id = ontology_term.split("/")[-1].replace(":", "_")
+        if ontology_id == 'UBERON_0000468':
+            ontology_id = 'OBI_0100026'
         result = {
-            'id': id,
-            'source_ref': id.split("_")[0]
+            'id': ontology_id,
+            'source_ref': ontology_id.split("_")[0]
         }
         return result
 
-    def get_ruleset_version(self):
+    @staticmethod
+    def get_ruleset_version():
         """
         This function will get ruleset version
         :return: version of ruleset
@@ -118,8 +118,8 @@ class validate_record():
 
         # Rest of the samples
         part = list()
-        for id in ids:
-            part.append(self.records[id])
+        for record_id in ids:
+            part.append(self.records[record_id])
         total_results = self.get_validation_results(total_results, part)
         return total_results
 
@@ -187,7 +187,7 @@ class validate_record():
                       f' -F "metadata_file=@{tmp_out_file}" "https://www.ebi.ac.uk/vg/faang/validate" > ' \
                           f'{tmp_validation_result_file}'
             os.system(command)
-        except:
+        except Exception:
             logger.error("Validation Error!!!")
             sys.exit(0)
         with open(tmp_validation_result_file, 'r') as f:
@@ -233,10 +233,10 @@ class validate_record():
             status = entity['_outcome']['status']
             summary.setdefault(status, 0)
             summary[status] += 1
-            id = entity['id']
+            entity_id = entity['id']
             result.setdefault('detail', dict())
-            result['detail'].setdefault(id, dict())
-            result['detail'][id]['status'] = status
+            result['detail'].setdefault(entity_id, dict())
+            result['detail'][entity_id]['status'] = status
 
             backup_msg = ''
             tag = status + 's'
@@ -247,7 +247,7 @@ class validate_record():
             if tag in entity['_outcome']:
                 for message in entity['_outcome'][tag]:
                     outcome_msgs.append(f"({status}){message}")
-            backup_msg = ";".join(outcome_msgs)
+                backup_msg = ";".join(outcome_msgs)
 
             msgs = list()
             attributes = entity['attributes']
@@ -279,11 +279,8 @@ class validate_record():
             # means that error contained in the backup_msg, e.g. missing mandatory fields
             elif both_type_flag == 1 and contain_error_flag == 0:
                 total_msg += f";{backup_msg}"
-            result['detail'].setdefault(entity['id'], {})
-            result['detail'][entity['id']]['message'] = total_msg
+            result['detail'][entity_id]['message'] = total_msg
 
         result['summary'] = summary
         result['errors'] = errors
         return result
-
-

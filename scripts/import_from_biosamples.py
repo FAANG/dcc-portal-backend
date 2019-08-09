@@ -8,7 +8,6 @@ from misc import *
 from typing import Dict
 from datetime import date
 import click
-import logging
 import os
 import os.path
 import constants
@@ -38,7 +37,7 @@ MATERIAL_TYPES = {
 }
 ALL_MATERIAL_TYPES = dict()
 
-logger = utils.create_logging_instance('import_biosamples', level=logging.INFO)
+logger = utils.create_logging_instance('import_biosamples')
 
 
 @click.command()

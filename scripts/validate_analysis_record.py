@@ -1,6 +1,5 @@
 import validate_record
 import utils
-import logging
 
 ANALYSES_FIELDS_CONVERSION_MAPPING = {
     'datasetAccession': 'study',
@@ -15,7 +14,7 @@ FIELDS_TO_BE_REMOVED = [
     'updateDate',
     'fileSizes'
 ]
-logger = utils.create_logging_instance("haha", level=logging.INFO, to_file=False)
+logger = utils.create_logging_instance("validate_analysis")
 
 class validate_analysis_record(validate_record.validate_record):
     def __init__(self, records, rulesets, batch_size=600):

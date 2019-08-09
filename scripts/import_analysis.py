@@ -1,16 +1,15 @@
 import click
 from constants import STANDARDS, STAGING_NODE1, STANDARD_LEGACY, STANDARD_FAANG
 from elasticsearch import Elasticsearch
-from utils import check_existsence, remove_underscore_from_end_prefix
-from validate_experiment_record import *
-from validate_sample_record import *
-import pprint
+from utils import remove_underscore_from_end_prefix, create_logging_instance, insert_into_es
+import requests
+import json
 import validate_analysis_record
 
 RULESETS = ["FAANG Analyses", "FAANG Legacy Analyses"]
 FILE_SERVER_TYPES = ['ftp', 'galaxy', 'aspera']
 
-logger = utils.create_logging_instance('import_analysis', level=logging.INFO, to_file=False)
+logger = create_logging_instance('import_analysis')
 
 
 @click.command()
@@ -126,7 +125,7 @@ def main(es_hosts, es_index_prefix):
                 if analysis_es['standardMet'] == STANDARD_FAANG:
                     analysis_es['versionLastStandardMet'] = validator.get_ruleset_version()
                 body = json.dumps(analysis_es)
-                utils.insert_into_es(es, es_index_prefix, 'analysis', analysis_accession, body)
+                insert_into_es(es, es_index_prefix, 'analysis', analysis_accession, body)
                 # index into ES so break the loop
                 break
 

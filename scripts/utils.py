@@ -5,7 +5,7 @@ import logging
 import pprint
 
 
-def create_logging_instance(name, level=logging.DEBUG, to_file=True):
+def create_logging_instance(name, level=logging.INFO, to_file=True):
     """
     This function will create logger instance that will log information to {name}.log file
     Log example: 29-Mar-19 11:54:33 - DEBUG - This is a debug message
@@ -36,7 +36,7 @@ def create_logging_instance(name, level=logging.DEBUG, to_file=True):
     return logger
 
 
-logger = create_logging_instance('utils', level=logging.INFO)
+logger = create_logging_instance('utils')
 logging.getLogger('elasticsearch').setLevel(logging.WARNING)
 
 
