@@ -7,13 +7,18 @@ to help understanding the code
 import click
 from constants import TECHNOLOGIES, STANDARDS, CATEGORIES, SPECIES_DICT, EXPERIMENT_TARGETS
 from elasticsearch import Elasticsearch
-from validate_experiment_record import *
-from validate_sample_record import *
 import constants
 from typing import Set, Dict, List
-from utils import determine_file_and_source, check_existsence, remove_underscore_from_end_prefix
+from utils import determine_file_and_source, check_existsence, remove_underscore_from_end_prefix, \
+    create_logging_instance, insert_into_es
 import re
+import validate_experiment_record
+import sys
+import json
+import requests
+from misc import convert_readable, get_filename_from_url, parse_date
 
+logger = create_logging_instance('import_ena_legacy')
 
 # in FAANG ruleset each technology has mandatory fields in the corresponding section, which is not expected in the
 # general ENA datasets, so only validate against Legacy standard
@@ -325,7 +330,7 @@ def retrieve_biosamples_record(es, es_index_prefix, biosample_id):
 
     # expected to fail validation (Legacy basic), so no need to carry out
     body = json.dumps(es_doc)
-    utils.insert_into_es(es, es_index_prefix, es_type, biosample_id, body)
+    insert_into_es(es, es_index_prefix, es_type, biosample_id, body)
 
     BIOSAMPLES_RECORDS[biosample_id] = es_doc
     return status
@@ -625,7 +630,8 @@ def main(es_hosts, es_index_prefix):
     # datasets contains one artificial value set with the key as 'tmp', so need to -1
     logger.info(f"There are {len(list(datasets.keys())) -  1} datasets to be processed")
 
-    validation_results = validate_total_experiment_records(experiments, RULESETS)
+    validator = validate_experiment_record.validate_experiment_record(experiments, RULESETS)
+    validation_results = validator.validate()
     exp_validation = dict()
     for exp_id in sorted(list(experiments.keys())):
         exp_es = experiments[exp_id]
@@ -637,7 +643,7 @@ def main(es_hosts, es_index_prefix):
                 exp_validation[exp_id] = STANDARDS[ruleset]
                 exp_es['standardMet'] = STANDARDS[ruleset]
                 body = json.dumps(exp_es)
-                utils.insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
+                insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
                 # index into ES so break the loop
                 break
     logger.info("finishing indexing experiments")
@@ -651,7 +657,7 @@ def main(es_hosts, es_index_prefix):
             continue
         es_file_doc['experiment']['standardMet'] = exp_validation[exp_id]
         body = json.dumps(es_file_doc)
-        utils.insert_into_es(es, es_index_prefix, 'file', file_id, body)
+        insert_into_es(es, es_index_prefix, 'file', file_id, body)
         indexed_files[file_id] = 1
     logger.info("finishing indexing files")
 
@@ -716,10 +722,9 @@ def main(es_hosts, es_index_prefix):
         es_doc_dataset['instrument'] = list(datasets['tmp'][dataset_id]['instrument'])
         es_doc_dataset['archive'] = sorted(list(datasets['tmp'][dataset_id]['archive']))
         body = json.dumps(es_doc_dataset)
-        utils.insert_into_es(es, es_index_prefix, 'dataset', dataset_id, body)
+        insert_into_es(es, es_index_prefix, 'dataset', dataset_id, body)
     logger.info("finishing indexing datasets")
 
 
 if __name__ == "__main__":
-    logger = utils.create_logging_instance('import_ena_legacy', level=logging.INFO)
     main()
