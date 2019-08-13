@@ -16,7 +16,7 @@ import validate_experiment_record
 import sys
 import json
 import requests
-from misc import convert_readable, get_filename_from_url, parse_date
+from misc import convert_readable, parse_date
 
 logger = create_logging_instance('import_ena_legacy')
 

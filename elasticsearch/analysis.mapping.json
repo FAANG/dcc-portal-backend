@@ -45,7 +45,6 @@
         }
       }
     },
-
     "type": {
       "type": "keyword"
     },
@@ -61,20 +60,27 @@
     "runAccessions": {
       "type": "keyword"
     },
-    "fileNames": {
-      "type": "keyword"
-    },
-    "fileTypes": {
-      "type": "keyword"
-    },
-    "fileSizes": {
-      "type": "keyword"
-    },
-    "checksumMethods": {
-      "type": "keyword"
-    },
-    "checksums": {
-      "type": "keyword"
+    "files": {
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "url": {
+          "type": "keyword"
+        },
+        "type": {
+          "type": "keyword"
+        },
+        "size": {
+          "type": "keyword"
+        },
+        "checksumMethod": {
+          "type": "keyword"
+        },
+        "checksum": {
+          "type": "keyword"
+        }
+      }
     },
     "analysisDate": {
       "type": "keyword"
@@ -82,8 +88,6 @@
     "analysisCentre": {
       "type": "keyword"
     },
-
-
     "assayType": {
       "type": "keyword"
     },
@@ -106,7 +110,6 @@
     "analysisCenter": {
       "type": "keyword"
     },
-
     "analysisLink": {
       "type": "keyword"
     },

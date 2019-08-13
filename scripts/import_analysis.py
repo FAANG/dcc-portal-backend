@@ -2,9 +2,11 @@ import click
 from constants import STANDARDS, STAGING_NODE1, STANDARD_LEGACY, STANDARD_FAANG
 from elasticsearch import Elasticsearch
 from utils import remove_underscore_from_end_prefix, create_logging_instance, insert_into_es
+from misc import convert_readable
 import requests
 import json
 import validate_analysis_record
+from typing import List, Dict
 
 RULESETS = ["FAANG Analyses", "FAANG Legacy Analyses"]
 FILE_SERVER_TYPES = ['ftp', 'galaxy', 'aspera']
@@ -73,11 +75,13 @@ def main(es_hosts, es_index_prefix):
                 es_doc.setdefault('fileSizes', list())
                 es_doc.setdefault('checksumMethods', list())
                 es_doc.setdefault('checksums', list())
+                es_doc.setdefault('urls', list())
                 es_doc['fileNames'].append(fullname)
                 es_doc['fileTypes'].append(suffix)
-                es_doc['fileSizes'].append(sizes[i])
+                es_doc['fileSizes'].append(convert_readable(sizes[i]))
                 es_doc['checksumMethods'].append('md5')
                 es_doc['checksums'].append(checksums[i])
+                es_doc['urls'].append(file)
         es_doc['accession'] = record['analysis_accession']
         es_doc['title'] = record['analysis_title']
         es_doc['alias'] = record['analysis_alias']
@@ -124,6 +128,24 @@ def main(es_hosts, es_index_prefix):
                 analysis_es['standardMet'] = STANDARDS[ruleset]
                 if analysis_es['standardMet'] == STANDARD_FAANG:
                     analysis_es['versionLastStandardMet'] = validator.get_ruleset_version()
+
+                files_es: List[Dict] = list()
+                for i in range(0, len(analysis_es['fileNames'])):
+                    file_es: Dict = dict()
+                    file_es['name'] = analysis_es['fileNames'][i]
+                    file_es['type'] = analysis_es['fileTypes'][i]
+                    file_es['size'] = analysis_es['fileSizes'][i]
+                    file_es['checksumMethod'] = 'md5sum'
+                    file_es['checksum'] = analysis_es['checksums'][i]
+                    file_es['url'] = analysis_es['urls'][i]
+                    files_es.append(file_es)
+                analysis_es['files'] = files_es
+                analysis_es.pop('fileNames')
+                analysis_es.pop('fileTypes')
+                analysis_es.pop('fileSizes')
+                analysis_es.pop('checksumMethods')
+                analysis_es.pop('checksums')
+                analysis_es.pop('urls')
                 body = json.dumps(analysis_es)
                 insert_into_es(es, es_index_prefix, 'analysis', analysis_accession, body)
                 # index into ES so break the loop
