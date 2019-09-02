@@ -96,9 +96,13 @@ class validate_record():
         This function will get ruleset version
         :return: version of ruleset
         """
-        url = 'https://api.github.com/repos/FAANG/faang-metadata/releases'
-        response = requests.get(url).json()
-        return response[0]['tag_name']
+        # url = 'https://api.github.com/repos/FAANG/faang-metadata/releases'
+        # response = requests.get(url).json()
+        # print(response)
+        # return response[0]['tag_name']
+        # GitHub API introduced rate limit, temporarily use hard-coded version
+        # https://github.com/FAANG/dcc-metadata/releases
+        return "3.6.1"
 
     def validate(self) -> Dict:
         """

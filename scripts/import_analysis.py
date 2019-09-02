@@ -2,7 +2,7 @@ import click
 from constants import STANDARDS, STAGING_NODE1, STANDARD_LEGACY, STANDARD_FAANG
 from elasticsearch import Elasticsearch
 from utils import remove_underscore_from_end_prefix, create_logging_instance, insert_into_es
-from misc import convert_readable
+from misc import convert_readable, get_filename_from_url
 import requests
 import json
 import validate_analysis_record
@@ -98,18 +98,21 @@ def main(es_hosts, es_index_prefix):
 
         es_doc.setdefault('experimentAccessions', list())
         es_doc.setdefault('runAccessions', list())
-        # es_doc['experimentAccessions'].append()
+        for elmt in record['experiment_accession'].split(','):
+            if (elmt):
+                es_doc['experimentAccessions'].append(elmt)
         # es_doc['runAccessions'].append()
 
-        # es_doc['description'] = record['analysis_alias']
+        es_doc['description'] = record['analysis_description']
         # es_doc['analysisDate'] = record['analysis_alias']
         es_doc['analysisCenter'] = record['center_name']
-        # es_doc['assayType'] = record['center_name']
-        # es_doc.setdefault('analysisProtocol', dict())
-        # es_doc['analysisProtocol']['url'] = record['']
-        # es_doc['analysisProtocol']['filename'] = record['']
+        es_doc['assayType'] = record['assay_type']
+        protocol = record['analysis_protocol']
+        es_doc.setdefault('analysisProtocol', dict())
+        es_doc['analysisProtocol']['url'] = protocol
+        es_doc['analysisProtocol']['filename'] = get_filename_from_url(protocol, record['analysis_accession'])
         es_doc['analysisType'] = record['analysis_type']
-        # es_doc['referenceGenome'] = record['analysis_alias']
+        es_doc['referenceGenome'] = record['reference_genome']
         # es_doc['analysisLink'] = record['analysis_alias']
         # es_doc['analysisCodeRepository'] = record['analysis_alias']
         analyses[record['analysis_accession']] = es_doc
