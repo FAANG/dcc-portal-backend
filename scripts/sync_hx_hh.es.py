@@ -12,7 +12,7 @@ class SyncHinxtonLondon:
     1. Create snapshot on test server
     2. Sync snapshot files to fallback and production servers
     3. Restore from snapshot on fallback and production servers
-    4. Change aliases to point to restored snapshot on fallback and production servers
+    4. Change aliases to point to restored snapshot on fallback and production
     5. Delete old indices on fallback and production servers
     """
     def __init__(self, es_staging, es_fallback, es_production, logger):
@@ -33,10 +33,8 @@ class SyncHinxtonLondon:
         self.today = date.today().strftime('%Y-%m-%d')
         self.yesterday = (date.today() - timedelta(1)).strftime('%Y-%m-%d')
         self.snapshot_name = "snapshot_{}".format(self.today)
-        self.from_path = '/nfs/public/rw/reseq-info/elastic_search_staging/' \
-                         'snapshot_repo/es6_faang_repo/'
-        self.to_path = '/nfs/public/rw/reseq-info/elastic_search/' \
-                       'snapshot_repo/es6_faang_repo/'
+        self.from_path = FROM
+        self.to_path = TO
         self.es_server_production = 'wp-p1m-e2'
 
     def run_sync(self):
@@ -56,10 +54,9 @@ class SyncHinxtonLondon:
         :param rep_type type of repo to use (staging or production)
         """
         self.logger.info('Creating snapshot')
+        indices = ",".join(ALIASES_IN_USE.values())
         parameters = {
-            "indices": "file,organism,specimen,dataset,experiment,"
-                       "protocol_files,protocol_samples,summary_specimen,"
-                       "summary_organism,summary_file,summary_dataset",
+            "indices": indices,
             "ignore_unavailable": True,
             "include_global_state": False
         }
@@ -76,14 +73,11 @@ class SyncHinxtonLondon:
         This function will restore snapshot on fallback and production servers
         """
         self.logger.info('Restoring snapshot')
+        indices_in_use = "|".join(ALIASES_IN_USE.keys())
         parameters = {
             "ignore_unavailable": True,
             "include_aliases": False,
-            "rename_pattern": "(protocol_files|protocol_samples|"
-                              "faang_build_3_organism|faang_build_3_specimen"
-                              "|faang_build_3_dataset|faang_build_3_file|"
-                              "faang_build_3_experiment|summary_specimen"
-                              "|summary_organism|summary_file|summary_dataset)",
+            "rename_pattern": "({})".format(indices_in_use),
             "rename_replacement": "{}_$1".format(self.today)
         }
         self.es_fallback.snapshot.restore(
@@ -99,55 +93,15 @@ class SyncHinxtonLondon:
         and fallback servers
         """
         self.logger.info('Changing aliases')
-        actions = {"actions": [
-            {"remove": {"index": "{}_faang_build_3_file".format(self.yesterday),
-                        "alias": "file"}},
-            {"add": {"index": "{}_faang_build_3_file".format(self.today),
-                     "alias": "file"}},
-            {"remove": {"index": "{}_faang_build_3_organism".format(
-                self.yesterday), "alias": "organism"}},
-            {"add": {"index": "{}_faang_build_3_organism".format(self.today),
-                     "alias": "organism"}},
-            {"remove": {"index": "{}_faang_build_3_specimen".format(
-                self.yesterday), "alias": "specimen"}},
-            {"add": {"index": "{}_faang_build_3_specimen".format(self.today),
-                     "alias": "specimen"}},
-            {"remove": {"index": "{}_faang_build_3_dataset".format(
-                self.yesterday), "alias": "dataset"}},
-            {"add": {"index": "{}_faang_build_3_dataset".format(self.today),
-                     "alias": "dataset"}},
-            {"remove": {"index": "{}_faang_build_3_experiment".format(
-                self.yesterday), "alias": "experiment"}},
-            {"add": {"index": "{}_faang_build_3_experiment".format(self.today),
-                     "alias": "experiment"}},
-            {"remove": {"index": "{}_protocol_files3".format(self.yesterday),
-                        "alias": "protocol_files"}},
-            {"add": {"index": "{}_protocol_files3".format(self.today),
-                     "alias": "protocol_files"}},
-            {"remove": {"index": "{}_protocol_samples3".format(self.yesterday),
-                        "alias": "protocol_samples"}},
-            {"add": {"index": "{}_protocol_samples3".format(self.today),
-                     "alias": "protocol_samples"}},
-            {"remove": {"index": "{}_summary_specimen".format(self.yesterday),
-                        "alias": "summary_specimen"}},
-            {"add": {"index": "{}_summary_specimen".format(self.today),
-                     "alias": "summary_specimen"}},
-            {"remove": {"index": "{}_summary_organism".format(self.yesterday),
-                        "alias": "summary_organism"}},
-            {"add": {"index": "{}_summary_organism".format(self.today),
-                     "alias": "summary_organism"}},
-            {"remove": {"index": "{}_summary_file".format(self.yesterday),
-                        "alias": "summary_file"}},
-            {"add": {"index": "{}_summary_file".format(self.today),
-                     "alias": "summary_file"}},
-            {"remove": {"index": "{}_summary_dataset".format(self.yesterday),
-                        "alias": "summary_dataset"}},
-            {"add": {"index": "{}_summary_dataset".format(self.today),
-                     "alias": "summary_dataset"}}
-        ]
-        }
-        self.es_fallback.indices.update_aliases(body=actions)
-        self.es_production.indices.update_aliases(body=actions)
+        actions = list()
+        for k, v in ALIASES_IN_USE.items():
+            actions.append({"remove": {"index": "{}_{}".format(
+                self.yesterday, k), "alias": "{}".format(v)}})
+            actions.append({"add": {"index": "{}_{}".format(self.today, k),
+                                    "alias": "{}".format(v)}})
+        body = {"actions": actions}
+        self.es_fallback.indices.update_aliases(body=body)
+        self.es_production.indices.update_aliases(body=body)
 
     def delete_old_indices(self):
         """
@@ -155,30 +109,10 @@ class SyncHinxtonLondon:
         directories
         """
         self.logger.info('Deleting old indices')
-        self.es_fallback.indices.delete(
-            index=f"{self.yesterday}_faang_build_3_specimen," +
-                  f"{self.yesterday}_faang_build_3_file," +
-                  f"{self.yesterday}_summary_dataset," +
-                  f"{self.yesterday}_summary_specimen," +
-                  f"{self.yesterday}_faang_build_3_dataset," +
-                  f"{self.yesterday}_protocol_samples3," +
-                  f"{self.yesterday}_summary_file," +
-                  f"{self.yesterday}_faang_build_3_organism," +
-                  f"{self.yesterday}_summary_organism," +
-                  f"{self.yesterday}_faang_build_3_experiment," +
-                  f"{self.yesterday}_protocol_files3")
-        self.es_production.indices.delete(
-            index=f"{self.yesterday}_faang_build_3_specimen," +
-                  f"{self.yesterday}_faang_build_3_file," +
-                  f"{self.yesterday}_summary_dataset," +
-                  f"{self.yesterday}_summary_specimen," +
-                  f"{self.yesterday}_faang_build_3_dataset," +
-                  f"{self.yesterday}_protocol_samples3," +
-                  f"{self.yesterday}_summary_file," +
-                  f"{self.yesterday}_faang_build_3_organism," +
-                  f"{self.yesterday}_summary_organism," +
-                  f"{self.yesterday}_faang_build_3_experiment," +
-                  f"{self.yesterday}_protocol_files3")
+        indices_to_delete = ",".join(
+            ["{}_{}".format(self.yesterday, k) for k in ALIASES_IN_USE.keys()])
+        self.es_fallback.indices.delete(index=indices_to_delete)
+        self.es_production.indices.delete(index=indices_to_delete)
 
 
 if __name__ == "__main__":
