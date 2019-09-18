@@ -22,7 +22,12 @@ from constants import TYPES
     default=False,
     help='Indicate whether to create empty indices, i.e. if set to True, this scripts turns to delete existing indices'
 )
-def main(es_host, es_index_prefix, delete_only) -> None:
+@click.option(
+    '--target_type',
+    default='',
+    help='Indicate the type of data to be initialized only'
+)
+def main(es_host, es_index_prefix, delete_only, target_type) -> None:
     """
     Script to initialize/delete a build of indices determined by parameter es_index_prefix on Elastic Search server
     if parameter delete_only is true, only delete any existing indices matching the prefix pattern,
@@ -42,6 +47,8 @@ def main(es_host, es_index_prefix, delete_only) -> None:
 
     prefix = f"{es_host}/{es_index_prefix}"
     for es_type in TYPES:
+        if len(target_type)>0 and es_type != target_type:
+            continue
         # delete the current index if existing
         flag = es.indices.exists(f"{es_index_prefix}_{es_type}")
         if flag:
