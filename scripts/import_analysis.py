@@ -99,9 +99,11 @@ def main(es_hosts, es_index_prefix):
         es_doc.setdefault('experimentAccessions', list())
         es_doc.setdefault('runAccessions', list())
         for elmt in record['experiment_accession'].split(','):
-            if (elmt):
+            if elmt:
                 es_doc['experimentAccessions'].append(elmt)
-        # es_doc['runAccessions'].append()
+        for elmt in record['run_accession'].split(','):
+            if elmt:
+                es_doc['runAccessions'].append(elmt)
 
         es_doc['description'] = record['analysis_description']
         # es_doc['analysisDate'] = record['analysis_alias']

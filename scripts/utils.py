@@ -58,7 +58,6 @@ def insert_into_es(es, es_index_prefix, doc_type, doc_id, body):
     except Exception as e:
         # TODO logging error
         logger.error(f"Error when try to insert into index {es_index_prefix}_{doc_type}: " + str(e.args))
-        pprint.pprint(body)
 
 
 def get_number_of_published_papers(data):

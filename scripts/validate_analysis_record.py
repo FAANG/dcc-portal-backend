@@ -12,7 +12,9 @@ FIELDS_TO_BE_REMOVED = [
     'versionLastStandardMet',
     'releaseDate',
     'updateDate',
-    'fileSizes'
+    'fileSizes',
+    'organism',
+    'urls'
 ]
 logger = utils.create_logging_instance("validate_analysis")
 
