@@ -31,7 +31,7 @@ ALIASES_IN_USE = {
 }
 
 # Current indices in use
-TYPES = ['organism', 'specimen', 'file', 'experiment', 'dataset']
+TYPES = ['organism', 'specimen', 'file', 'experiment', 'dataset', 'analysis']
 
 # Paths for rsync command (is used during syncing process between staging and production elasticsearch servers)
 FROM = '/nfs/public/rw/reseq-info/elastic_search_staging/snapshot_repo/es6_faang_repo/'
