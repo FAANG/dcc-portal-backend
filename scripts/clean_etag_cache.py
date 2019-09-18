@@ -29,7 +29,7 @@ def main(number_to_keep):
     lines.pop()
     total = len(lines)
     if num >= total:
-        print ("Within the limit, all etag cache files are kept")
+        print("Within the limit, all etag cache files are kept")
     else:
         for i in range(num, len(lines)):
             remaining = lines[i].split("etag_list_")[1:]
