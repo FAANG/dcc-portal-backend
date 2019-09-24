@@ -14,9 +14,11 @@ FIELDS_TO_BE_REMOVED = [
     'updateDate',
     'fileSizes',
     'organism',
-    'urls'
+    'urls',
+    'datasetInPortal'
 ]
 logger = utils.create_logging_instance("validate_analysis")
+
 
 class validate_analysis_record(validate_record.validate_record):
     def __init__(self, records, rulesets, batch_size=600):

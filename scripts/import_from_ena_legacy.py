@@ -10,7 +10,7 @@ from elasticsearch import Elasticsearch
 import constants
 from typing import Set, Dict, List
 from utils import determine_file_and_source, check_existsence, remove_underscore_from_end_prefix, \
-    create_logging_instance, insert_into_es
+    create_logging_instance, insert_into_es, get_datasets
 import re
 import validate_experiment_record
 import sys
@@ -72,27 +72,6 @@ def get_biosamples_records_from_es(host, es_index_prefix, es_type):
         return
     for item in response['hits']['hits']:
         BIOSAMPLES_RECORDS[item['_id']] = item['_source']
-
-
-def get_faang_datasets(host: str, es_index_prefix: str) -> Set[str]:
-    """
-    Get the id list of existing datasets with FAANG standard stored in the Elastic Search
-    :param host: the Elastic Search server address
-    :param es_index_prefix: the Elastic Search dataset index
-    :return: set of FAANG dataset id
-    """
-    url = f"http://{host}/{es_index_prefix}_dataset/_search?_source=standardMet"
-    response = requests.get(url).json()
-    total_number = response['hits']['total']
-    if total_number == 0:
-        return set()
-    datasets = set()
-    url = f"{url}&size={total_number}"
-    response = requests.get(url).json()
-    for hit in response['hits']['hits']:
-        if hit['_source']['standardMet'] == constants.STANDARD_FAANG:
-            datasets.add(hit['_id'])
-    return datasets
 
 
 def retrieve_biosamples_record(es, es_index_prefix, biosample_id):
@@ -419,7 +398,7 @@ def main(es_hosts, es_index_prefix):
         logger.error("No biosamples data found in the given index, please run import_from_biosamles.py first")
         sys.exit(1)
 
-    existing_faang_datasets: Set[str] = get_faang_datasets(hosts[0], es_index_prefix)
+    existing_faang_datasets: Set[str] = get_datasets(hosts[0], es_index_prefix)
     logger.info(f"There are {len(existing_faang_datasets)} FAANG datasets in the ES")
 
     # strings used to build ENA API query

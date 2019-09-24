@@ -2,8 +2,10 @@
 Different function that could be used in any faang backend script
 """
 import logging
-import pprint
-
+from typing import Set
+import requests
+import constants
+from misc import convert_readable
 
 def create_logging_instance(name, level=logging.INFO, to_file=True):
     """
@@ -59,6 +61,88 @@ def insert_into_es(es, es_index_prefix, doc_type, doc_id, body):
         # TODO logging error
         logger.error(f"Error when try to insert into index {es_index_prefix}_{doc_type}: " + str(e.args))
 
+
+def get_datasets(host: str, es_index_prefix: str, only_faang=True) -> Set[str]:
+    """
+    Get the id list of existing datasets stored in the Elastic Search
+    :param host: the Elastic Search server address
+    :param es_index_prefix: the Elastic Search dataset index
+    :param only_faang: indiciates whether only include FAANG standard datasets (when True) or all datasets (when False)
+    :return: set of FAANG dataset id
+    """
+    url = f"http://{host}/{es_index_prefix}_dataset/_search?_source=standardMet"
+    response = requests.get(url).json()
+    total_number = response['hits']['total']
+    if total_number == 0:
+        return set()
+    datasets = set()
+    url = f"{url}&size={total_number}"
+    response = requests.get(url).json()
+    for hit in response['hits']['hits']:
+        if only_faang:
+            if hit['_source']['standardMet'] == constants.STANDARD_FAANG:
+                datasets.add(hit['_id'])
+        else:
+            datasets.add(hit['_id'])
+    return datasets
+
+
+def convert_analysis(record, existing_datasets):
+    file_server_types = ['ftp', 'galaxy', 'aspera']
+    file_server_type = ''
+    for tmp in file_server_types:
+        key_to_check = f"submitted_{tmp}"
+        if key_to_check in record and record[key_to_check] != '':
+            file_server_type = tmp
+            break
+    if len(file_server_type) == 0:
+        return dict()
+
+    es_doc = dict()
+    files = record[f"submitted_{file_server_type}"].split(";")
+    sizes = record["submitted_bytes"].split(";")
+    # for ENA, it is fixed to MD5 as the checksum method
+    checksums = record["submitted_md5"].split(";")
+    if len(files) != len(checksums) or len(files) != len(sizes) or len(files) == 0:
+        return dict()
+    for i, file in enumerate(files):
+        fullname = file.split("/")[-1]
+        # filename = fullname.split(".")[0]
+        suffix = fullname.split(".")[-1]
+        if suffix != 'md5':
+            es_doc.setdefault('fileNames', list())
+            es_doc.setdefault('fileTypes', list())
+            es_doc.setdefault('fileSizes', list())
+            es_doc.setdefault('checksumMethods', list())
+            es_doc.setdefault('checksums', list())
+            es_doc.setdefault('urls', list())
+            es_doc['fileNames'].append(fullname)
+            es_doc['fileTypes'].append(suffix)
+            es_doc['fileSizes'].append(convert_readable(sizes[i]))
+            es_doc['checksumMethods'].append('md5')
+            es_doc['checksums'].append(checksums[i])
+            es_doc['urls'].append(file)
+    es_doc['accession'] = record['analysis_accession']
+    es_doc['title'] = record['analysis_title']
+    es_doc['alias'] = record['analysis_alias']
+    es_doc['releaseDate'] = record['first_public']
+    es_doc['updateDate'] = record['last_updated']
+    es_doc.setdefault('organism', dict())
+    es_doc['organism']['text'] = record['scientific_name']
+    es_doc['organism']['ontologyTerms'] = f"http://purl.obolibrary.org/obo/NCBITaxon_{record['tax_id']}"
+
+    es_doc['datasetAccession'] = record['study_accession']
+    if record['study_accession'] in existing_datasets:
+        es_doc['datasetInPortal'] = True
+    else:
+        es_doc['datasetInPortal'] = False
+    es_doc.setdefault('sampleAccessions', list())
+    es_doc['sampleAccessions'] = record['sample_accession']
+
+    # es_doc['analysisDate'] = record['analysis_alias']
+    es_doc['analysisCenter'] = record['center_name']
+    es_doc['analysisType'] = record['analysis_type']
+    return es_doc
 
 def get_number_of_published_papers(data):
     """

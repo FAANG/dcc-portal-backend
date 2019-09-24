@@ -51,6 +51,9 @@
     "datasetAccession": {
       "type": "keyword"
     },
+    "datasetInPortal": {
+      "type": "boolean"
+    },
     "sampleAccessions": {
       "type": "keyword"
     },

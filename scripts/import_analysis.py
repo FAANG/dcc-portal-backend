@@ -1,8 +1,9 @@
 import click
 from constants import STANDARDS, STAGING_NODE1, STANDARD_LEGACY, STANDARD_FAANG
 from elasticsearch import Elasticsearch
-from utils import remove_underscore_from_end_prefix, create_logging_instance, insert_into_es
-from misc import convert_readable, get_filename_from_url
+from utils import remove_underscore_from_end_prefix, create_logging_instance, insert_into_es, get_datasets, \
+    convert_analysis
+from misc import get_filename_from_url
 import requests
 import json
 import validate_analysis_record
@@ -23,7 +24,7 @@ logger = create_logging_instance('import_analysis')
 )
 @click.option(
     '--es_index_prefix',
-    default="",
+    default="faang_build_3",
     help='Specify the Elastic Search index prefix, e.g. '
          'faang_build_1_ then the indices will be faang_build_1_experiment etc.'
          'If not provided, then work on the aliases, e.g. experiment'
@@ -48,53 +49,14 @@ def main(es_hosts, es_index_prefix):
     url = "https://www.ebi.ac.uk/ena/portal/api/search/?result=analysis&format=JSON&limit=0&fields=all&dataPortal=faang"
     data = requests.get(url).json()
     analyses = dict()
+    existing_datasets = get_datasets(hosts[0], es_index_prefix, only_faang=False)
     for record in data:
-        file_server_type = ''
-        for tmp in FILE_SERVER_TYPES:
-            key_to_check = f"submitted_{tmp}"
-            if key_to_check in record and record[key_to_check] != '':
-                file_server_type = tmp
-                break
-        if len(file_server_type) == 0:
+        es_doc = convert_analysis(record, existing_datasets)
+        if not es_doc:
             continue
 
-        es_doc = dict()
-        files = record[f"submitted_{file_server_type}"].split(";")
-        sizes = record["submitted_bytes"].split(";")
-        # for ENA, it is fixed to MD5 as the checksum method
-        checksums = record["submitted_md5"].split(";")
-        if len(files) != len(checksums) or len(files) != len(sizes) or len(files) == 0:
-            continue
-        for i, file in enumerate(files):
-            fullname = file.split("/")[-1]
-            # filename = fullname.split(".")[0]
-            suffix = fullname.split(".")[-1]
-            if suffix != 'md5':
-                es_doc.setdefault('fileNames', list())
-                es_doc.setdefault('fileTypes', list())
-                es_doc.setdefault('fileSizes', list())
-                es_doc.setdefault('checksumMethods', list())
-                es_doc.setdefault('checksums', list())
-                es_doc.setdefault('urls', list())
-                es_doc['fileNames'].append(fullname)
-                es_doc['fileTypes'].append(suffix)
-                es_doc['fileSizes'].append(convert_readable(sizes[i]))
-                es_doc['checksumMethods'].append('md5')
-                es_doc['checksums'].append(checksums[i])
-                es_doc['urls'].append(file)
-        es_doc['accession'] = record['analysis_accession']
-        es_doc['title'] = record['analysis_title']
-        es_doc['alias'] = record['analysis_alias']
-        es_doc['releaseDate'] = record['first_public']
-        es_doc['updateDate'] = record['last_updated']
         es_doc['project'] = record['project_name']
-        es_doc.setdefault('organism', dict())
-        es_doc['organism']['text'] = record['scientific_name']
-        es_doc['organism']['ontologyTerms'] = f"http://purl.obolibrary.org/obo/NCBITaxon_{record['tax_id']}"
 
-        es_doc['datasetAccession'] = record['study_accession']
-        es_doc.setdefault('sampleAccessions', list())
-        es_doc['sampleAccessions'] = record['sample_accession']
 
         es_doc.setdefault('experimentAccessions', list())
         es_doc.setdefault('runAccessions', list())
@@ -106,14 +68,11 @@ def main(es_hosts, es_index_prefix):
                 es_doc['runAccessions'].append(elmt)
 
         es_doc['description'] = record['analysis_description']
-        # es_doc['analysisDate'] = record['analysis_alias']
-        es_doc['analysisCenter'] = record['center_name']
         es_doc['assayType'] = record['assay_type']
         protocol = record['analysis_protocol']
         es_doc.setdefault('analysisProtocol', dict())
         es_doc['analysisProtocol']['url'] = protocol
         es_doc['analysisProtocol']['filename'] = get_filename_from_url(protocol, record['analysis_accession'])
-        es_doc['analysisType'] = record['analysis_type']
         es_doc['referenceGenome'] = record['reference_genome']
         # es_doc['analysisLink'] = record['analysis_alias']
         # es_doc['analysisCodeRepository'] = record['analysis_alias']
