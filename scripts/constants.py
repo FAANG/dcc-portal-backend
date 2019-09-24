@@ -15,6 +15,21 @@ FALLBACK_NODE2 = 'wp-p2m-e3:9200'
 PRODUCTION_NODE1 = 'wp-p1m-e2:9200'
 PRODUCTION_NODE2 = 'wp-p1m-e3:9200'
 
+ALIASES_IN_USE = {
+    'faang_build_3_file': 'file',
+    'faang_build_3_organism': 'organism',
+    'faang_build_3_specimen': 'specimen',
+    'faang_build_3_dataset': 'dataset',
+    'faang_build_3_experiment': 'experiment',
+    'protocol_files3': 'protocol_files',
+    'protocol_samples3': 'protocol_samples',
+    'summary_specimen': 'summary_specimen',
+    'summary_organism': 'summary_organism',
+    'summary_file': 'summary_file',
+    'summary_dataset': 'summary_dataset',
+    'faang_build_3_analysis': 'analysis'
+}
+
 # Current indices in use
 TYPES = ['organism', 'specimen', 'file', 'experiment', 'dataset', 'analysis']
 

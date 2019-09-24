@@ -170,8 +170,9 @@ def get_standard(data):
     """
     standard_data = dict()
     for item in data:
-        standard_data.setdefault(item['_source']['standardMet'], 0)
-        standard_data[item['_source']['standardMet']] += 1
+        standard = item['_source'].get('standardMet', None)
+        standard_data.setdefault(standard, 0)
+        standard_data[standard] += 1
     return standard_data
 
 

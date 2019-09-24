@@ -30,7 +30,7 @@ class CreateProtocols:
         This function will create protocols data for samples
         """
         self.logger.info("Creating sample protocols")
-        results = self.es_staging.search(index="specimen", size=100000)
+        results = self.es_staging.search(index="specimen", size=1000000)
         entries = {}
         for result in results["hits"]["hits"]:
             if "specimenFromOrganism" in result["_source"] and 'specimenCollectionProtocol' in \
@@ -76,7 +76,7 @@ class CreateProtocols:
         This function will create protocols data for experiments
         """
         return_results = {}
-        results = self.es_staging.search(index="experiment", size=100000)
+        results = self.es_staging.search(index="experiment", size=1000000)
 
         def expand_object(data, assay='', target='', accession='', storage='', processing=''):
             for key in data:

@@ -11,7 +11,27 @@
         }
       }
     },
+    "standardSummaryFAANGOnly": {
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "value": {
+          "type": "keyword"
+        }
+      }
+    },
     "sexSummary": {
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "value": {
+          "type": "keyword"
+        }
+      }
+    },
+    "sexSummaryFAANGOnly": {
       "properties": {
         "name": {
           "type": "keyword"
@@ -31,7 +51,27 @@
         }
       }
     },
+    "paperPublishedSummaryFAANGOnly": {
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "value": {
+          "type": "keyword"
+        }
+      }
+    },
     "organismSummary": {
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "value": {
+          "type": "keyword"
+        }
+      }
+    },
+    "organismSummaryFAANGOnly": {
       "properties": {
         "name": {
           "type": "keyword"
@@ -51,6 +91,16 @@
         }
       }
     },
+    "cellTypeSummaryFAANGOnly": {
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "value": {
+          "type": "keyword"
+        }
+      }
+    },
     "materialSummary": {
       "properties": {
         "name": {
@@ -61,7 +111,34 @@
         }
       }
     },
+    "materialSummaryFAANGOnly": {
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "value": {
+          "type": "keyword"
+        }
+      }
+    },
     "breedSummary": {
+      "properties": {
+        "speciesName": {
+          "type": "keyword"
+        },
+        "speciesValue": {
+          "properties": {
+            "breedsName": {
+              "type": "keyword"
+            },
+            "breedsValue": {
+              "type": "keyword"
+            }
+          }
+        }
+      }
+    },
+    "breedSummaryFAANGOnly": {
       "properties": {
         "speciesName": {
           "type": "keyword"
