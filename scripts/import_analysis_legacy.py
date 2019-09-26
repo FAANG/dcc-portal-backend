@@ -13,8 +13,8 @@ EVA_SPECIES = ['Chicken', 'Cow', 'Goat', 'Horse', 'Pig', 'Sheep']
 FIELD_LIST = [
     "analysis_accession", "study_accession", "sample_accession", "analysis_title", "analysis_type", "center_name",
     "first_public", "last_updated", "study_title", "tax_id", "scientific_name", "analysis_alias", "submitted_bytes",
-    "submitted_md5", "submitted_ftp", "submitted_aspera", "submitted_galaxy", "broker_name", "pipeline_name",
-    "pipeline_version", "assembly_type", "accession", "description", "germline"
+    "submitted_md5", "submitted_ftp", "submitted_aspera", "submitted_galaxy", "submitted_format",
+    "broker_name", "pipeline_name", "pipeline_version", "assembly_type", "accession", "description", "germline"
 ]
 
 

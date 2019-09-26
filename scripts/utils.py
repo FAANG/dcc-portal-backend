@@ -101,9 +101,10 @@ def convert_analysis(record, existing_datasets):
     es_doc = dict()
     files = record[f"submitted_{file_server_type}"].split(";")
     sizes = record["submitted_bytes"].split(";")
+    formats = record["submitted_format"].lower().split(";")
     # for ENA, it is fixed to MD5 as the checksum method
     checksums = record["submitted_md5"].split(";")
-    if len(files) != len(checksums) or len(files) != len(sizes) or len(files) == 0:
+    if len(files) != len(checksums) or len(files) != len(sizes) or len(files) != len(formats) or len(files) == 0:
         return dict()
     for i, file in enumerate(files):
         fullname = file.split("/")[-1]
@@ -117,7 +118,7 @@ def convert_analysis(record, existing_datasets):
             es_doc.setdefault('checksums', list())
             es_doc.setdefault('urls', list())
             es_doc['fileNames'].append(fullname)
-            es_doc['fileTypes'].append(suffix)
+            es_doc['fileTypes'].append(formats[i])
             es_doc['fileSizes'].append(convert_readable(sizes[i]))
             es_doc['checksumMethods'].append('md5')
             es_doc['checksums'].append(checksums[i])
