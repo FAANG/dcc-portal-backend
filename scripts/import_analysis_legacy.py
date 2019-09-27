@@ -68,13 +68,18 @@ def main(es_hosts, es_index_prefix):
             continue
         data = response.json()
         for record in data:
-            es_doc = convert_analysis(record, existing_datasets)
+            analysis_accession = record['analysis_accession']
+            if analysis_accession in analyses:
+                es_doc = analyses[analysis_accession]
+            else:
+                es_doc = convert_analysis(record, existing_datasets)
             if not es_doc:
                 continue
             # in ENA api, it is description, different to analysis_description in FAANG portal
             es_doc['description'] = record['description']
+            es_doc['sampleAccessions'].append(record['sample_accession'])
             # es_doc['']
-            analyses[record['analysis_accession']] = es_doc
+            analyses[analysis_accession] = es_doc
         # end of analysis list for one study loop
     # end of all studies loop
 

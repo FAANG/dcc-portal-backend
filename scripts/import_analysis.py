@@ -51,32 +51,36 @@ def main(es_hosts, es_index_prefix):
     analyses = dict()
     existing_datasets = get_datasets(hosts[0], es_index_prefix, only_faang=False)
     for record in data:
-        es_doc = convert_analysis(record, existing_datasets)
-        if not es_doc:
-            continue
+        analysis_accession = record['analysis_accession']
+        if analysis_accession in analyses:
+            es_doc = analyses[analysis_accession]
+        else:
+            es_doc = convert_analysis(record, existing_datasets)
+            if not es_doc:
+                continue
+            es_doc['project'] = record['project_name']
+            es_doc.setdefault('experimentAccessions', list())
+            es_doc.setdefault('runAccessions', list())
+            for elmt in record['experiment_accession'].split(','):
+                if elmt:
+                    es_doc['experimentAccessions'].append(elmt)
+            for elmt in record['run_accession'].split(','):
+                if elmt:
+                    es_doc['runAccessions'].append(elmt)
 
-        es_doc['project'] = record['project_name']
+            es_doc['description'] = record['analysis_description']
+            es_doc['assayType'] = record['assay_type']
+            protocol = record['analysis_protocol']
+            es_doc.setdefault('analysisProtocol', dict())
+            es_doc['analysisProtocol']['url'] = protocol
+            es_doc['analysisProtocol']['filename'] = get_filename_from_url(protocol, record['analysis_accession'])
+            es_doc['referenceGenome'] = record['reference_genome']
+            # es_doc['analysisLink'] = record['analysis_alias']
+            # es_doc['analysisCodeRepository'] = record['analysis_alias']
 
-
-        es_doc.setdefault('experimentAccessions', list())
-        es_doc.setdefault('runAccessions', list())
-        for elmt in record['experiment_accession'].split(','):
-            if elmt:
-                es_doc['experimentAccessions'].append(elmt)
-        for elmt in record['run_accession'].split(','):
-            if elmt:
-                es_doc['runAccessions'].append(elmt)
-
-        es_doc['description'] = record['analysis_description']
-        es_doc['assayType'] = record['assay_type']
-        protocol = record['analysis_protocol']
-        es_doc.setdefault('analysisProtocol', dict())
-        es_doc['analysisProtocol']['url'] = protocol
-        es_doc['analysisProtocol']['filename'] = get_filename_from_url(protocol, record['analysis_accession'])
-        es_doc['referenceGenome'] = record['reference_genome']
-        # es_doc['analysisLink'] = record['analysis_alias']
-        # es_doc['analysisCodeRepository'] = record['analysis_alias']
+        es_doc['sampleAccessions'].append(record['sample_accession'])
         analyses[record['analysis_accession']] = es_doc
+
 
     validator = validate_analysis_record.validate_analysis_record(analyses, RULESETS)
     validation_results = validator.validate()

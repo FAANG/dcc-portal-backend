@@ -138,7 +138,6 @@ def convert_analysis(record, existing_datasets):
     else:
         es_doc['datasetInPortal'] = False
     es_doc.setdefault('sampleAccessions', list())
-    es_doc['sampleAccessions'] = record['sample_accession']
 
     # es_doc['analysisDate'] = record['analysis_alias']
     es_doc['analysisCenter'] = record['center_name']
