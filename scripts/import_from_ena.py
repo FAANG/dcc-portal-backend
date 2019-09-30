@@ -567,7 +567,7 @@ def main(es_hosts, es_index_prefix):
             tmp = new_errors[study]
             for biosample in sorted(tmp.keys()):
                 logger.warning(f"{biosample} from {study} does not exist in BioSamples at the moment\n")
-                w.write(f"{study}\t{biosample}")
+                w.write(f"{study}\t{biosample}\n")
 
 
 def get_ena_data():
