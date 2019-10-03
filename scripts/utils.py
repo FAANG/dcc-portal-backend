@@ -132,24 +132,20 @@ def create_summary_document_for_breeds(data):
 def determine_file_and_source(record):
     """
     predict the combination of data source and data type to use for file information
-    for data source, the preference in the order of fastq, sra, cram_index
-    for file type, the preference in the order of ftp, galaxy, aspera
+    for file type, the preference in the order of fastq, sra, cram_index
+    for source type, the preference in the order of ftp, galaxy, aspera
     the order is from the observation of data availabilities in those fields, so subject to change
     :param record: one data record from ENA API
     :return: the predicted file type and source type, if not found, return two empty strings
     """
-    data_sources = ['fastq', 'sra', 'cram_index']
-    data_types = ['ftp', 'galaxy', 'aspera']
-    file_type = ''
-    source_type = ''
-    for data_source in data_sources:
-        for my_type in data_types:
-            key_to_check = f"{data_source}_{my_type}"
+    file_types = ['fastq', 'sra', 'cram_index']
+    source_types = ['ftp', 'galaxy', 'aspera']
+    for file_type in file_types:
+        for source_type in source_types:
+            key_to_check = f"{file_type}_{source_type}"
             if key_to_check in record and record[key_to_check] != '':
-                file_type = my_type
-                source_type = data_source
                 return file_type, source_type
-    return file_type, source_type
+    return '', ''
 
 
 def check_existsence(data_to_check, field_to_check):
