@@ -42,7 +42,6 @@ class SyncHinxtonLondon:
         Main function that will run syncing
         """
         self.create_snapshot('es6_faang_repo')
-        self.create_snapshot('es6_faang_repo_production')
         self.rsync_snapshot()
         self.restore_snapshot()
         self.change_aliases()
@@ -65,6 +64,8 @@ class SyncHinxtonLondon:
             body=parameters, wait_for_completion=True)
 
     def rsync_snapshot(self):
+        os.system("rsync --archive --delete-during {} {}".format(
+            self.from_path, self.to_path))
         os.system("rsync --archive --delete-during {} {}:{}".format(
             self.from_path, self.es_server_production, self.to_path))
 
@@ -117,10 +118,10 @@ class SyncHinxtonLondon:
 
 if __name__ == "__main__":
     # Create elasticsearch objects for each server
-    es_staging = Elasticsearch([STAGING_NODE1, STAGING_NODE2], timeout=60)
-    es_fallback = Elasticsearch([FALLBACK_NODE1, FALLBACK_NODE2], timeout=60)
+    es_staging = Elasticsearch([STAGING_NODE1, STAGING_NODE2], timeout=120)
+    es_fallback = Elasticsearch([FALLBACK_NODE1, FALLBACK_NODE2], timeout=120)
     es_production = Elasticsearch([PRODUCTION_NODE1, PRODUCTION_NODE2],
-                                  timeout=60)
+                                  timeout=120)
 
     # Create logger to log info
     logger = create_logging_instance('sync_hx_hh')
