@@ -106,19 +106,22 @@ def main(es_hosts, es_index_prefix):
 
         if file_type == '':
             continue
-        if source_type == 'fastq':
+        if file_type == 'fastq':
             archive = 'ENA'
-        elif source_type == 'cram_index':
-            archive = 'CRAM'
+        elif file_type == 'cram_index':
+            archive = 'ENA'
+            file_type = 'submitted'
+            source_type = 'ftp'
         else:
             archive = 'SRA'
-        files = record[f"{source_type}_{file_type}"].split(";")
+
+        files = record[f"{file_type}_{source_type}"].split(";")
         types = record['submitted_format'].split(";")
-        sizes = record[f"{source_type}_bytes"].split(";")
+        sizes = record[f"{file_type}_bytes"].split(";")
         if len(files) != len(types) or len(files) != len(sizes) or len(types) == 0:
             continue
         # for ENA, it is fixed to MD5 as the checksum method
-        checksums = record[f"{source_type}_md5"].split(";")
+        checksums = record[f"{file_type}_md5"].split(";")
         for index, file in enumerate(files):
             specimen_biosample_id = record['sample_accession']
             # if the ena records contains biosample records which have not been in FAANG data portal (biosample_ids)

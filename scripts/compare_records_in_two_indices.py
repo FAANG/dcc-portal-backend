@@ -53,10 +53,8 @@ def main(es_host, es_index_1, es_index_2, es_type):
 
     es_index_1 = remove_underscore_from_end_prefix(es_index_1)
     es_index_2 = remove_underscore_from_end_prefix(es_index_2)
-    url_1: str = f"{es_host}/{es_index_1}_{es_type}/_search?_source=_id&size=100000"
-    url_2: str = f"{es_host}/{es_index_2}_{es_type}/_search?_source=_id&size=100000"
-    resp1 = get_ids(url_1)
-    resp2 = get_ids(url_2)
+    resp1 = get_ids(es_host, es_index_1, es_type)
+    resp2 = get_ids(es_host, es_index_2, es_type)
     for record_id in sorted(resp1):
         if record_id in resp2:
             resp2.remove(record_id)
@@ -68,17 +66,30 @@ def main(es_host, es_index_1, es_index_2, es_type):
             print(f"Only in {es_index_2}_{es_type}: {record_id}")
 
 
-def get_ids(url: str) -> Set[str]:
+def get_ids(es_host: str, es_index: str, es_type:str) -> Set[str]:
     """
-    Return the id list in the form of Dict
-    :param url: used to be curled
+    Return the id list in the form of Set
+    :param es_host: elastic search host server
+    :param es_index: the index prefix e.g. faang_build_1
+    :param es_type: the type of records to be compared
     :return: the id list
     """
+    # first get the total number of records
+    url: str = f"{es_host}/{es_index}_{es_type}/_search?_source=_id"
     response = requests.get(url).json()
+    total_number = response['hits']['total']
+    if total_number == 0:
+        return set()
+    # second get the list
     results = set()
-    for hit in response['hits']['hits']:
-        results.add(hit['_id'])
-    return results
+    url = f"{url}&size={total_number}"
+    response = requests.get(url).json()
+    try:
+        for hit in response['hits']['hits']:
+            results.add(hit['_id'])
+        return results
+    except KeyError:
+        print (f"url: {url}\nresponse: {response}")
 
 
 if __name__ == "__main__":

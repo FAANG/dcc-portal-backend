@@ -46,7 +46,8 @@ FIELD_LIST = [
     'submission_accession', 'tax_id', 'instrument_platform', 'instrument_model', 'library_strategy',
     'library_selection', 'read_count', 'base_count', 'first_public', 'last_updated',
     'study_title', 'study_alias', 'run_alias', 'fastq_bytes', 'fastq_md5',
-    'fastq_ftp', 'fastq_aspera', 'fastq_galaxy', 'submitted_format', 'sra_bytes',
+    'fastq_ftp', 'fastq_aspera', 'fastq_galaxy', 'submitted_format', 'submitted_ftp', 'submitted_md5',
+    'submitted_bytes', 'sra_bytes',
     'sra_md5', 'sra_ftp', 'sra_aspera', 'sra_galaxy', 'cram_index_ftp',
     'cram_index_aspera', 'cram_index_galaxy', 'project_name'
 ]
@@ -480,21 +481,27 @@ def main(es_hosts, es_index_prefix):
 
             with_files.setdefault(study_accession, 0)
             with_files[study_accession] += 1
-            if source_type == 'fastq':
+            if file_type == 'fastq':
                 archive = 'ENA'
-            elif source_type == 'cram_index':
-                archive = 'CRAM'
+            elif file_type == 'cram_index':
+                archive = 'ENA'
+                file_type = 'submitted'
+                source_type = 'ftp'
             else:
                 archive = 'SRA'
 
-            files = record[f"{source_type}_{file_type}"].split(";")
-            types = record['submitted_format'].split(";")
-            sizes = record[f"{source_type}_bytes"].split(";")
+            try:
+                files = record[f"{file_type}_{source_type}"].split(";")
+                types = record['submitted_format'].split(";")
+                sizes = record[f"{file_type}_bytes"].split(";")
+            except KeyError:
+                print(f"category {category} record {record}")
+                exit()
 
             if len(files) != len(sizes):
                 continue
             # for ENA, it is fixed to MD5 as the checksum method
-            checksums = record[f"{source_type}_md5"].split(";")
+            checksums = record[f"{file_type}_md5"].split(";")
             # logger.info(f"study {study_accession} with sample {specimen_biosample_id} having files {','.join(files)}")
 
             for index, file in enumerate(files):
