@@ -68,15 +68,19 @@ def main(es_host, es_index_1, es_index_2, es_type):
 
 def get_ids(es_host: str, es_index: str, es_type:str) -> Set[str]:
     """
-    Return the id list in the form of Dict
-    :param url: used to be curled
+    Return the id list in the form of Set
+    :param es_host: elastic search host server
+    :param es_index: the index prefix e.g. faang_build_1
+    :param es_type: the type of records to be compared
     :return: the id list
     """
+    # first get the total number of records
     url: str = f"{es_host}/{es_index}_{es_type}/_search?_source=_id"
     response = requests.get(url).json()
     total_number = response['hits']['total']
     if total_number == 0:
         return set()
+    # second get the list
     results = set()
     url = f"{url}&size={total_number}"
     response = requests.get(url).json()
