@@ -88,9 +88,6 @@
     "analysisDate": {
       "type": "keyword"
     },
-    "analysisCentre": {
-      "type": "keyword"
-    },
     "assayType": {
       "type": "keyword"
     },
@@ -118,6 +115,18 @@
     },
     "analysisCodeRepository": {
       "type": "keyword"
+    },
+    "experimentType": {
+      "type": "keyword"
+    },
+    "program": {
+      "type": "keyword"
+    },
+    "platform": {
+      "type": "keyword"
+    },
+    "imputation": {
+      "type": "boolean"
     }
   }
 }

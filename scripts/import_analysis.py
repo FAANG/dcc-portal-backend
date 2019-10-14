@@ -78,8 +78,9 @@ def main(es_hosts, es_index_prefix):
             # es_doc['analysisLink'] = record['analysis_alias']
             # es_doc['analysisCodeRepository'] = record['analysis_alias']
 
-        es_doc['sampleAccessions'].append(record['sample_accession'])
-        analyses[record['analysis_accession']] = es_doc
+        if es_doc:
+            es_doc['sampleAccessions'].append(record['sample_accession'])
+            analyses[record['analysis_accession']] = es_doc
 
 
     validator = validate_analysis_record.validate_analysis_record(analyses, RULESETS)

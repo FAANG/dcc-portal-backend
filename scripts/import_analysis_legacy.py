@@ -18,7 +18,7 @@ FIELD_LIST = [
 ]
 
 
-logger = create_logging_instance('import_analysis_legacy')
+logger = create_logging_instance('import_analysis_legacy', to_file=False)
 
 @click.command()
 @click.option(
@@ -54,7 +54,15 @@ def main(es_hosts, es_index_prefix):
     eva_datasets = get_eva_dataset_list()
     field_str = ",".join(FIELD_LIST)
     analyses = dict()
-    existing_datasets = get_datasets(hosts[0], es_index_prefix, only_faang=False)
+    try:
+        existing_datasets = get_datasets(hosts[0], es_index_prefix, only_faang=False)
+    except KeyError:
+        logger.error("No existing datasets retrieved from Elastic Search")
+        logger.error("Possible causes:")
+        logger.error("1 missing/wrong value for parameter es_index_prefix")
+        logger.error("2 ES server has connection issue, index does not exist etc.")
+        exit()
+
     for study_accession in eva_datasets:
         url = f"http://www.ebi.ac.uk/eva/webservices/rest/v1/studies/{study_accession}/summary"
         # expect always to have data from EVA as the list is retrieved live
@@ -67,23 +75,36 @@ def main(es_hosts, es_index_prefix):
         if response.status_code == 204:  # 204 is the status code for no content => the current term does not have match
             continue
         data = response.json()
+        displayed = set()
         for record in data:
             analysis_accession = record['analysis_accession']
             if analysis_accession in analyses:
                 es_doc = analyses[analysis_accession]
             else:
                 es_doc = convert_analysis(record, existing_datasets)
-            if not es_doc:
-                continue
-            # in ENA api, it is description, different to analysis_description in FAANG portal
-            es_doc['description'] = record['description']
-            es_doc['sampleAccessions'].append(record['sample_accession'])
-            # es_doc['']
-            analyses[analysis_accession] = es_doc
+                if not es_doc:
+                    continue
+                # in ENA api, it is description in ena result, different to analysis_description in faang result portal
+                es_doc['description'] = record['description']
+                if eva_summary['experimentType'] != '-':
+                    es_doc['experimentType'] = eva_summary['experimentType'].split(', ')
+                # es_doc['program'] = eva_summary['program']
+                if eva_summary['platform'] != '-':
+                    es_doc['platform'] = eva_summary['platform'].split(', ')
+                # imputation has not been exported in the ENA warehouse
+                # use PRJEB22988 (non farm animal) as example being both imputation and phasing project
+                # es_doc['imputation'] = record['imputation']
+            if es_doc:
+                es_doc['sampleAccessions'].append(record['sample_accession'])
+                analyses[analysis_accession] = es_doc
+            count = len(analyses)
+            if count % 50 == 0 and str(count) not in displayed:
+                displayed.add(str(count))
+                logger.info(f"Processed {count} analysis records")
         # end of analysis list for one study loop
     # end of all studies loop
 
-    logger.info(len(analyses))
+    logger.info("Total analyses to be validated: " + str(len(analyses)))
     validator = validate_analysis_record.validate_analysis_record(analyses, RULESETS)
     validation_results = validator.validate()
     analysis_validation = dict()
