@@ -22,13 +22,15 @@ logger = utils.create_logging_instance("validate_analysis")
 
 class ValidateAnalysisRecord(validate_record.ValidateRecord):
     def __init__(self, records, rulesets, batch_size=600):
+        """
+        inherited constructor, call the parental constructor directly with type set as analysis
+        """
         super().__init__('analysis', records, rulesets, batch_size)
 
     def convert_data(self, item):
         """
         Overwrite the abstract method
         Create an analysis data structure to be validated
-        :return:
         """
         data = dict(item)
         attr = list()

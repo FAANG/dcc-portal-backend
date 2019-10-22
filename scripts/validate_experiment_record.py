@@ -17,9 +17,16 @@ logger = utils.create_logging_instance('validate_experiment')
 
 class ValidateExperimentRecord(validate_record.ValidateRecord):
     def __init__(self, records, rulesets, batch_size=600):
+        """
+        inherited constructor, call the parental constructor directly with type set as experiment
+        """
         super().__init__('experiment', records, rulesets, batch_size)
 
     def convert_data(self, item):
+        """
+        Overwrite the abstract method
+        Create an experiment data structure to be validated
+        """
         data = dict(item)
         attr: List = list()
         result = dict()

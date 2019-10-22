@@ -1,3 +1,7 @@
+"""
+The base class which deals with validation records against the ruleset
+"""
+
 import json
 import os
 import sys
@@ -9,25 +13,64 @@ from misc import from_lower_camel_case
 logger = utils.create_logging_instance("validate_record")
 
 
+def parse_ontology_term(ontology_term):
+    """
+    extract ontology short term from iri
+    a special case that UBERON_0000468 is wrongly used for organism, corrected to the correct one OBI_0100026
+    :param ontology_term:
+    :return:
+    """
+    ontology_id = ontology_term.split("/")[-1].replace(":", "_")
+    if ontology_id == 'UBERON_0000468':
+        ontology_id = 'OBI_0100026'
+    result = {
+        'id': ontology_id,
+        'source_ref': ontology_id.split("_")[0]
+    }
+    return result
+
+
 class ValidateRecord:
     def __init__(self, record_type: str, records: Dict, rulesets: List, batch_size: int = 600):
+        """
+        constructor method
+        :param record_type: indicates the type of records, could be one of experiment, analysis
+        :param records: the records to be validated, stored as a Dict, keys are record accession and values are the data
+        :param rulesets: the name of ruleset(s) to be validated against
+        :param batch_size: the list of records to be validated could be very long and to make it possible to transfer to
+        the validation server without timeout, it needs to split into small batches. The batch size determines how many
+        records are contained in a batch
+        """
         self.record_type = record_type
         self.records = records
         self.rulesets = rulesets
         self.batch_size = batch_size
 
     def get_record_type(self):
+        """
+        :return: the type of records
+        """
         return self.record_type
 
     def convert_data(self, item):
         """
-        abstract method, convert record into data structure which is expected by the validation server
-        :param item: record data
+        abstract method, convert single record into data structure which is expected by the validation server
+        it may involve with removing some known fields not in the ruleset, e.g. release date
+        :param item: single record data
         :return: converted record
         """
         raise NotImplemented
 
     def parse(self, data: Dict, attrs: List, mapping_field_names: Dict) -> List:
+        """
+        parse the record data into list of attributes (required by the validation service) and change the field name
+        if mapping_filed_names provided
+        :param data: the single record data
+        :param attrs: the list of existing converted attributes
+        :param mapping_field_names: the list of fields the name of which needs to be replaced
+        (ES and ruleset use different names)
+        :return: the updated list of attributes
+        """
         for key, value in data.items():
             if isinstance(value, list):
                 matched = from_lower_camel_case(key)
@@ -55,39 +98,35 @@ class ValidateRecord:
                 attrs.append(tmp)
         return attrs
 
-    def parse_hash(self, hash_value, key):
-        if key == 'rnaPreparation3AdapterLigationProtocol':
-            key = "rna preparation 3' adapter ligation protocol"
-        if key == 'rnaPreparation5AdapterLigationProtocol':
-            key = "rna preparation 5' adapter ligation protocol"
+    def parse_hash(self, hash_value, field_name):
+        """
+        convert data in hash (Dict) into accepted format
+        :param hash_value: the original data in the form of hash
+        :param field_name: the field name
+        :return: the converted attribute
+        """
+        if field_name == 'rnaPreparation3AdapterLigationProtocol':
+            field_name = "rna preparation 3' adapter ligation protocol"
+        if field_name == 'rnaPreparation5AdapterLigationProtocol':
+            field_name = "rna preparation 5' adapter ligation protocol"
         tmp = dict()
         if 'ontologyTerms' in hash_value:
             if len(hash_value['ontologyTerms']) > 0:
-                tmp = self.parse_ontology_term(hash_value['ontologyTerms'])
+                tmp = parse_ontology_term(hash_value['ontologyTerms'])
         if 'unit' in hash_value:
             tmp['units'] = hash_value['unit']
         if 'url' in hash_value:
             tmp['value'] = hash_value['url']
             tmp['uri'] = hash_value['url']
-            key = from_lower_camel_case(key)
+            field_name = from_lower_camel_case(field_name)
         else:
-            key = from_lower_camel_case(key)
+            field_name = from_lower_camel_case(field_name)
             if 'text' in hash_value:
                 tmp['value'] = hash_value['text']
             else:
                 tmp['value'] = None
-        tmp['name'] = key
+        tmp['name'] = field_name
         return tmp
-
-    def parse_ontology_term(self, ontology_term):
-        ontology_id = ontology_term.split("/")[-1].replace(":", "_")
-        if ontology_id == 'UBERON_0000468':
-            ontology_id = 'OBI_0100026'
-        result = {
-            'id': ontology_id,
-            'source_ref': ontology_id.split("_")[0]
-        }
-        return result
 
     @staticmethod
     def get_ruleset_version():
