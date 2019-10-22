@@ -1,4 +1,3 @@
-import requests
 import json
 import os
 import sys
@@ -10,7 +9,7 @@ from misc import from_lower_camel_case
 logger = utils.create_logging_instance("validate_record")
 
 
-class validate_record():
+class ValidateRecord:
     def __init__(self, record_type: str, records: Dict, rulesets: List, batch_size: int = 600):
         self.record_type = record_type
         self.records = records
@@ -102,7 +101,7 @@ class validate_record():
         # return response[0]['tag_name']
         # GitHub API introduced rate limit, temporarily use hard-coded version
         # https://github.com/FAANG/dcc-metadata/releases
-        return "3.6.1"
+        return "3.6.3"
 
     def validate(self) -> Dict:
         """

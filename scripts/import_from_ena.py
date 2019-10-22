@@ -8,7 +8,7 @@ import click
 from constants import TECHNOLOGIES, STANDARDS, STAGING_NODE1, STANDARD_LEGACY, STANDARD_FAANG
 from elasticsearch import Elasticsearch
 from utils import determine_file_and_source, check_existsence, remove_underscore_from_end_prefix, \
-    create_logging_instance, insert_into_es
+    create_logging_instance, insert_into_es, generate_ena_api_endpoint
 import validate_experiment_record
 import validate_record
 import sys
@@ -65,7 +65,7 @@ def main(es_hosts, es_index_prefix):
     known_errors = get_known_errors()
     new_errors = dict()
 
-    ruleset_version = validate_record.validate_record.get_ruleset_version()
+    ruleset_version = validate_record.ValidateRecord.get_ruleset_version()
     logger.info(f"Current experiment ruleset version: {ruleset_version}")
     indexed_files = dict()
     datasets = dict()
@@ -476,7 +476,7 @@ def main(es_hosts, es_index_prefix):
     # datasets contains one artificial value set with the key as 'tmp', so need to -1
     logger.info(f"There are {len(list(datasets.keys())) -  1} datasets to be processed")
 
-    validator = validate_experiment_record.validate_experiment_record(experiments, RULESETS)
+    validator = validate_experiment_record.ValidateExperimentRecord(experiments, RULESETS)
     validation_results = validator.validate()
     exp_validation = dict()
     for exp_id in sorted(experiments.keys()):
@@ -581,8 +581,10 @@ def get_ena_data():
     This function will fetch data from ena FAANG data portal ruead_run result
     :return: json representation of data from ena
     """
-    response = requests.get('https://www.ebi.ac.uk/ena/portal/api/search/?result=read_run&format=JSON&limit=0'
-                            '&dataPortal=faang&fields=all').json()
+    # 'https://www.ebi.ac.uk/ena/portal/api/search/?result=read_run&format=JSON&limit=0&dataPortal=faang&fields=all'
+    url = generate_ena_api_endpoint('read_run', 'faang', 'all')
+    logger.info(f"Getting data from {url}")
+    response = requests.get(url).json()
     return response
 
 

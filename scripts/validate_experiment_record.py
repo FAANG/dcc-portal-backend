@@ -15,7 +15,7 @@ FIELDS_TO_BE_REMOVED = [
 logger = utils.create_logging_instance('validate_experiment')
 
 
-class validate_experiment_record(validate_record.validate_record):
+class ValidateExperimentRecord(validate_record.ValidateRecord):
     def __init__(self, records, rulesets, batch_size=600):
         super().__init__('experiment', records, rulesets, batch_size)
 

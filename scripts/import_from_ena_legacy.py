@@ -10,7 +10,7 @@ from elasticsearch import Elasticsearch
 import constants
 from typing import Set, Dict, List
 from utils import determine_file_and_source, check_existsence, remove_underscore_from_end_prefix, \
-    create_logging_instance, insert_into_es, get_datasets
+    create_logging_instance, insert_into_es, get_datasets, generate_ena_api_endpoint
 import re
 import validate_experiment_record
 import sys
@@ -414,8 +414,11 @@ def main(es_hosts, es_index_prefix):
         if category not in ASSAY_TYPES_TO_BE_IMPORTED:
             continue
         logger.info(f"term {term} in category {category}")
-        url = f"https://www.ebi.ac.uk/ena/portal/api/search/?result=read_run&format=JSON&limit=0&" \
-            f"query=library_strategy%3D%22{term}%22%20AND%20tax_eq({species_str})&fields={field_str}"
+        # f"https://www.ebi.ac.uk/ena/portal/api/search/?result=read_run&format=JSON&limit=0&" \
+        #    f"query=library_strategy%3D%22{term}%22%20AND%20tax_eq({species_str})&fields={field_str}"
+        # extra constraint based on species and library strategy
+        optional_str = f"query=library_strategy%3D%22{term}%22%20AND%20tax_eq({species_str})"
+        url = generate_ena_api_endpoint('read_run', 'ena', field_str, optional_str)
         response = requests.get(url)
         if response.status_code == 204:  # 204 is the status code for no content => the current term does not have match
             continue
@@ -609,7 +612,7 @@ def main(es_hosts, es_index_prefix):
     # datasets contains one artificial value set with the key as 'tmp', so need to -1
     logger.info(f"There are {len(list(datasets.keys())) -  1} datasets to be processed")
 
-    validator = validate_experiment_record.validate_experiment_record(experiments, RULESETS)
+    validator = validate_experiment_record.ValidateExperimentRecord(experiments, RULESETS)
     validation_results = validator.validate()
     exp_validation = dict()
     for exp_id in sorted(list(experiments.keys())):

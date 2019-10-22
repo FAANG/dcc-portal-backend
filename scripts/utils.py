@@ -251,7 +251,7 @@ def check_existsence(data_to_check, field_to_check):
         return None
 
 
-def remove_underscore_from_end_prefix(es_index_prefix: str)->str:
+def remove_underscore_from_end_prefix(es_index_prefix: str) -> str:
     """
     Remove the last underscore from index prefix if existing
     :param es_index_prefix: the index prefix may having underscore at the end
@@ -261,3 +261,20 @@ def remove_underscore_from_end_prefix(es_index_prefix: str)->str:
         str_len = len(es_index_prefix)
         es_index_prefix = es_index_prefix[0:str_len - 1]
     return es_index_prefix
+
+
+def generate_ena_api_endpoint(result: str, data_portal: str, fields: str, optional: str = ''):
+    """
+    Generate the url for ENA API endpoint
+    :param result: either be read_run (for experiment, file, dataset import) or analysis (for analysis import)
+    :param data_portal: either ena (legacy data) or faang (faang data)
+    :param fields: all (only faang data supports all) or list of fields separated by ',' (for legacy data)
+    :param optional: optional constraint, e.g. species
+    :return: the generated url
+    """
+    if optional == "":
+        return f"https://www.ebi.ac.uk/ena/portal/api/search/?" \
+           f"result={result}&format=JSON&limit=0&fields={fields}&dataPortal={data_portal}"
+    else:
+        return f"https://www.ebi.ac.uk/ena/portal/api/search/?" \
+           f"result={result}&format=JSON&limit=0&{optional}&fields={fields}&dataPortal={data_portal}"

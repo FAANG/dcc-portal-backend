@@ -2,7 +2,7 @@ import click
 from constants import STANDARDS, STAGING_NODE1, STANDARD_LEGACY, STANDARD_FAANG
 from elasticsearch import Elasticsearch
 from utils import remove_underscore_from_end_prefix, create_logging_instance, insert_into_es, get_datasets, \
-    convert_analysis
+    convert_analysis, generate_ena_api_endpoint
 from misc import get_filename_from_url
 import requests
 import json
@@ -10,7 +10,6 @@ import validate_analysis_record
 from typing import List, Dict
 
 RULESETS = ["FAANG Analyses", "FAANG Legacy Analyses"]
-FILE_SERVER_TYPES = ['ftp', 'galaxy', 'aspera']
 
 logger = create_logging_instance('import_analysis')
 
@@ -46,7 +45,9 @@ def main(es_hosts, es_index_prefix):
 
     es = Elasticsearch(hosts)
 
-    url = "https://www.ebi.ac.uk/ena/portal/api/search/?result=analysis&format=JSON&limit=0&fields=all&dataPortal=faang"
+    # "https://www.ebi.ac.uk/ena/portal/api/search/?result=analysis&format=JSON&limit=0&fields=all&dataPortal=faang"
+    url = generate_ena_api_endpoint('analysis', 'faang', 'all')
+    logger.info(f"Getting data from {url}")
     data = requests.get(url).json()
     analyses = dict()
     existing_datasets = get_datasets(hosts[0], es_index_prefix, only_faang=False)
@@ -78,19 +79,18 @@ def main(es_hosts, es_index_prefix):
             # es_doc['analysisLink'] = record['analysis_alias']
             # es_doc['analysisCodeRepository'] = record['analysis_alias']
 
-        if es_doc:
-            es_doc['sampleAccessions'].append(record['sample_accession'])
-            analyses[record['analysis_accession']] = es_doc
+        es_doc['sampleAccessions'].append(record['sample_accession'])
+        analyses[record['analysis_accession']] = es_doc
 
 
-    validator = validate_analysis_record.validate_analysis_record(analyses, RULESETS)
+    validator = validate_analysis_record.ValidateAnalysisRecord(analyses, RULESETS)
     validation_results = validator.validate()
     analysis_validation = dict()
     for analysis_accession, analysis_es in analyses.items():
         for ruleset in RULESETS:
             if validation_results[ruleset]['detail'][analysis_accession]['status'] == 'error':
-                logger.info(f"{analysis_accession}\tAnalysis\terror\t"
-                            f"{validation_results[ruleset]['detail'][analysis_accession]['message']}")
+                message = validation_results[ruleset]['detail'][analysis_accession]['message']
+                logger.info(f"{analysis_accession}\tAnalysis\terror\t{message}")
             else:
                 # only indexing when meeting standard
                 analysis_validation[analysis_accession] = STANDARDS[ruleset]

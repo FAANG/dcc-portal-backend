@@ -2,7 +2,7 @@ import click
 from constants import STANDARDS, STAGING_NODE1, STANDARD_LEGACY, STANDARD_FAANG
 from elasticsearch import Elasticsearch
 from utils import remove_underscore_from_end_prefix, create_logging_instance, insert_into_es, get_datasets, \
-    convert_analysis
+    convert_analysis, generate_ena_api_endpoint
 import requests
 import json
 import validate_analysis_record
@@ -18,7 +18,7 @@ FIELD_LIST = [
 ]
 
 
-logger = create_logging_instance('import_analysis_legacy', to_file=False)
+logger = create_logging_instance('import_analysis_legacy')
 
 @click.command()
 @click.option(
@@ -69,8 +69,11 @@ def main(es_hosts, es_index_prefix):
         # get EVA summary
         eva_summary = requests.get(url).json()['response'][0]['result'][0]
 
-        url = f"https://www.ebi.ac.uk/ena/portal/api/search/?result=analysis&format=JSON&limit=0&" \
-            f"query=study_accession%3D%22{study_accession}%22&fields={field_str}"
+        # f"https://www.ebi.ac.uk/ena/portal/api/search/?result=analysis&format=JSON&limit=0&" \
+        #    f"query=study_accession%3D%22{study_accession}%22&fields={field_str}"
+        # extra constraint based on study accession
+        optional_str = f"query=study_accession%3D%22{study_accession}%22"
+        url = generate_ena_api_endpoint('analysis', 'ena', field_str, optional_str)
         response = requests.get(url)
         if response.status_code == 204:  # 204 is the status code for no content => the current term does not have match
             continue
@@ -94,9 +97,8 @@ def main(es_hosts, es_index_prefix):
                 # imputation has not been exported in the ENA warehouse
                 # use PRJEB22988 (non farm animal) as example being both imputation and phasing project
                 # es_doc['imputation'] = record['imputation']
-            if es_doc:
-                es_doc['sampleAccessions'].append(record['sample_accession'])
-                analyses[analysis_accession] = es_doc
+            es_doc['sampleAccessions'].append(record['sample_accession'])
+            analyses[analysis_accession] = es_doc
             count = len(analyses)
             if count % 50 == 0 and str(count) not in displayed:
                 displayed.add(str(count))
@@ -105,7 +107,7 @@ def main(es_hosts, es_index_prefix):
     # end of all studies loop
 
     logger.info("Total analyses to be validated: " + str(len(analyses)))
-    validator = validate_analysis_record.validate_analysis_record(analyses, RULESETS)
+    validator = validate_analysis_record.ValidateAnalysisRecord(analyses, RULESETS)
     validation_results = validator.validate()
     analysis_validation = dict()
     for analysis_accession, analysis_es in analyses.items():
