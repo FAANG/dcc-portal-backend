@@ -136,10 +136,7 @@ def convert_analysis(record, existing_datasets):
     es_doc['organism']['ontologyTerms'] = f"http://purl.obolibrary.org/obo/NCBITaxon_{record['tax_id']}"
 
     es_doc['datasetAccession'] = record['study_accession']
-    if record['study_accession'] in existing_datasets:
-        es_doc['datasetInPortal'] = True
-    else:
-        es_doc['datasetInPortal'] = False
+    es_doc['datasetInPortal'] = True if record['study_accession'] in existing_datasets else False
     es_doc.setdefault('sampleAccessions', list())
 
     # es_doc['analysisDate'] = record['analysis_alias']
