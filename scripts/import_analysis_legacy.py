@@ -1,12 +1,10 @@
 import click
-from constants import STANDARDS, STAGING_NODE1, STANDARD_LEGACY, STANDARD_FAANG
+from constants import STAGING_NODE1
 from elasticsearch import Elasticsearch
 from utils import remove_underscore_from_end_prefix, create_logging_instance, insert_into_es, get_datasets, \
-    convert_analysis, generate_ena_api_endpoint
+    convert_analysis, generate_ena_api_endpoint, process_validation_result
 import requests
-import json
 import validate_analysis_record
-from typing import List, Dict
 
 RULESETS = ["FAANG Legacy Analyses"]
 EVA_SPECIES = ['Chicken', 'Cow', 'Goat', 'Horse', 'Pig', 'Sheep']
@@ -19,6 +17,7 @@ FIELD_LIST = [
 
 
 logger = create_logging_instance('import_analysis_legacy')
+
 
 @click.command()
 @click.option(
@@ -109,40 +108,8 @@ def main(es_hosts, es_index_prefix):
     logger.info("Total analyses to be validated: " + str(len(analyses)))
     validator = validate_analysis_record.ValidateAnalysisRecord(analyses, RULESETS)
     validation_results = validator.validate()
-    analysis_validation = dict()
-    for analysis_accession, analysis_es in analyses.items():
-        for ruleset in RULESETS:
-            if validation_results[ruleset]['detail'][analysis_accession]['status'] == 'error':
-                logger.info(f"{analysis_accession}\tAnalysis\terror\t"
-                            f"{validation_results[ruleset]['detail'][analysis_accession]['message']}")
-            else:
-                # only indexing when meeting standard
-                analysis_validation[analysis_accession] = STANDARDS[ruleset]
-                analysis_es['standardMet'] = STANDARDS[ruleset]
-                if analysis_es['standardMet'] == STANDARD_FAANG:
-                    analysis_es['versionLastStandardMet'] = validator.get_ruleset_version()
-
-                files_es: List[Dict] = list()
-                for i in range(0, len(analysis_es['fileNames'])):
-                    file_es: Dict = dict()
-                    file_es['name'] = analysis_es['fileNames'][i]
-                    file_es['type'] = analysis_es['fileTypes'][i]
-                    file_es['size'] = analysis_es['fileSizes'][i]
-                    file_es['checksumMethod'] = 'md5sum'
-                    file_es['checksum'] = analysis_es['checksums'][i]
-                    file_es['url'] = analysis_es['urls'][i]
-                    files_es.append(file_es)
-                analysis_es['files'] = files_es
-                analysis_es.pop('fileNames')
-                analysis_es.pop('fileTypes')
-                analysis_es.pop('fileSizes')
-                analysis_es.pop('checksumMethods')
-                analysis_es.pop('checksums')
-                analysis_es.pop('urls')
-                body = json.dumps(analysis_es)
-                insert_into_es(es, es_index_prefix, 'analysis', analysis_accession, body)
-                # index into ES so break the loop
-                break
+    ruleset_version = validator.get_ruleset_version()
+    process_validation_result(analyses, es, es_index_prefix, validation_results, ruleset_version, RULESETS, logger)
 
 
 def get_eva_dataset_list():

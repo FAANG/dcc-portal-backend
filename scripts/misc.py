@@ -3,6 +3,7 @@ A collection of commonly-used functions, could be cross-projects
 """
 import re
 
+
 def to_lower_camel_case(str_to_convert):
     """
     This function will convert any string with spaces or underscores to lower camel case string
@@ -55,6 +56,7 @@ def convert_readable(size_to_convert):
     :param size_to_convert: size in bytes
     :return: human-readable string with size
     """
+    i = 0
     size_to_convert = int(size_to_convert)
     units = ['B', 'kB', 'MB', 'GB', 'TB', 'PB']
     for i in range(6):
@@ -67,7 +69,7 @@ def convert_readable(size_to_convert):
     return f"{round(size_to_convert, 2)}{units[i]}"
 
 
-def parse_date(date_str: str) -> str:
+def parse_date(date_str: str):
     """
     extract YYYY-MM-DD from ISO date string used by BioSamples
     :param date_str: ISO date string

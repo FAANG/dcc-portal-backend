@@ -1,11 +1,14 @@
 """
 Different function that could be used in any faang backend script
 """
+import json
 import logging
-from typing import Set
+from typing import Set, List, Dict
 import requests
 import constants
+from constants import STANDARDS, STANDARD_FAANG
 from misc import convert_readable
+
 
 def create_logging_instance(name, level=logging.INFO, to_file=True):
     """
@@ -17,7 +20,7 @@ def create_logging_instance(name, level=logging.INFO, to_file=True):
     :return: logger instance
     """
     # Create a custom logger
-    logger = logging.getLogger(name)
+    new_logger = logging.getLogger(name)
 
     # Create handlers
     if to_file:
@@ -33,9 +36,9 @@ def create_logging_instance(name, level=logging.INFO, to_file=True):
     f_handler.setFormatter(f_format)
 
     # Add handlers to the logger
-    logger.addHandler(f_handler)
-    logger.setLevel(level)
-    return logger
+    new_logger.addHandler(f_handler)
+    new_logger.setLevel(level)
+    return new_logger
 
 
 logger = create_logging_instance('utils')
@@ -143,6 +146,7 @@ def convert_analysis(record, existing_datasets):
     es_doc['analysisCenter'] = record['center_name']
     es_doc['analysisType'] = record['analysis_type']
     return es_doc
+
 
 def get_number_of_published_papers(data):
     """
@@ -278,3 +282,40 @@ def generate_ena_api_endpoint(result: str, data_portal: str, fields: str, option
     else:
         return f"https://www.ebi.ac.uk/ena/portal/api/search/?" \
            f"result={result}&format=JSON&limit=0&{optional}&fields={fields}&dataPortal={data_portal}"
+
+
+def process_validation_result(analyses, es, es_index_prefix, validation_results, ruleset_version, rulesets, logger_in):
+    analysis_validation = dict()
+    for analysis_accession, analysis_es in analyses.items():
+        for ruleset in rulesets:
+            if validation_results[ruleset]['detail'][analysis_accession]['status'] == 'error':
+                message = validation_results[ruleset]['detail'][analysis_accession]['message']
+                logger_in.info(f"{analysis_accession}\tAnalysis\terror\t{message}")
+            else:
+                # only indexing when meeting standard
+                analysis_validation[analysis_accession] = STANDARDS[ruleset]
+                analysis_es['standardMet'] = STANDARDS[ruleset]
+                if analysis_es['standardMet'] == STANDARD_FAANG:
+                    analysis_es['versionLastStandardMet'] = ruleset_version
+
+                files_es: List[Dict] = list()
+                for i in range(0, len(analysis_es['fileNames'])):
+                    file_es: Dict = dict()
+                    file_es['name'] = analysis_es['fileNames'][i]
+                    file_es['type'] = analysis_es['fileTypes'][i]
+                    file_es['size'] = analysis_es['fileSizes'][i]
+                    file_es['checksumMethod'] = 'md5sum'
+                    file_es['checksum'] = analysis_es['checksums'][i]
+                    file_es['url'] = analysis_es['urls'][i]
+                    files_es.append(file_es)
+                analysis_es['files'] = files_es
+                analysis_es.pop('fileNames')
+                analysis_es.pop('fileTypes')
+                analysis_es.pop('fileSizes')
+                analysis_es.pop('checksumMethods')
+                analysis_es.pop('checksums')
+                analysis_es.pop('urls')
+                body = json.dumps(analysis_es)
+                insert_into_es(es, es_index_prefix, 'analysis', analysis_accession, body)
+                # index into ES so break the loop
+                break
