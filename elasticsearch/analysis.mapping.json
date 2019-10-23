@@ -1,0 +1,132 @@
+{
+  "dynamic": "strict",
+  "date_detection": false,
+  "properties": {
+    "accession": {
+      "type": "keyword"
+    },
+    "project": {
+      "type": "keyword"
+    },
+    "title": {
+      "type": "keyword"
+    },
+    "alias": {
+      "type": "keyword"
+    },
+    "description": {
+      "type": "keyword"
+    },
+    "standardMet": {
+      "type": "keyword"
+    },
+    "versionLastStandardMet": {
+      "type": "keyword"
+    },
+    "releaseDate": {
+      "type": "keyword"
+    },
+    "updateDate": {
+      "type": "keyword"
+    },
+    "organism": {
+      "properties": {
+        "text": {
+          "type": "keyword",
+          "fields": {
+            "autocomp": {
+              "type": "text",
+              "analyzer": "autocomp"
+            }
+          }
+        },
+        "ontologyTerms": {
+          "type": "keyword"
+        }
+      }
+    },
+    "type": {
+      "type": "keyword"
+    },
+    "datasetAccession": {
+      "type": "keyword"
+    },
+    "datasetInPortal": {
+      "type": "boolean"
+    },
+    "sampleAccessions": {
+      "type": "keyword"
+    },
+    "experimentAccessions": {
+      "type": "keyword"
+    },
+    "runAccessions": {
+      "type": "keyword"
+    },
+    "files": {
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "url": {
+          "type": "keyword"
+        },
+        "type": {
+          "type": "keyword"
+        },
+        "size": {
+          "type": "keyword"
+        },
+        "checksumMethod": {
+          "type": "keyword"
+        },
+        "checksum": {
+          "type": "keyword"
+        }
+      }
+    },
+    "analysisDate": {
+      "type": "keyword"
+    },
+    "assayType": {
+      "type": "keyword"
+    },
+    "analysisProtocol": {
+      "properties": {
+        "url": {
+          "type": "keyword"
+        },
+        "filename": {
+          "type": "keyword"
+        }
+      }
+    },
+    "analysisType": {
+      "type": "keyword"
+    },
+    "referenceGenome": {
+      "type": "keyword"
+    },
+    "analysisCenter": {
+      "type": "keyword"
+    },
+    "analysisLink": {
+      "type": "keyword"
+    },
+    "analysisCodeRepository": {
+      "type": "keyword"
+    },
+    "experimentType": {
+      "type": "keyword"
+    },
+    "program": {
+      "type": "keyword"
+    },
+    "platform": {
+      "type": "keyword"
+    },
+    "imputation": {
+      "type": "boolean"
+    }
+  }
+}

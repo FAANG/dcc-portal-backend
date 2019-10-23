@@ -7,13 +7,18 @@ to help understanding the code
 import click
 from constants import TECHNOLOGIES, STANDARDS, CATEGORIES, SPECIES_DICT, EXPERIMENT_TARGETS
 from elasticsearch import Elasticsearch
-from validate_experiment_record import *
-from validate_sample_record import *
 import constants
 from typing import Set, Dict, List
-from utils import determine_file_and_source, check_existsence, remove_underscore_from_end_prefix
+from utils import determine_file_and_source, check_existsence, remove_underscore_from_end_prefix, \
+    create_logging_instance, insert_into_es, get_datasets, generate_ena_api_endpoint
 import re
+import validate_experiment_record
+import sys
+import json
+import requests
+from misc import convert_readable, parse_date
 
+logger = create_logging_instance('import_ena_legacy')
 
 # in FAANG ruleset each technology has mandatory fields in the corresponding section, which is not expected in the
 # general ENA datasets, so only validate against Legacy standard
@@ -68,27 +73,6 @@ def get_biosamples_records_from_es(host, es_index_prefix, es_type):
         return
     for item in response['hits']['hits']:
         BIOSAMPLES_RECORDS[item['_id']] = item['_source']
-
-
-def get_faang_datasets(host: str, es_index_prefix: str) -> Set[str]:
-    """
-    Get the id list of existing datasets with FAANG standard stored in the Elastic Search
-    :param host: the Elastic Search server address
-    :param es_index_prefix: the Elastic Search dataset index
-    :return: set of FAANG dataset id
-    """
-    url = f"http://{host}/{es_index_prefix}_dataset/_search?_source=standardMet"
-    response = requests.get(url).json()
-    total_number = response['hits']['total']
-    if total_number == 0:
-        return set()
-    datasets = set()
-    url = f"{url}&size={total_number}"
-    response = requests.get(url).json()
-    for hit in response['hits']['hits']:
-        if hit['_source']['standardMet'] == constants.STANDARD_FAANG:
-            datasets.add(hit['_id'])
-    return datasets
 
 
 def retrieve_biosamples_record(es, es_index_prefix, biosample_id):
@@ -326,7 +310,7 @@ def retrieve_biosamples_record(es, es_index_prefix, biosample_id):
 
     # expected to fail validation (Legacy basic), so no need to carry out
     body = json.dumps(es_doc)
-    utils.insert_into_es(es, es_index_prefix, es_type, biosample_id, body)
+    insert_into_es(es, es_index_prefix, es_type, biosample_id, body)
 
     BIOSAMPLES_RECORDS[biosample_id] = es_doc
     return status
@@ -415,7 +399,7 @@ def main(es_hosts, es_index_prefix):
         logger.error("No biosamples data found in the given index, please run import_from_biosamles.py first")
         sys.exit(1)
 
-    existing_faang_datasets: Set[str] = get_faang_datasets(hosts[0], es_index_prefix)
+    existing_faang_datasets: Set[str] = get_datasets(hosts[0], es_index_prefix)
     logger.info(f"There are {len(existing_faang_datasets)} FAANG datasets in the ES")
 
     # strings used to build ENA API query
@@ -431,8 +415,11 @@ def main(es_hosts, es_index_prefix):
         if category not in ASSAY_TYPES_TO_BE_IMPORTED:
             continue
         logger.info(f"term {term} in category {category}")
-        url = f"https://www.ebi.ac.uk/ena/portal/api/search/?result=read_run&format=JSON&limit=0&" \
-            f"query=library_strategy%3D%22{term}%22%20AND%20tax_eq({species_str})&fields={field_str}"
+        # f"https://www.ebi.ac.uk/ena/portal/api/search/?result=read_run&format=JSON&limit=0&" \
+        #    f"query=library_strategy%3D%22{term}%22%20AND%20tax_eq({species_str})&fields={field_str}"
+        # extra constraint based on species and library strategy
+        optional_str = f"query=library_strategy%3D%22{term}%22%20AND%20tax_eq({species_str})"
+        url = generate_ena_api_endpoint('read_run', 'ena', field_str, optional_str)
         response = requests.get(url)
         if response.status_code == 204:  # 204 is the status code for no content => the current term does not have match
             continue
@@ -632,7 +619,8 @@ def main(es_hosts, es_index_prefix):
     # datasets contains one artificial value set with the key as 'tmp', so need to -1
     logger.info(f"There are {len(list(datasets.keys())) -  1} datasets to be processed")
 
-    validation_results = validate_total_experiment_records(experiments, RULESETS)
+    validator = validate_experiment_record.ValidateExperimentRecord(experiments, RULESETS)
+    validation_results = validator.validate()
     exp_validation = dict()
     for exp_id in sorted(list(experiments.keys())):
         exp_es = experiments[exp_id]
@@ -644,7 +632,7 @@ def main(es_hosts, es_index_prefix):
                 exp_validation[exp_id] = STANDARDS[ruleset]
                 exp_es['standardMet'] = STANDARDS[ruleset]
                 body = json.dumps(exp_es)
-                utils.insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
+                insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
                 # index into ES so break the loop
                 break
     logger.info("finishing indexing experiments")
@@ -658,7 +646,7 @@ def main(es_hosts, es_index_prefix):
             continue
         es_file_doc['experiment']['standardMet'] = exp_validation[exp_id]
         body = json.dumps(es_file_doc)
-        utils.insert_into_es(es, es_index_prefix, 'file', file_id, body)
+        insert_into_es(es, es_index_prefix, 'file', file_id, body)
         indexed_files[file_id] = 1
     logger.info("finishing indexing files")
 
@@ -723,10 +711,9 @@ def main(es_hosts, es_index_prefix):
         es_doc_dataset['instrument'] = list(datasets['tmp'][dataset_id]['instrument'])
         es_doc_dataset['archive'] = sorted(list(datasets['tmp'][dataset_id]['archive']))
         body = json.dumps(es_doc_dataset)
-        utils.insert_into_es(es, es_index_prefix, 'dataset', dataset_id, body)
+        insert_into_es(es, es_index_prefix, 'dataset', dataset_id, body)
     logger.info("finishing indexing datasets")
 
 
 if __name__ == "__main__":
-    logger = utils.create_logging_instance('import_ena_legacy', level=logging.INFO)
     main()

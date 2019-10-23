@@ -8,7 +8,6 @@ from misc import *
 from typing import Dict
 from datetime import date
 import click
-import logging
 import os
 import os.path
 import constants
@@ -38,7 +37,7 @@ MATERIAL_TYPES = {
 }
 ALL_MATERIAL_TYPES = dict()
 
-logger = utils.create_logging_instance('import_biosamples', level=logging.INFO)
+logger = utils.create_logging_instance('import_biosamples')
 
 
 @click.command()
@@ -132,8 +131,10 @@ def main(es_hosts, es_index_prefix):
     # when more than half biosample records not already stored in ES, take the batch import route
     # otherwise compare each record's etag to decide
     if len(etags_es) == 0 or len(fetch_biosample_ids())/len(etags_es) > 2:
+        logger.info("By project route")
         fetch_records_by_project()
     else:
+        logger.info("By individual route")
         fetch_records_by_project_via_etag(etags_es)
 
     if TOTAL_RECORDS_TO_UPDATE == 0:
@@ -337,8 +338,7 @@ def fetch_single_record(biosample_id):
     :param biosample_id: accession id or record to return
     :return: json file of sample with biosampleId
     """
-    url_schema = 'https://www.ebi.ac.uk/biosamples/samples/{}.json?curationdomain=self.FAANG_DCC_curation'
-    url = url_schema.format(biosample_id)
+    url = f"https://www.ebi.ac.uk/biosamples/samples/{biosample_id}.json?curationdomain=self.FAANG_DCC_curation"
     result = unify_field_names(requests.get(url).json())
     result['etag'] = ETAGS_CACHE[biosample_id]
     return result
@@ -537,8 +537,10 @@ def process_specimens(es, es_index_prefix) -> None:
                         'ontologyTerms': health_status['ontologyTerms'][0]
                     }
                 )
-        if organism_accession not in ORGANISM_FOR_SPECIMEN:
-            add_organism_info_for_specimen(organism_accession, fetch_single_record(organism_accession))
+
+        successful = add_organism(accession, organism_accession)
+        if not successful:
+            continue
 
         doc_for_update['organism'] = ORGANISM_FOR_SPECIMEN[organism_accession]
         doc_for_update['alternativeId'] = get_alternative_id(relationships)
@@ -546,6 +548,16 @@ def process_specimens(es, es_index_prefix) -> None:
         ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
         converted[accession] = doc_for_update
     insert_into_es(converted, es_index_prefix, 'specimen', es)
+
+def add_organism(specimen_accession, organism_accession):
+    try:
+        if organism_accession not in ORGANISM_FOR_SPECIMEN:
+            add_organism_info_for_specimen(organism_accession, fetch_single_record(organism_accession))
+    except:
+        print(f"Encounter error when trying to retrieve animal information by accesion {organism_accession} "
+              f"for specimen {specimen_accession}")
+        return False
+    return True
 
 
 def process_cell_specimens(es, es_index_prefix) -> None:
@@ -591,8 +603,9 @@ def process_cell_specimens(es, es_index_prefix) -> None:
             for cell_type in item['characteristics']['cell type']:
                 doc_for_update['cellSpecimen']['cellType'].append(cell_type)
         doc_for_update['alternativeId'] = get_alternative_id(relatioships)
-        if organism_accession not in ORGANISM_FOR_SPECIMEN:
-            add_organism_info_for_specimen(organism_accession, fetch_single_record(organism_accession))
+        successful = add_organism(accession, organism_accession)
+        if not successful:
+            continue
         doc_for_update['organism'] = ORGANISM_FOR_SPECIMEN[organism_accession]
         ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
         ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
@@ -661,8 +674,9 @@ def process_cell_cultures(es, es_index_prefix) -> None:
             'ontologyTerms': check_existence(item, 'cell type', 'ontologyTerms')
         }
         doc_for_update['alternativeId'] = get_alternative_id(relationships)
-        if organism_accession not in ORGANISM_FOR_SPECIMEN:
-            add_organism_info_for_specimen(organism_accession, fetch_single_record(organism_accession))
+        successful = add_organism(accession, organism_accession)
+        if not successful:
+            continue
         doc_for_update['organism'] = ORGANISM_FOR_SPECIMEN[organism_accession]
         ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
         ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1

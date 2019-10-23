@@ -3,11 +3,10 @@ import sys
 import json
 import os
 from misc import *
-import logging
 import utils
 
 
-logger = utils.create_logging_instance('validate_sample', logging.INFO)
+logger = utils.create_logging_instance('validate_sample')
 
 
 def get_ruleset_version():

@@ -107,7 +107,9 @@ STANDARDS = {
     'FAANG Samples': STANDARD_FAANG,
     'FAANG Legacy Samples': STANDARD_LEGACY,
     'FAANG Experiments': STANDARD_FAANG,
-    'FAANG Legacy Experiments': STANDARD_LEGACY
+    'FAANG Legacy Experiments': STANDARD_LEGACY,
+    'FAANG Analyses': STANDARD_FAANG,
+    'FAANG Legacy Analyses': STANDARD_LEGACY
 }
 
 # import from ena legacy

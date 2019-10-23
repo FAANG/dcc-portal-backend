@@ -7,14 +7,18 @@ to help understanding the code
 import click
 from constants import TECHNOLOGIES, STANDARDS, STAGING_NODE1, STANDARD_LEGACY, STANDARD_FAANG
 from elasticsearch import Elasticsearch
-from utils import determine_file_and_source, check_existsence, remove_underscore_from_end_prefix
-from validate_experiment_record import *
-from validate_sample_record import *
-
+from utils import determine_file_and_source, check_existsence, remove_underscore_from_end_prefix, \
+    create_logging_instance, insert_into_es, generate_ena_api_endpoint
+import validate_experiment_record
+import validate_record
+import sys
+import json
+import requests
+from misc import convert_readable, get_filename_from_url
 
 RULESETS = ["FAANG Experiments", "FAANG Legacy Experiments"]
 
-logger = utils.create_logging_instance('import_ena', level=logging.INFO)
+logger = create_logging_instance('import_ena')
 
 
 @click.command()
@@ -61,7 +65,7 @@ def main(es_hosts, es_index_prefix):
     known_errors = get_known_errors()
     new_errors = dict()
 
-    ruleset_version = get_ruleset_version()
+    ruleset_version = validate_record.ValidateRecord.get_ruleset_version()
     logger.info(f"Current experiment ruleset version: {ruleset_version}")
     indexed_files = dict()
     datasets = dict()
@@ -474,7 +478,9 @@ def main(es_hosts, es_index_prefix):
                     f"experiments to be processed")
     # datasets contains one artificial value set with the key as 'tmp', so need to -1
     logger.info(f"There are {len(list(datasets.keys())) -  1} datasets to be processed")
-    validation_results = validate_total_experiment_records(experiments, RULESETS)
+
+    validator = validate_experiment_record.ValidateExperimentRecord(experiments, RULESETS)
+    validation_results = validator.validate()
     exp_validation = dict()
     for exp_id in sorted(experiments.keys()):
         exp_es = experiments[exp_id]
@@ -491,7 +497,7 @@ def main(es_hosts, es_index_prefix):
                 if exp_es['standardMet'] == STANDARD_FAANG:
                     exp_es['versionLastStandardMet'] = ruleset_version
                 body = json.dumps(exp_es)
-                utils.insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
+                insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
 
                 # index into ES so break the loop
                 break
@@ -504,7 +510,7 @@ def main(es_hosts, es_index_prefix):
             continue
         es_file_doc['experiment']['standardMet'] = exp_validation[exp_id]
         body = json.dumps(es_file_doc)
-        utils.insert_into_es(es, es_index_prefix, 'file', file_id, body)
+        insert_into_es(es, es_index_prefix, 'file', file_id, body)
         indexed_files[file_id] = 1
 
     for dataset_id in datasets:
@@ -564,7 +570,7 @@ def main(es_hosts, es_index_prefix):
         es_doc_dataset['centerName'] = list(datasets['tmp'][dataset_id]['center_name'].keys())
         es_doc_dataset['archive'] = sorted(list(datasets['tmp'][dataset_id]['archive'].keys()))
         body = json.dumps(es_doc_dataset)
-        utils.insert_into_es(es, es_index_prefix, 'dataset', dataset_id, body)
+        insert_into_es(es, es_index_prefix, 'dataset', dataset_id, body)
     with open('ena_not_in_biosample.txt', 'a') as w:
         for study in new_errors:
             tmp = new_errors[study]
@@ -578,8 +584,10 @@ def get_ena_data():
     This function will fetch data from ena FAANG data portal ruead_run result
     :return: json representation of data from ena
     """
-    response = requests.get('https://www.ebi.ac.uk/ena/portal/api/search/?result=read_run&format=JSON&limit=0'
-                            '&dataPortal=faang&fields=all').json()
+    # 'https://www.ebi.ac.uk/ena/portal/api/search/?result=read_run&format=JSON&limit=0&dataPortal=faang&fields=all'
+    url = generate_ena_api_endpoint('read_run', 'faang', 'all')
+    logger.info(f"Getting data from {url}")
+    response = requests.get(url).json()
     return response
 
 
