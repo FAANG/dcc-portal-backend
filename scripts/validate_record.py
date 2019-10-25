@@ -20,10 +20,9 @@ def parse_ontology_term(ontology_term):
     :param ontology_term:
     :return:
     """
-    try:
-        ontology_id = ontology_term.split("/")[-1].replace(":", "_")
-    except AttributeError as err:
-        raise err
+    if isinstance(ontology_term, list):
+        ontology_term = ontology_term[0]
+    ontology_id = ontology_term.split("/")[-1].replace(":", "_")
     if ontology_id == 'UBERON_0000468':
         ontology_id = 'OBI_0100026'
     result = {
@@ -83,22 +82,18 @@ class ValidateRecord:
                 else:
                     matched = from_lower_camel_case(key)
             if isinstance(value, list):
-                try:
-                    for elmt in value:
-                        if isinstance(elmt, list):
-                            attrs.append(self.parse_hash(elmt, matched))
-                        elif isinstance(elmt, dict):
-                            attrs.append(self.parse_hash(elmt, matched))
-                        else:
-                            attrs.append(
-                                {
-                                    'name': matched,
-                                    'value': elmt
-                                }
-                            )
-                except AttributeError:
-                    print(data)
-                    exit()
+                for elmt in value:
+                    if isinstance(elmt, list):
+                        attrs.append(self.parse_hash(elmt, matched))
+                    elif isinstance(elmt, dict):
+                        attrs.append(self.parse_hash(elmt, matched))
+                    else:
+                        attrs.append(
+                            {
+                                'name': matched,
+                                'value': elmt
+                            }
+                        )
             elif isinstance(value, dict):
                 attrs.append(self.parse_hash(value, matched))
             else:
@@ -120,14 +115,10 @@ class ValidateRecord:
         if field_name == 'rnaPreparation5AdapterLigationProtocol':
             field_name = "rna preparation 5' adapter ligation protocol"
         tmp = dict()
-        try:
-            if 'ontologyTerms' in hash_value:
-                if len(hash_value['ontologyTerms']) > 0:
-                    tmp = parse_ontology_term(hash_value['ontologyTerms'])
-        except AttributeError as err:
-            print(hash_value)
-            print(field_name)
-            raise err
+        if 'ontologyTerms' in hash_value:
+            if hash_value['ontologyTerms'] and len(hash_value['ontologyTerms']) > 0:
+                tmp = parse_ontology_term(hash_value['ontologyTerms'])
+
         if 'unit' in hash_value:
             tmp['units'] = hash_value['unit']
         if 'url' in hash_value:
