@@ -7,6 +7,7 @@ from columns import *
 from misc import *
 from typing import Dict
 from datetime import date
+import validate_organism_record
 import click
 import os
 import os.path
@@ -144,7 +145,7 @@ def main(es_hosts, es_index_prefix):
     # the order of importation could not be changed due to derive from
     logger.info("Indexing organism starts")
     process_organisms(es, es_index_prefix)
-
+    exit()
     logger.info("Indexing specimen from organism starts")
     process_specimens(es, es_index_prefix)
 
@@ -284,6 +285,15 @@ def unify_field_names(biosample):
     return biosample
 
 
+def find_essential_fields(biosample: Dict) -> bool:
+    essential_fields = ['Material']
+    for essential in essential_fields:
+        if essential not in biosample['characteristics']:
+            print(f"field {essential} not found in {biosample['accession']}")
+            return False
+    return True
+
+
 def fetch_records_by_project():
     global TOTAL_RECORDS_TO_UPDATE
     biosamples = list()
@@ -296,8 +306,9 @@ def fetch_records_by_project():
         response = requests.get(url).json()
         for biosample in response['_embedded']['samples']:
             biosample = unify_field_names(biosample)
-            biosample['etag'] = ETAGS_CACHE[biosample['accession']]
-            biosamples.append(biosample)
+            if find_essential_fields(biosample):
+                biosample['etag'] = ETAGS_CACHE[biosample['accession']]
+                biosamples.append(biosample)
         if 'next' in response['_links']:
             url = response['_links']['next']['href']
         else:
@@ -961,7 +972,7 @@ def extract_custom_field(doc, item, material_type):
             if 'unit' in to_parse:
                 tmp['unit'] = to_parse['unit']
             if 'ontologyTerms' in to_parse:
-                tmp['ontologyTerms'] = to_parse['ontologyTerms']
+                tmp['ontologyTerms'] = to_parse['ontologyTerms'][0]
         else:
             tmp['value'] = to_parse
         customs.append(tmp)
@@ -1075,7 +1086,11 @@ def insert_into_es(data, index_prefix, my_type, es):
     :param es: elasticsearch object
     :return: updates index or return error it it was impossible ot sample didn't go through validation
     """
-    validation_results = validate_total_sample_records(data, my_type, RULESETS)
+    if my_type == 'organism':
+        validator = validate_organism_record.ValidateOrganismRecord(data, RULESETS)
+        validation_results = validator.validate()
+    else:
+        validation_results = validate_total_sample_records(data, my_type, RULESETS)
     for biosample_id in sorted(list(data.keys())):
         INDEXED_SAMPLES[biosample_id] = 1
         es_doc = data[biosample_id]
