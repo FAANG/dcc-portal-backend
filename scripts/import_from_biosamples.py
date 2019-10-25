@@ -31,6 +31,8 @@ ALL_DERIVED_SPECIMEN = dict()
 RULESETS = ["FAANG Samples", "FAANG Legacy Samples"]
 TOTAL_RECORDS_TO_UPDATE = 0
 ETAGS_CACHE = dict()
+ERROR_ESSENTIAL_FILENAME = 'biosamples_without_essential_fields.txt'
+known_missing_essential_records = set()
 
 MATERIAL_TYPES = {
     "organism": "OBI_0100026",
@@ -83,6 +85,13 @@ def main(es_hosts, es_index_prefix):
     except FileNotFoundError:
         logger.error(f"Could not find the local etag cache file etag_list_{today}.txt")
         sys.exit(1)
+    try:
+        with open(ERROR_ESSENTIAL_FILENAME, 'r') as f:
+            for line in f:
+                line = line.rstrip()
+                known_missing_essential_records.add(line)
+    except FileNotFoundError:  # file does not exist means that no known records
+        pass
 
     for base_material in MATERIAL_TYPES.keys():
         ALL_MATERIAL_TYPES[base_material] = base_material
@@ -293,7 +302,6 @@ def find_essential_fields(biosample: Dict) -> bool:
     essential_fields = ['Material']
     for essential in essential_fields:
         if essential not in biosample['characteristics']:
-            print(f"field {essential} not found in {biosample['accession']}")
             return False
     return True
 
@@ -309,10 +317,17 @@ def fetch_records_by_project():
         logger.info(f"Fetching data from {url}")
         response = requests.get(url).json()
         for biosample in response['_embedded']['samples']:
+            if biosample['accession'] in known_missing_essential_records:
+                continue
             biosample = unify_field_names(biosample)
             if find_essential_fields(biosample):
                 biosample['etag'] = ETAGS_CACHE[biosample['accession']]
                 biosamples.append(biosample)
+            else:
+                with open(ERROR_ESSENTIAL_FILENAME , 'a') as w:
+                    w.write(f"{biosample['accession']}\n")
+                    print(f"{biosample['accession']} does not have essential fields\n")
+
         if 'next' in response['_links']:
             url = response['_links']['next']['href']
         else:
