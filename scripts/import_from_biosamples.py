@@ -1,12 +1,17 @@
 from elasticsearch import Elasticsearch
 import datetime
-from validate_sample_record import *
-from utils import remove_underscore_from_end_prefix
+# from validate_sample_record import *
+from utils import remove_underscore_from_end_prefix, create_logging_instance, insert_into_es
 from get_all_etags import fetch_biosample_ids
 from columns import *
 from misc import *
 from typing import Dict
 from datetime import date
+import validate_organism_record
+import validate_specimen_record
+import requests
+import json
+import sys
 import click
 import os
 import os.path
@@ -26,6 +31,8 @@ ALL_DERIVED_SPECIMEN = dict()
 RULESETS = ["FAANG Samples", "FAANG Legacy Samples"]
 TOTAL_RECORDS_TO_UPDATE = 0
 ETAGS_CACHE = dict()
+ERROR_ESSENTIAL_FILENAME = 'biosamples_without_essential_fields.txt'
+known_missing_essential_records = set()
 
 MATERIAL_TYPES = {
     "organism": "OBI_0100026",
@@ -37,7 +44,7 @@ MATERIAL_TYPES = {
 }
 ALL_MATERIAL_TYPES = dict()
 
-logger = utils.create_logging_instance('import_biosamples')
+logger = create_logging_instance('import_biosamples')
 
 
 @click.command()
@@ -78,6 +85,13 @@ def main(es_hosts, es_index_prefix):
     except FileNotFoundError:
         logger.error(f"Could not find the local etag cache file etag_list_{today}.txt")
         sys.exit(1)
+    try:
+        with open(ERROR_ESSENTIAL_FILENAME, 'r') as f:
+            for line in f:
+                line = line.rstrip()
+                known_missing_essential_records.add(line)
+    except FileNotFoundError:  # file does not exist means that no known records
+        pass
 
     for base_material in MATERIAL_TYPES.keys():
         ALL_MATERIAL_TYPES[base_material] = base_material
@@ -117,7 +131,7 @@ def main(es_hosts, es_index_prefix):
     if es_index_prefix:
         logger.info("Index_prefix:"+es_index_prefix)
 
-    ruleset_version = get_ruleset_version()
+    ruleset_version = validate_organism_record.ValidateOrganismRecord.get_ruleset_version()
     es = Elasticsearch(hosts)
 
     logger.info(f"The program starts")
@@ -176,7 +190,6 @@ def main(es_hosts, es_index_prefix):
         union[acc]['count'] += 1
         union[acc]['source'].append('specimen')
     for acc in union:
-        # TODO add logging
         if union[acc]['count'] == 1:
             logger.warning(f"{acc} only in source {union[acc]['source']}")
     clean_elasticsearch(f'{es_index_prefix}_specimen', es)
@@ -284,6 +297,14 @@ def unify_field_names(biosample):
     return biosample
 
 
+def find_essential_fields(biosample: Dict) -> bool:
+    essential_fields = ['Material']
+    for essential in essential_fields:
+        if essential not in biosample['characteristics']:
+            return False
+    return True
+
+
 def fetch_records_by_project():
     global TOTAL_RECORDS_TO_UPDATE
     biosamples = list()
@@ -295,9 +316,17 @@ def fetch_records_by_project():
         logger.info(f"Fetching data from {url}")
         response = requests.get(url).json()
         for biosample in response['_embedded']['samples']:
+            if biosample['accession'] in known_missing_essential_records:
+                continue
             biosample = unify_field_names(biosample)
-            biosample['etag'] = ETAGS_CACHE[biosample['accession']]
-            biosamples.append(biosample)
+            if find_essential_fields(biosample):
+                biosample['etag'] = ETAGS_CACHE[biosample['accession']]
+                biosamples.append(biosample)
+            else:
+                with open(ERROR_ESSENTIAL_FILENAME , 'a') as w:
+                    w.write(f"{biosample['accession']}\n")
+                    print(f"{biosample['accession']} does not have essential fields\n")
+
         if 'next' in response['_links']:
             url = response['_links']['next']['href']
         else:
@@ -452,7 +481,7 @@ def process_organisms(es, es_index_prefix) -> None:
             }
 
         converted[accession] = doc_for_update
-    insert_into_es(converted, es_index_prefix, 'organism', es)
+    import_into_es(converted, es_index_prefix, 'organism', es)
 
 
 def process_specimens(es, es_index_prefix) -> None:
@@ -547,7 +576,7 @@ def process_specimens(es, es_index_prefix) -> None:
         ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
         ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
         converted[accession] = doc_for_update
-    insert_into_es(converted, es_index_prefix, 'specimen', es)
+    import_into_es(converted, es_index_prefix, 'specimen', es)
 
 def add_organism(specimen_accession, organism_accession):
     try:
@@ -610,7 +639,7 @@ def process_cell_specimens(es, es_index_prefix) -> None:
         ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
         ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
         converted[accession] = doc_for_update
-    insert_into_es(converted, es_index_prefix, 'specimen', es)
+    import_into_es(converted, es_index_prefix, 'specimen', es)
 
 
 def process_cell_cultures(es, es_index_prefix) -> None:
@@ -681,7 +710,7 @@ def process_cell_cultures(es, es_index_prefix) -> None:
         ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
         ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
         converted[accession] = doc_for_update
-    insert_into_es(converted, es_index_prefix, 'specimen', es)
+    import_into_es(converted, es_index_prefix, 'specimen', es)
 
 
 def process_pool_specimen(es, es_index_prefix) -> None:
@@ -792,7 +821,7 @@ def process_pool_specimen(es, es_index_prefix) -> None:
                 doc_for_update['organism'].setdefault(field_name, {})
                 doc_for_update['organism'][field_name]['text'] = ";".join(values)
         converted[accession] = doc_for_update
-    insert_into_es(converted, es_index_prefix, 'specimen', es)
+    import_into_es(converted, es_index_prefix, 'specimen', es)
 
 
 def process_cell_lines(es, es_index_prefix) -> None:
@@ -871,7 +900,7 @@ def process_cell_lines(es, es_index_prefix) -> None:
         for field_name in ['organism', 'sex', 'breed']:
             doc_for_update['organism'][field_name] = doc_for_update['cellLine'][field_name]
         converted[accession] = doc_for_update
-    insert_into_es(converted, es_index_prefix, 'specimen', es)
+    import_into_es(converted, es_index_prefix, 'specimen', es)
 
 
 def check_existence(item, field_name, subfield):
@@ -939,7 +968,7 @@ def extract_custom_field(doc, item, material_type):
     """
     characteristics = item['characteristics'].copy()
     if material_type not in known_columns:
-        # TODO logging to error
+        logger.error(f"Please update known_columns constants in columns.py for missing material type {material_type}")
         sys.exit(0)
     for column in common_columns + known_columns[material_type]:
         if column in characteristics:
@@ -1066,7 +1095,7 @@ def add_organism_info_for_specimen(accession, item):
     ORGANISM_FOR_SPECIMEN[accession]['healthStatus'] = get_health_status(item)
 
 
-def insert_into_es(data, index_prefix, my_type, es):
+def import_into_es(data, index_prefix, my_type, es):
     """
     This function will update current index with new data
     :param data: data to update elasticsearch with
@@ -1075,20 +1104,26 @@ def insert_into_es(data, index_prefix, my_type, es):
     :param es: elasticsearch object
     :return: updates index or return error it it was impossible ot sample didn't go through validation
     """
-    validation_results = validate_total_sample_records(data, my_type, RULESETS)
+    if my_type == 'organism':
+        validator = validate_organism_record.ValidateOrganismRecord(data, RULESETS)
+        validation_results = validator.validate()
+    else:
+        # validation_results = validate_total_sample_records(data, my_type, RULESETS)
+        validator = validate_specimen_record.ValidateSpecimenRecord(data, RULESETS)
+        validation_results = validator.validate()
     for biosample_id in sorted(list(data.keys())):
         INDEXED_SAMPLES[biosample_id] = 1
         es_doc = data[biosample_id]
         for ruleset in RULESETS:
             if validation_results[ruleset]['detail'][biosample_id]['status'] == 'error':
-                logger.error(f"{biosample_id}\t{validation_results[ruleset]['detail'][biosample_id]['type']}\t"
-                             f"{'error'}\t{ruleset}\t{validation_results[ruleset]['detail'][biosample_id]['message']}")
+                logger.error(f"{biosample_id}\t{my_type}\terror\t"
+                             f"{ruleset}\t{validation_results[ruleset]['detail'][biosample_id]['message']}")
             else:
                 es_doc['standardMet'] = constants.STANDARDS[ruleset]
                 break
         body = json.dumps(es_doc)
 
-        utils.insert_into_es(es, index_prefix, my_type, biosample_id, body)
+        insert_into_es(es, index_prefix, my_type, biosample_id, body)
 
 
 def clean_elasticsearch(index, es):

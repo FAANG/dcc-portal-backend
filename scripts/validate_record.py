@@ -20,6 +20,8 @@ def parse_ontology_term(ontology_term):
     :param ontology_term:
     :return:
     """
+    if isinstance(ontology_term, list):
+        ontology_term = ontology_term[0]
     ontology_id = ontology_term.split("/")[-1].replace(":", "_")
     if ontology_id == 'UBERON_0000468':
         ontology_id = 'OBI_0100026'
@@ -31,7 +33,7 @@ def parse_ontology_term(ontology_term):
 
 
 class ValidateRecord:
-    def __init__(self, record_type: str, records: Dict, rulesets: List, batch_size: int = 600):
+    def __init__(self, record_type: str, records: Dict, rulesets: List, batch_size: int):
         """
         constructor method
         :param record_type: indicates the type of records, could be one of experiment, analysis
@@ -72,12 +74,15 @@ class ValidateRecord:
         :return: the updated list of attributes
         """
         for key, value in data.items():
-            if isinstance(value, list):
+            if key in mapping_field_names:
+                matched = mapping_field_names[key]
+            else:
                 matched = from_lower_camel_case(key)
-                if key == 'childOf':
-                    matched = 'Child of'
+            if isinstance(value, list):
                 for elmt in value:
                     if isinstance(elmt, list):
+                        attrs.append(self.parse_hash(elmt, matched))
+                    elif isinstance(elmt, dict):
                         attrs.append(self.parse_hash(elmt, matched))
                     else:
                         attrs.append(
@@ -87,13 +92,10 @@ class ValidateRecord:
                             }
                         )
             elif isinstance(value, dict):
-                attrs.append(self.parse_hash(value, key))
+                attrs.append(self.parse_hash(value, matched))
             else:
                 tmp = dict()
-                if key in mapping_field_names:
-                    tmp['name'] = mapping_field_names[key]
-                else:
-                    tmp['name'] = from_lower_camel_case(key)
+                tmp['name'] = matched
                 tmp['value'] = value
                 attrs.append(tmp)
         return attrs
@@ -105,22 +107,19 @@ class ValidateRecord:
         :param field_name: the field name
         :return: the converted attribute
         """
-        if field_name == 'rnaPreparation3AdapterLigationProtocol':
-            field_name = "rna preparation 3' adapter ligation protocol"
-        if field_name == 'rnaPreparation5AdapterLigationProtocol':
-            field_name = "rna preparation 5' adapter ligation protocol"
         tmp = dict()
         if 'ontologyTerms' in hash_value:
-            if len(hash_value['ontologyTerms']) > 0:
+            if hash_value['ontologyTerms'] and len(hash_value['ontologyTerms']) > 0:
                 tmp = parse_ontology_term(hash_value['ontologyTerms'])
+
         if 'unit' in hash_value:
             tmp['units'] = hash_value['unit']
         if 'url' in hash_value:
             tmp['value'] = hash_value['url']
             tmp['uri'] = hash_value['url']
-            field_name = from_lower_camel_case(field_name)
+#            field_name = from_lower_camel_case(field_name)
         else:
-            field_name = from_lower_camel_case(field_name)
+#            field_name = from_lower_camel_case(field_name)
             if 'text' in hash_value:
                 tmp['value'] = hash_value['text']
             else:

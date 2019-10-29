@@ -53,13 +53,10 @@ def main(es_hosts, es_index_prefix):
 
     es = Elasticsearch(hosts)
 
-    logger.info("Retrieving data from ENA")
-    data = get_ena_data()
-
     logger.info(f"Get current specimens stored in the corresponding ES index {es_index_prefix}_specimen")
     biosample_ids = get_all_specimen_ids(hosts[0], es_index_prefix)
+
     if not biosample_ids:
-        # TODO log to error
         logger.error("No specimen data found in the given index, please run import_from_biosamles.py first")
         sys.exit(1)
     known_errors = get_known_errors()
@@ -67,6 +64,10 @@ def main(es_hosts, es_index_prefix):
 
     ruleset_version = validate_record.ValidateRecord.get_ruleset_version()
     logger.info(f"Current experiment ruleset version: {ruleset_version}")
+
+    logger.info("Retrieving data from ENA")
+    data = get_ena_data()
+
     indexed_files = dict()
     datasets = dict()
     experiments = dict()
@@ -599,7 +600,7 @@ def get_all_specimen_ids(host, es_index_prefix):
     if not host.endswith(":9200"):
         host = host + ":9200"
     results = dict()
-    url = f'http://{host}/{es_index_prefix}_specimen/_search?size=100000'
+    url = f'http://{host}/{es_index_prefix}_specimen/_search?size=100000&q=standardMet:FAANG'
     response = requests.get(url).json()
     for item in response['hits']['hits']:
         results[item['_id']] = item['_source']
