@@ -3,6 +3,8 @@ import utils
 from typing import List, Dict
 
 EXPERIMENT_FIELDS_CONVERSION_MAPPING = {
+    'rnaPreparation3AdapterLigationProtocol': "rna preparation 3' adapter ligation protocol",
+    'rnaPreparation5AdapterLigationProtocol': "rna preparation 5' adapter ligation protocol"
 }
 
 FIELDS_TO_BE_REMOVED = [

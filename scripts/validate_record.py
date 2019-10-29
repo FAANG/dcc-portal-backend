@@ -74,13 +74,10 @@ class ValidateRecord:
         :return: the updated list of attributes
         """
         for key, value in data.items():
-            if key == 'childOf':
-                matched = 'Child of'
+            if key in mapping_field_names:
+                matched = mapping_field_names[key]
             else:
-                if key in mapping_field_names:
-                    matched = mapping_field_names[key]
-                else:
-                    matched = from_lower_camel_case(key)
+                matched = from_lower_camel_case(key)
             if isinstance(value, list):
                 for elmt in value:
                     if isinstance(elmt, list):
@@ -110,10 +107,6 @@ class ValidateRecord:
         :param field_name: the field name
         :return: the converted attribute
         """
-        if field_name == 'rnaPreparation3AdapterLigationProtocol':
-            field_name = "rna preparation 3' adapter ligation protocol"
-        if field_name == 'rnaPreparation5AdapterLigationProtocol':
-            field_name = "rna preparation 5' adapter ligation protocol"
         tmp = dict()
         if 'ontologyTerms' in hash_value:
             if hash_value['ontologyTerms'] and len(hash_value['ontologyTerms']) > 0:

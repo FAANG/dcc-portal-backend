@@ -4,6 +4,7 @@ from typing import List
 
 ORGANISM_FIELDS_CONVERSION_MAPPING = {
     'material': 'Material',
+    'childOf': 'Child of',
     'sex': 'Sex',
     'description': 'Sample Description'
 }
