@@ -57,7 +57,6 @@ def main(es_hosts, es_index_prefix):
     biosample_ids = get_all_specimen_ids(hosts[0], es_index_prefix)
 
     if not biosample_ids:
-        # TODO log to error
         logger.error("No specimen data found in the given index, please run import_from_biosamles.py first")
         sys.exit(1)
     known_errors = get_known_errors()

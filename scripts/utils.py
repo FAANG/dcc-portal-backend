@@ -61,7 +61,6 @@ def insert_into_es(es, es_index_prefix, doc_type, doc_id, body):
             es.delete(index=f'{es_index_prefix}_{doc_type}', doc_type="_doc", id=doc_id)
         es.create(index=f'{es_index_prefix}_{doc_type}', doc_type="_doc", id=doc_id, body=body)
     except Exception as e:
-        # TODO logging error
         logger.error(f"Error when try to insert into index {es_index_prefix}_{doc_type}: " + str(e.args))
 
 

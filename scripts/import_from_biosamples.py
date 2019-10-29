@@ -190,7 +190,6 @@ def main(es_hosts, es_index_prefix):
         union[acc]['count'] += 1
         union[acc]['source'].append('specimen')
     for acc in union:
-        # TODO add logging
         if union[acc]['count'] == 1:
             logger.warning(f"{acc} only in source {union[acc]['source']}")
     clean_elasticsearch(f'{es_index_prefix}_specimen', es)
@@ -969,7 +968,7 @@ def extract_custom_field(doc, item, material_type):
     """
     characteristics = item['characteristics'].copy()
     if material_type not in known_columns:
-        # TODO logging to error
+        logger.error(f"Please update known_columns constants in columns.py for missing material type {material_type}")
         sys.exit(0)
     for column in common_columns + known_columns[material_type]:
         if column in characteristics:
