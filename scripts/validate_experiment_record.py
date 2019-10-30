@@ -53,6 +53,8 @@ class ValidateExperimentRecord(validate_record.ValidateRecord):
             type_specific = 'Hi-C'
         elif data['assayType'] == 'whole genome sequencing assay':
             type_specific = 'WGS'
+        elif data['assayType'] == 'CAGE-seq':
+            type_specific = 'CAGE-seq'
         else:
             type_specific = 'RNA-seq'
         if type_specific in data:

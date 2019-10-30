@@ -75,7 +75,7 @@ def main(es_hosts, es_index_prefix):
     cache_filename = f"etag_list_{today}.txt"
     if not os.path.isfile(cache_filename):
         logger.info("Could not find today etag cache file. Generating")
-        os.system("python get_all_etags.py")
+        os.system("python3 get_all_etags.py")
     try:
         with open(cache_filename, 'r') as f:
             for line in f:

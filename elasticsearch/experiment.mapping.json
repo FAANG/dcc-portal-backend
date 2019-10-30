@@ -363,6 +363,41 @@
           "type": "keyword"
         }
       }
+    },
+    "CAGE-seq": {
+      "properties": {
+        "cageProtocol": {
+          "properties": {
+            "url": {
+              "type": "keyword"
+            },
+            "filename": {
+              "type": "keyword"
+            }
+          }
+        },
+        "sequencingPrimerProvider": {
+          "type": "keyword"
+        },
+        "sequencingPrimerCatalog": {
+          "type": "keyword"
+        },
+        "sequencingPrimerLot": {
+          "type": "keyword"
+        },
+        "restrictEnzymeTargetSequence": {
+          "type": "keyword"
+        },
+        "rnaPurity260280ratio": {
+          "type": "keyword"
+        },
+        "rnaPurity260230ratio": {
+          "type": "keyword"
+        },
+        "rnaIntegrityNumber": {
+          "type": "keyword"
+        }
+      }
     }
   }
 }

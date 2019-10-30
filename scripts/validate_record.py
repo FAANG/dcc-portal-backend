@@ -117,9 +117,7 @@ class ValidateRecord:
         if 'url' in hash_value:
             tmp['value'] = hash_value['url']
             tmp['uri'] = hash_value['url']
-#            field_name = from_lower_camel_case(field_name)
         else:
-#            field_name = from_lower_camel_case(field_name)
             if 'text' in hash_value:
                 tmp['value'] = hash_value['text']
             else:
@@ -139,7 +137,7 @@ class ValidateRecord:
         # return response[0]['tag_name']
         # GitHub API introduced rate limit, temporarily use hard-coded version
         # https://github.com/FAANG/dcc-metadata/releases
-        return "3.6.3"
+        return "3.7"
 
     def validate(self) -> Dict:
         """
