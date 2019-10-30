@@ -106,6 +106,9 @@ def main(es_hosts, es_index_prefix):
         elif assay_type == 'whole genome sequencing assay':
             if len(experiment_target) == 0:
                 experiment_target = 'input DNA'
+        elif assay_type == 'CAGE-seq':
+            if len(experiment_target) == 0:
+                experiment_target = 'TSS'
 
         file_type, source_type = determine_file_and_source(record)
 
@@ -352,6 +355,22 @@ def main(es_hosts, es_index_prefix):
                         },
                         'librarySelection': record['faang_library_selection']
                     }
+                elif assay_type == 'CAGE-seq': # CAGE-seq
+                    cage_protocol = record['cage_protocol']
+                    cage_protocol_name = get_filename_from_url(cage_protocol, f"{exp_id} CAGE-seq protocol")
+                    exp_es['CAGE-seq'] = {
+                        'rnaPurity260280ratio': record['rna_purity_280_ratio'],
+                        'rnaPurity260230ratio': record['rna_purity_230_ratio'],
+                        'rnaIntegrityNumber': record['rna_integrity_num'],
+                        'cageProtocol': {
+                            'url': cage_protocol,
+                            'filename': cage_protocol_name
+                        },
+                        'sequencingPrimerProvider': record['sequencing_primer_provider'],
+                        'sequencingPrimerCatalog': record['sequencing_primer_catalog'],
+                        'sequencingPrimerLot': record['sequencing_primer_lot'],
+                        'restrictEnzymeTargetSequence': record['restriction_site']
+                    }
                 else:  # RNA-seq
                     rna_3_adapter_protocol = None
                     rna_3_adapter_protocol_filename = None
@@ -465,6 +484,7 @@ def main(es_hosts, es_index_prefix):
             # noinspection PyTypeChecker
             datasets['tmp'][dataset_id]['experiment'][record['experiment_accession']] = tmp_exp
             datasets[dataset_id] = es_doc_dataset
+    # end of loop for record in data:
 
     logger.info("The dataset list:")
     dataset_ids = sorted(list(studies_from_api.keys()))

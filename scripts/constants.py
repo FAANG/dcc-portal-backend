@@ -100,7 +100,8 @@ TECHNOLOGIES: Dict[str, str] = {
     'RNA-seq of non coding RNA': 'RNA-seq',
     'RNA-seq of total RNA': 'RNA-seq',
     'transcription profiling by high throughput sequencing': 'RNA-seq',
-    'whole genome sequencing assay': 'WGS'
+    'whole genome sequencing assay': 'WGS',
+    'CAGE-seq': 'CAGE-seq'
 }
 
 STANDARDS = {
@@ -163,5 +164,6 @@ EXPERIMENT_TARGETS = {
     "RNA-Seq": "Unknown",
     "WGS": "input DNA",
     "ChIP-Seq": "Unknown",
-    "miRNA": "Unknown"
+    "miRNA": "Unknown",
+    'CAGE-seq': "TSS"
 }
