@@ -124,8 +124,11 @@ def main(es_hosts, es_index_prefix):
             archive = 'SRA'
 
         files = record[f"{file_type}_{source_type}"].split(";")
-        types = record['submitted_format'].split(";")
         sizes = record[f"{file_type}_bytes"].split(";")
+        if file_type == 'fastq':
+            types = ['fastq'] * len(files)
+        else:
+            types = record['submitted_format'].split(";")
         if len(files) != len(types) or len(files) != len(sizes) or len(types) == 0:
             continue
         # for ENA, it is fixed to MD5 as the checksum method
@@ -369,7 +372,7 @@ def main(es_hosts, es_index_prefix):
                         'sequencingPrimerProvider': record['sequencing_primer_provider'],
                         'sequencingPrimerCatalog': record['sequencing_primer_catalog'],
                         'sequencingPrimerLot': record['sequencing_primer_lot'],
-                        'restrictEnzymeTargetSequence': record['restriction_site']
+                        'restrictionEnzymeTargetSequence': record['restriction_site']
                     }
                 else:  # RNA-seq
                     rna_3_adapter_protocol = None

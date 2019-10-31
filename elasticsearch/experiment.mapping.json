@@ -385,7 +385,7 @@
         "sequencingPrimerLot": {
           "type": "keyword"
         },
-        "restrictEnzymeTargetSequence": {
+        "restrictionEnzymeTargetSequence": {
           "type": "keyword"
         },
         "rnaPurity260280ratio": {
