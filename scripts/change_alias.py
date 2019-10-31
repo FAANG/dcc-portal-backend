@@ -6,7 +6,7 @@ from utils import create_logging_instance, remove_underscore_from_end_prefix
 # logger = logging.getLogger(__name__)
 # logging.basicConfig(format='%(asctime)s\t%(levelname)s:\t%(name)s line %(lineno)s\t%(message)s', level=logging.INFO)
 # logging.getLogger('elasticsearch').setLevel(logging.WARNING)
-logger = create_logging_instance('change_alias', to_file=False)
+logger = create_logging_instance('change_alias', to_file=True)
 
 
 @click.command()
