@@ -372,7 +372,7 @@ def main(es_hosts, es_index_prefix):
                         'sequencingPrimerProvider': record['sequencing_primer_provider'],
                         'sequencingPrimerCatalog': record['sequencing_primer_catalog'],
                         'sequencingPrimerLot': record['sequencing_primer_lot'],
-                        'restrictionEnzymeTargetSequence': record['restriction_site']
+                        'restrictionEnzymeTargetSequence': record['restriction_enzyme_target_sequence']
                     }
                 else:  # RNA-seq
                     rna_3_adapter_protocol = None
