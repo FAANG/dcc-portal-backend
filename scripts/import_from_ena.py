@@ -80,6 +80,10 @@ def main(es_hosts, es_index_prefix):
         library_strategy = record['library_strategy']
         assay_type = record['assay_type']
         experiment_target = record['experiment_target']
+        if experiment_target == 'EFO_0005031':
+            experiment_target = 'input DNA'
+        if experiment_target == 'CHEBI_33697':
+            experiment_target = 'RNA'
         # some studies use non-standard values or miss value for assay type, library strategy and experiment target
         # standardize them below based on the 1-to-1 relationship in the ruleset
         # assign assay type according to library strategy
@@ -473,7 +477,9 @@ def main(es_hosts, es_index_prefix):
                 'readableSize': convert_readable(sizes[index]),
                 'archive': archive,
                 'baseCount': record['base_count'],
-                'readCount': record['read_count']
+                'readCount': record['read_count'],
+                'checksum': checksums[index],
+                'checksumMethod': 'md5'
             }
             datasets['tmp'][dataset_id].setdefault('file', {})
             # noinspection PyTypeChecker
