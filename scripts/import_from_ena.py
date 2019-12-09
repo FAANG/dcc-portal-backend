@@ -114,6 +114,11 @@ def main(es_hosts, es_index_prefix):
             if len(experiment_target) == 0:
                 experiment_target = 'TSS'
 
+        if assay_type == 'ChIP-seq' and experiment_target.lower() != 'input dna':
+            target_used_in_file = record['chip_target']
+        else:
+            target_used_in_file = experiment_target
+
         file_type, source_type = determine_file_and_source(record)
 
         if file_type == '':
@@ -170,7 +175,7 @@ def main(es_hosts, es_index_prefix):
                 'experiment': {
                     'accession': record['experiment_accession'],
                     'assayType': assay_type,
-                    'target': experiment_target
+                    'target': target_used_in_file
                 },
                 'run': {
                     'accession': record['run_accession'],
@@ -212,6 +217,7 @@ def main(es_hosts, es_index_prefix):
 
                 exp_es = {
                     'accession': exp_id,
+                    'project': record['project'],
                     'assayType': assay_type,
                     'experimentTarget': experiment_target,
                     'sampleStorage': check_existsence(record, 'sample_storage'),
@@ -312,12 +318,15 @@ def main(es_hosts, es_index_prefix):
                         'libraryGenerationMinFragmentSizeRange': record['library_min_fragment_size']
                     }
                     if experiment_target.lower() == 'input dna':
-                        exp_es['ChiP-seq input DNA'] = section_info
+                        exp_es['ChIP-seq input DNA'] = section_info
                     else:
                         section_info['chipAntibodyProvider'] = record['chip_ab_provider']
                         section_info['chipAntibodyCatalog'] = record['chip_ab_catalog']
                         section_info['chipAntibodyLot'] = record['chip_ab_lot']
-                        exp_es['ChiP-seq histone'] = section_info
+
+                        section_info['chipTarget'] = record['chip_target']
+                        section_info['controlExperiment'] = record['control_experiment']
+                        exp_es['ChIP-seq DNA-binding'] = section_info
                 elif assay_type == 'DNase-Hypersensitivity seq"':  # DNase seq
                     dnase_protocol = None
                     dnase_protocol_filename = None

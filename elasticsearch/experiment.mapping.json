@@ -5,6 +5,9 @@
     "accession": {
       "type": "keyword"
     },
+    "project": {
+      "type": "keyword"
+    },
     "assayType": {
       "type": "keyword"
     },
@@ -188,7 +191,7 @@
         }
       }
     },
-    "ChiP-seq histone": {
+    "ChIP-seq DNA-binding": {
       "properties": {
         "chipProtocol": {
           "properties": {
@@ -199,6 +202,12 @@
               "type": "keyword"
             }
           }
+        },
+        "chipTarget": {
+          "type": "keyword"
+        },
+        "controlExperiment": {
+          "type": "keyword"
         },
         "chipAntibodyProvider": {
           "type": "keyword"
@@ -217,7 +226,7 @@
         }
       }
     },
-    "ChiP-seq input DNA": {
+    "ChIP-seq input DNA": {
       "properties": {
         "chipProtocol": {
           "properties": {

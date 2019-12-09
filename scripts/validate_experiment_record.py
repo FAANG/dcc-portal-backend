@@ -46,9 +46,9 @@ class ValidateExperimentRecord(validate_record.ValidateRecord):
             type_specific = 'ATAC-seq'
         elif data['assayType'] == 'ChIP-seq':
             if data['experimentTarget'].lower() == 'input dna':
-                type_specific = 'ChiP-seq input DNA'
+                type_specific = 'ChIP-seq input DNA'
             else:
-                type_specific = 'ChiP-seq histone'
+                type_specific = 'ChIP-seq DNA-binding'
         elif data['assayType'] == 'Hi-C':
             type_specific = 'Hi-C'
         elif data['assayType'] == 'whole genome sequencing assay':
