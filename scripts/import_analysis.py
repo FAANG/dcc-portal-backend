@@ -62,11 +62,11 @@ def main(es_hosts, es_index_prefix):
             es_doc.setdefault('experimentAccessions', list())
             es_doc.setdefault('runAccessions', list())
             es_doc.setdefault('analysisAccessions', list())
-            for elmt in record['experiment_accession'].split(' '):
+            for elmt in record['experiment_accession'].split(';'):
                 es_doc['experimentAccessions'].append(elmt)
-            for elmt in record['run_accession'].split(' '):
+            for elmt in record['run_accession'].split(';'):
                 es_doc['runAccessions'].append(elmt)
-            for elmt in record['related_analysis_accession'].split(' '):
+            for elmt in record['related_analysis_accession'].split(';'):
                 es_doc['analysisAccessions'].append(elmt)
 
             es_doc['description'] = record['analysis_description']

@@ -20,6 +20,7 @@ RULESETS = ["FAANG Experiments", "FAANG Legacy Experiments"]
 
 logger = create_logging_instance('import_ena')
 
+alias_cache = dict()
 
 @click.command()
 @click.option(
@@ -325,7 +326,15 @@ def main(es_hosts, es_index_prefix):
                         section_info['chipAntibodyLot'] = record['chip_ab_lot']
 
                         section_info['chipTarget'] = record['chip_target']
-                        section_info['controlExperiment'] = record['control_experiment']
+                        original_control_experiment = record['control_experiment']
+                        converted_control_experiment = \
+                            replace_alias_with_accession(record['study_accession'], original_control_experiment)
+                        if not converted_control_experiment:
+                            logger.error(f"given control experiment value {original_control_experiment} could not be "
+                                         f"found with the same study {record['study_accession']} "
+                                         f"for experiment {exp_id}")
+                            continue
+                        section_info['controlExperiment'] = converted_control_experiment
                         exp_es['ChIP-seq DNA-binding'] = section_info
                 elif assay_type == 'DNase-Hypersensitivity seq"':  # DNase seq
                     dnase_protocol = None
@@ -658,6 +667,29 @@ def get_known_errors():
             known_errors.setdefault(study, {})
             known_errors[study][biosample] = 1
     return known_errors
+
+
+def replace_alias_with_accession(study: str, to_be_replaced: str) -> str:
+    alias_accession_map = dict()
+    if study not in alias_cache:
+        alias_cache.setdefault(study, dict())
+        url = generate_ena_api_endpoint('read_experiment', 'ena', 'experiment_accession,experiment_alias')
+        url = f"{url}&query=study_accession%3D%22{study}%22"
+        response = requests.get(url).json()
+        for record in response:
+            exp_alias = record['experiment_alias']
+            exp_acc = record['experiment_accession']
+            alias_cache[study][exp_alias] = exp_acc
+    alias_accession_map = alias_cache[study]
+    if to_be_replaced in alias_accession_map:
+        return alias_accession_map[to_be_replaced]
+    else:
+        # the given to_be_replaced could be accession already, need to check
+        accessions = alias_accession_map.values()
+        if to_be_replaced in accessions:
+            return to_be_replaced
+        else:
+            return ''
 
 
 if __name__ == "__main__":
