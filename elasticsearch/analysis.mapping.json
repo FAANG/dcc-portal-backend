@@ -8,6 +8,9 @@
     "project": {
       "type": "keyword"
     },
+    "secondaryProject": {
+      "type": "keyword"
+    },
     "title": {
       "type": "keyword"
     },
@@ -63,6 +66,9 @@
     "runAccessions": {
       "type": "keyword"
     },
+    "analysisAccessions": {
+      "type": "keyword"
+    },
     "files": {
       "properties": {
         "name": {
@@ -86,7 +92,14 @@
       }
     },
     "analysisDate": {
-      "type": "keyword"
+      "properties": {
+        "text": {
+          "type": "keyword"
+        },
+        "unit": {
+          "type": "keyword"
+        }
+      }
     },
     "assayType": {
       "type": "keyword"
@@ -108,9 +121,6 @@
       "type": "keyword"
     },
     "analysisCenter": {
-      "type": "keyword"
-    },
-    "analysisLink": {
       "type": "keyword"
     },
     "analysisCodeRepository": {

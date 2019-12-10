@@ -58,12 +58,16 @@ def main(es_hosts, es_index_prefix):
             if not es_doc:
                 continue
             es_doc['project'] = record['project_name']
+            es_doc['secondaryProject'] = record['secondary_project']
             es_doc.setdefault('experimentAccessions', list())
             es_doc.setdefault('runAccessions', list())
-            for elmt in record['experiment_accession'].split(','):
+            es_doc.setdefault('analysisAccessions', list())
+            for elmt in record['experiment_accession'].split(' '):
                 es_doc['experimentAccessions'].append(elmt)
-            for elmt in record['run_accession'].split(','):
+            for elmt in record['run_accession'].split(' '):
                 es_doc['runAccessions'].append(elmt)
+            for elmt in record['related_analysis_accession'].split(' '):
+                es_doc['analysisAccessions'].append(elmt)
 
             es_doc['description'] = record['analysis_description']
             es_doc['assayType'] = record['assay_type']
@@ -72,8 +76,13 @@ def main(es_hosts, es_index_prefix):
             es_doc['analysisProtocol']['url'] = protocol
             es_doc['analysisProtocol']['filename'] = get_filename_from_url(protocol, record['analysis_accession'])
             es_doc['referenceGenome'] = record['reference_genome']
-            # es_doc['analysisLink'] = record['analysis_alias']
-            # es_doc['analysisCodeRepository'] = record['analysis_alias']
+
+            analysis_date = record['analysis_date']
+            if analysis_date:
+                es_doc.setdefault('analysisDate', dict())
+                es_doc['analysisDate']['text'] = analysis_date
+                es_doc['analysisDate']['unit'] = 'YYYY-MM-DD'
+            es_doc['analysisCodeRepository'] = record['analysis_code_repository']
 
         es_doc['sampleAccessions'].append(record['sample_accession'])
         analyses[record['analysis_accession']] = es_doc
