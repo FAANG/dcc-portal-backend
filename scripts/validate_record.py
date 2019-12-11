@@ -137,7 +137,7 @@ class ValidateRecord:
         # return response[0]['tag_name']
         # GitHub API introduced rate limit, temporarily use hard-coded version
         # https://github.com/FAANG/dcc-metadata/releases
-        return "3.7"
+        return "3.8"
 
     def validate(self) -> Dict:
         """

@@ -188,6 +188,12 @@
         },
         "baseCount": {
           "type": "keyword"
+        },
+        "checksumMethod": {
+          "type": "keyword"
+        },
+        "checksum": {
+          "type": "keyword"
         }
       }
     },

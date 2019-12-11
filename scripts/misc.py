@@ -42,7 +42,7 @@ def get_filename_from_url(url, accession):
     :return: file name
     """
     if (not url) or (url and len(url) == 0):
-        print(f"{accession} url is empty")
+        # print(f"{accession} url is empty")
         return ""
     if url.lower().endswith(".pdf"):
         return url.split("/")[-1]

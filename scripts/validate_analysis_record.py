@@ -3,7 +3,10 @@ import utils
 
 ANALYSES_FIELDS_CONVERSION_MAPPING = {
     'datasetAccession': 'study',
-    'sampleAccessions': 'samples'
+    'sampleAccessions': 'samples',
+    'experimentAccessions': 'experiments',
+    'runAccessions': 'runs',
+    'analysisAccessions': 'related analyses'
 }
 FIELDS_TO_BE_REMOVED = [
     'accession',  # validation tool use fixed id field

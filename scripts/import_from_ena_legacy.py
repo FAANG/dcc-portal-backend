@@ -588,7 +588,9 @@ def main(es_hosts, es_index_prefix):
                     'readableSize': convert_readable(sizes[index]),
                     'archive': archive,
                     'baseCount': record['base_count'],
-                    'readCount': record['read_count']
+                    'readCount': record['read_count'],
+                    'checksumMethod': 'md5',
+                    'checksum': checksums[index]
                 }
                 datasets['tmp'][dataset_id].setdefault('file', dict())
                 datasets['tmp'][dataset_id]['file'][fullname] = tmp_file
