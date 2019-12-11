@@ -14,6 +14,7 @@ import validate_record
 import sys
 import json
 import requests
+import re
 from misc import convert_readable, get_filename_from_url
 
 RULESETS = ["FAANG Experiments", "FAANG Legacy Experiments"]
@@ -670,6 +671,11 @@ def get_known_errors():
 
 
 def replace_alias_with_accession(study: str, to_be_replaced: str) -> str:
+    match = re.search(r'^(S|E|D)RX\d+$', to_be_replaced)
+    # NOTE: Does not check whether the accession exists or not which should be done with validation service
+    if match:  # valid experiment accessions.
+        return to_be_replaced
+    
     alias_accession_map = dict()
     if study not in alias_cache:
         alias_cache.setdefault(study, dict())
