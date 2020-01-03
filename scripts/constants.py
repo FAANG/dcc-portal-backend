@@ -27,11 +27,12 @@ ALIASES_IN_USE = {
     'summary_organism': 'summary_organism',
     'summary_file': 'summary_file',
     'summary_dataset': 'summary_dataset',
-    'faang_build_3_analysis': 'analysis'
+    'faang_build_3_analysis': 'analysis',
+    'faang_build_3_article': 'article'
 }
 
 # Current indices in use
-TYPES = ['organism', 'specimen', 'file', 'experiment', 'dataset', 'analysis']
+TYPES = ['organism', 'specimen', 'file', 'experiment', 'dataset', 'analysis', 'article']
 
 # Paths for rsync command (is used during syncing process between staging and production elasticsearch servers)
 FROM = '/nfs/public/rw/reseq-info/elastic_search_staging/snapshot_repo/es6_faang_repo/'
