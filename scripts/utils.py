@@ -5,8 +5,7 @@ import json
 import logging
 from typing import Set, List, Dict
 import requests
-import constants
-from constants import STANDARDS, STANDARD_FAANG
+from constants import STANDARDS, STANDARD_FAANG, TYPES
 from misc import convert_readable
 
 
@@ -65,28 +64,35 @@ def insert_into_es(es, es_index_prefix, doc_type, doc_id, body):
 
 
 def get_datasets(host: str, es_index_prefix: str, only_faang=True) -> Set[str]:
+    return get_record_ids(host, es_index_prefix, 'dataset', only_faang)
+
+
+def get_record_ids(host: str, es_index_prefix: str, data_type: str, only_faang=True) -> Set[str]:
     """
-    Get the id list of existing datasets stored in the Elastic Search
+    Get the id list of existing records stored in the Elastic Search
     :param host: the Elastic Search server address
     :param es_index_prefix: the Elastic Search dataset index
-    :param only_faang: indiciates whether only include FAANG standard datasets (when True) or all datasets (when False)
+    :param data_type: the type of records
+    :param only_faang: indiciates whether only include FAANG standard records (when True) or all records (when False)
     :return: set of FAANG dataset id
     """
-    url = f"http://{host}/{es_index_prefix}_dataset/_search?_source=standardMet"
+    if data_type not in TYPES:
+        return set()
+    url = f"http://{host}/{es_index_prefix}_{data_type}/_search?_source=standardMet"
     response = requests.get(url).json()
     total_number = response['hits']['total']
     if total_number == 0:
         return set()
-    datasets = set()
+    results = set()
     url = f"{url}&size={total_number}"
     response = requests.get(url).json()
     for hit in response['hits']['hits']:
         if only_faang:
-            if hit['_source']['standardMet'] == constants.STANDARD_FAANG:
-                datasets.add(hit['_id'])
+            if 'standardMet' in  hit['_source'] and hit['_source']['standardMet'] == STANDARD_FAANG:
+                results.add(hit['_id'])
         else:
-            datasets.add(hit['_id'])
-    return datasets
+            results.add(hit['_id'])
+    return results
 
 
 def convert_analysis(record, existing_datasets):

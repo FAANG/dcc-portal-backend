@@ -1,181 +1,115 @@
 import requests
 from elasticsearch import Elasticsearch
-from decouple import config
-import asyncio
-import aiohttp
-import time
-
-# Global sets for ids
-ORGANISMS = {}
-SPECIMENS = {}
-DATASETS = {}
-FILES = {}
-ARTICLES = {}
-
-# Print progress or not
-PRINT_PROGRESS = config('PRINT', cast=bool, default=False)
+import click
+from utils import create_logging_instance, remove_underscore_from_end_prefix, get_record_ids, insert_into_es
+from constants import STAGING_NODE1, DEFAULT_PREFIX
+from typing import Dict, Set
+import pprint
+logger = create_logging_instance('fetch_articles', to_file=False)
 
 
-def main(es):
-    organisms_id = retrieve_ids('organism', es)
-    specimens_id = retrieve_ids('specimen', es)
-    datasets_id = retrieve_ids('dataset', es)
+@click.command()
+@click.option(
+    '--es_hosts',
+    default=STAGING_NODE1,
+    help='Specify the Elastic Search server(s) (port could be included), e.g. wp-np3-e2:9200. '
+         'If multiple servers are provided, please use ";" to separate them, e.g. "wp-np3-e2;wp-np3-e3"'
+)
+@click.option(
+    '--es_index_prefix',
+    default=DEFAULT_PREFIX,
+    help='Specify the Elastic Search index prefix, e.g. '
+         'faang_build_1 then the index to work on will be faang_build_1_article.'
+)
+def main(es_hosts, es_index_prefix):
+    hosts = es_hosts.split(";")
+    logger.info("Command line parameters")
+    logger.info("Hosts: "+str(hosts))
 
-    print_statement("Starting to fetch articles for organisms...")
-    asyncio.get_event_loop().run_until_complete(fetch_all_articles(organisms_id, 'organism'))
+    es_index_prefix = remove_underscore_from_end_prefix(es_index_prefix)
+    logger.info(f"Index: {es_index_prefix}_article")
+    datasets = get_record_ids(hosts[0], es_index_prefix, 'dataset', only_faang=False)
+    existing_articles = get_record_ids(hosts[0], es_index_prefix, 'article', only_faang=False)
+    logger.info("The number of existing datasets: " + str(len(datasets)))
+    logger.info("The number of existing articles: " + str(len(existing_articles)))
+    article_details = dict()
+    article_datasets: Dict[str, Set] = dict()
+    for dataset_id in datasets:
+        url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/search?query={dataset_id}&format=json"
+        epmc_result = requests.get(url).json()
+        hit_count = epmc_result['hitCount']
+        if hit_count != 0:
+            epmc_hits = epmc_result['resultList']['result']
+            for hit in epmc_hits:
+                # ignore preprints determined by two fields pubType and source
+                if 'pubType' in hit and hit['pubType'] == 'preprint':
+                    continue
+                if 'source' in hit and hit['source'] == 'PPR':
+                    continue
+                article_id = determine_article_id(hit)
+                if len(article_id) == 0:
+                    logger.error(f"Study {dataset_id} has related article without Identifier")
+                    continue
+                # new article
+                if article_id not in article_details:
+                    es_article = dict()
+                    es_article = parse_field(es_article, hit, 'pmcId', 'pmcid')
+                    es_article = parse_field(es_article, hit, 'pubmedId', 'pmid')
+                    es_article = parse_field(es_article, hit, 'doi', 'doi')
+                    es_article = parse_field(es_article, hit, 'title', 'title')
+                    es_article = parse_field(es_article, hit, 'authorString', 'authorString')
+                    es_article = parse_field(es_article, hit, 'journal', 'journalTitle')
+                    es_article = parse_field(es_article, hit, 'issue', 'issue')
+                    es_article = parse_field(es_article, hit, 'volume', 'journalVolume')
+                    es_article = parse_field(es_article, hit, 'year', 'pubYear')
+                    es_article = parse_field(es_article, hit, 'pages', 'pageInfo')
+                    es_article = parse_field(es_article, hit, 'isOpenAccess', 'isOpenAccess')
+                    article_details[article_id] = es_article
 
-    print_statement("Starting to fetch articles for specimens...")
-    asyncio.get_event_loop().run_until_complete(fetch_all_articles(specimens_id, 'specimen'))
+                article_datasets.setdefault(article_id, set())
+                article_datasets[article_id].add(dataset_id)
 
-    print_statement("Starting to fetch articles for datasets..")
-    asyncio.get_event_loop().run_until_complete(fetch_all_articles(datasets_id, 'dataset'))
+    logger.info(f'Retrieved {len(article_details.keys())} articles')
+    es = Elasticsearch(hosts)
+    for article_id in article_details.keys():
+        es_article = article_details[article_id]
+        datasets = article_datasets[article_id]
+        es_article['relatedDatasets'] = list(datasets)
+        insert_into_es(es, es_index_prefix, 'article', article_id, es_article)
+        if article_id in existing_articles:
+            existing_articles.remove(article_id)
 
-    print_statement("Starting to check specimens for additional organisms...")
-    asyncio.get_event_loop().run_until_complete(fetch_all_articles(SPECIMENS, 'check_specimen_for_organism'))
+    for not_needed_article_id in existing_articles:
+        es.delete(index=f'{es_index_prefix}_article', doc_type="_doc", id=not_needed_article_id)
 
-    print_statement("Starting to check specimens for additional datasets...")
-    asyncio.get_event_loop().run_until_complete(fetch_all_articles(SPECIMENS, 'check_specimen_for_dataset'))
-
-
-def retrieve_ids(index_name, es):
-    print_statement("Fetching ids from {}...".format(index_name))
-    ids = []
-    data = es.search(index=index_name, size=1000000, _source="_id")
-    for hit in data['hits']['hits']:
-        ids.append(hit['_id'])
-    return ids
-
-
-async def fetch_all_articles(ids, my_type):
-    async with aiohttp.ClientSession() as session:
-        tasks = []
-        for my_id in ids:
-            if my_type == 'check_specimen_for_organism':
-                task = asyncio.ensure_future(check_specimen_for_organism(session, my_id, ids[my_id]))
-            elif my_type == 'check_specimen_for_dataset':
-                task = asyncio.ensure_future(check_specimen_for_dataset(session, my_id, ids[my_id]))
-            else:
-                task = asyncio.ensure_future(fetch_article(session, my_id, my_type))
-            tasks.append(task)
-        await asyncio.gather(*tasks, return_exceptions=True)
-
-
-async def fetch_article(session, my_id, my_type):
-    url = "https://www.ebi.ac.uk/europepmc/webservices/rest/search?query={}&format=json".format(my_id)
-    async with session.get(url) as response:
-        results = await response.json()
-        results = results['resultList']['result']
-        if len(results) != 0:
-            articles_list = [{'pmcid': result['pmcid'], 'doi': result['doi'], 'title': result['title'],
-                              'year': result['pubYear'], 'journal': result['journalTitle']} for result in results]
-            for result in results:
-                ARTICLES[result['id']] = result
-            if my_type == 'organism':
-                add_new_pair(ORGANISMS, my_id, articles_list)
-
-                # Add specimens
-                response = requests.get(
-                    "http://test.faang.org/api/specimen/_search/?q=organism.biosampleId:{}&size=1000000".format(my_id)
-                ).json()
-                for item in response['hits']['hits']:
-                    add_new_pair(SPECIMENS, item['_id'], articles_list)
-
-                # Add files
-                response = requests.get(
-                    "http://test.faang.org/api/file/_search/?q=organism:{}&size=1000000".format(my_id)).json()
-                for item in response['hits']['hits']:
-                    # FILES.add(item['_id'])
-                    add_new_pair(FILES, item['_id'], articles_list)
-
-            elif my_type == 'specimen':
-                add_new_pair(SPECIMENS, my_id, articles_list)
-
-                # Add organisms
-                response = requests.get("http://test.faang.org/api/specimen/{}".format(my_id)).json()
-                if 'biosampleId' in response['hits']['hits'][0]['_source']['organism']:
-                    organism_id = response['hits']['hits'][0]['_source']['organism']['biosampleId']
-                    add_new_pair(ORGANISMS, organism_id, articles_list)
-
-                # Add datasets
-                response = requests.get(
-                    "http://test.faang.org/api/dataset/_search/?q=specimen.biosampleId:{}&size=1000000".format(my_id)
-                ).json()
-                for item in response['hits']['hits']:
-                    add_new_pair(DATASETS, item['_id'], articles_list)
-
-                # Add files
-                response = requests.get(
-                    "http://test.faang.org/api/file/_search/?q=specimen:{}&size=1000000".format(my_id)).json()
-                for item in response['hits']['hits']:
-                    add_new_pair(FILES, item['_id'], articles_list)
-
-            elif my_type == 'dataset':
-                add_new_pair(DATASETS, my_id, articles_list)
-
-                # Add specimens
-                response = requests.get("http://test.faang.org/api/dataset/{}".format(my_id)).json()
-                for item in response['hits']['hits'][0]['_source']['specimen']:
-                    add_new_pair(SPECIMENS, item['biosampleId'], articles_list)
-
-                # Add files
-                for item in response['hits']['hits'][0]['_source']['file']:
-                    add_new_pair(FILES, item['fileId'], articles_list)
+    logger.info("Finishing importing article")
 
 
-async def check_specimen_for_organism(session, my_id, articles_list):
-    url = "http://test.faang.org/api/specimen/{}".format(my_id)
-    async with session.get(url) as response:
-        results = await response.json()
-        if 'biosampleId' in results['hits']['hits'][0]['_source']['organism']:
-            organism_id = results['hits']['hits'][0]['_source']['organism']['biosampleId']
-            add_new_pair(ORGANISMS, organism_id, articles_list)
+def parse_field(es_article, hit, es_key, api_key):
+    if api_key in hit:
+        es_article[es_key] = hit[api_key]
+    return es_article
 
 
-async def check_specimen_for_dataset(session, my_id, articles_list):
-    url = "http://test.faang.org/api/dataset/_search/?q=specimen.biosampleId:{}&size=1000000".format(my_id)
-    async with session.get(url) as response:
-        results = await response.json()
-        for item in results['hits']['hits']:
-            add_new_pair(DATASETS, item['_id'], articles_list)
-
-
-def update_records(records_dict, array_type, es):
-    print_statement("Starting to update {} records:".format(array_type))
-    for index, item_id in enumerate(records_dict):
-        body = {"doc": {"paperPublished": "true", "publishedArticles": [
-            {'pubmedId': item['pmcid'], 'doi': item['doi'], 'title': item['title'], 'year': item['year'],
-             'journal': item['journal']} for item in records_dict[item_id]]}}
-
-        try:
-            es.update(index=array_type, doc_type="_doc", id=item_id, body=body)
-        except ValueError:
-            print("ValueError {}".format(item_id))
-            continue
-
-
-def add_new_pair(target_dict, id_to_check, target_list):
-    if id_to_check not in target_dict:
-        target_dict[id_to_check] = target_list
+def determine_article_id(epmc_hit):
+    '''
+    Determine the article id to be used in ElasticSearch from the ePMC record
+    The priority is pmcid (Pubmed Central id which provides open access), pmid (pubmed id), doi and id used by ePMC
+    If none of those values is available, return empty string, a sign of error to be dealt with in the caller
+    :param epmc_hit: the ePMC record from their API
+    :return: the determined id
+    '''
+    if 'pmcid' in epmc_hit:
+        return epmc_hit['pmcid']
+    elif 'pmid' in epmc_hit:
+        return epmc_hit['pmid']
+    elif 'doi' in epmc_hit:
+        return epmc_hit['doi'].replace('/', '_')
+    elif 'id' in epmc_hit:
+        return epmc_hit['id']
     else:
-        for item in target_list:
-            if item not in target_dict[id_to_check]:
-                target_dict[id_to_check].append(item)
+        return ""
 
 
-def print_statement(print_string):
-    if PRINT_PROGRESS:
-        print(print_string)
-
-
-if __name__ == "__main__":
-    start_time = time.time()
-
-    es = Elasticsearch(['wp-np3-e2', 'wp-np3-e3'])
-    main(es)
-    update_records(SPECIMENS, 'specimen', es)
-    update_records(ORGANISMS, 'organism', es)
-    update_records(DATASETS, 'dataset', es)
-    update_records(FILES, 'file', es)
-
-    duration = time.time() - start_time
-    print_statement(f"Done in {round(duration / 60)} minutes")
+if __name__ == '__main__':
+    main()
