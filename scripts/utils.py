@@ -6,6 +6,7 @@ import logging
 from typing import Set, List, Dict
 import requests
 from constants import STANDARDS, STANDARD_FAANG, TYPES
+from elasticsearch import Elasticsearch
 from misc import convert_readable
 
 
@@ -76,22 +77,57 @@ def get_record_ids(host: str, es_index_prefix: str, data_type: str, only_faang=T
     :param only_faang: indiciates whether only include FAANG standard records (when True) or all records (when False)
     :return: set of FAANG dataset id
     """
-    if data_type not in TYPES:
+    standard_field = 'standardMet'
+    if data_type == 'article':
+        standard_field = ''
+    details = get_record_details(host, es_index_prefix, data_type, [standard_field])
+    if len(details) == 0:
         return set()
+    if only_faang:
+        results = set()
+        for hit in details.keys():
+            if details[hit]['standard'] == STANDARD_FAANG:
+                results.add(hit)
+        return results
+    else:
+        return set(details.keys())
+
+
+def get_record_number(host: str, es_index_prefix: str, data_type: str) -> int:
+    """
+    Get the number of records of one type in the Elasticsearch, which is necessary to do a full list retrieval as
+    the default size is 20 and an arbitrary hard-coded value is also not ideal, may become too small one day
+    :param host: the Elastic Search server address
+    :param es_index_prefix: the Elastic Search dataset index
+    :param data_type: the type of records
+    :return: the number of records
+    """
+    if data_type not in TYPES:
+        return 0
     url = f"http://{host}/{es_index_prefix}_{data_type}/_search?_source=standardMet"
     response = requests.get(url).json()
-    total_number = response['hits']['total']
+    return response['hits']['total']
+
+
+def get_record_details(host: str, es_index_prefix: str, data_type: str, return_fields: List) -> Dict:
+    """
+    Get the subset of record details
+    :param host: the Elastic Search server address
+    :param es_index_prefix: the Elastic Search dataset index
+    :param data_type: the type of records
+    :param return_fields: the list of fields containing the wanted information
+    :return: a dict having record id as keys, and all field values as values
+    """
+    total_number = get_record_number(host, es_index_prefix, data_type)
     if total_number == 0:
-        return set()
-    results = set()
-    url = f"{url}&size={total_number}"
-    response = requests.get(url).json()
-    for hit in response['hits']['hits']:
-        if only_faang:
-            if 'standardMet' in  hit['_source'] and hit['_source']['standardMet'] == STANDARD_FAANG:
-                results.add(hit['_id'])
-        else:
-            results.add(hit['_id'])
+        return dict()
+    es = Elasticsearch(host)
+    index_name = f'{es_index_prefix}_{data_type}'
+    source_str = ','.join(return_fields)
+    data = es.search(index=index_name, size=total_number, _source=source_str)
+    results = dict()
+    for hit in data['hits']['hits']:
+        results[hit['_id']] = hit['_source']
     return results
 
 

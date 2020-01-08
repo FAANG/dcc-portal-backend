@@ -34,11 +34,21 @@
     "isOpenAccess": {
       "type": "keyword"
     },
-    "abstract": {
+    "datasetSource": {
       "type": "keyword"
     },
     "relatedDatasets": {
-      "type": "keyword"
+      "properties": {
+        "accession": {
+          "type": "keyword"
+        },
+        "standardMet": {
+          "type": "keyword"
+        },
+        "species": {
+          "type": "keyword"
+        }
+      }
     }
   }
 }
