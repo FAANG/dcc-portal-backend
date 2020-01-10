@@ -226,23 +226,20 @@
         "type": "keyword"
       },
     "publishedArticles": {
-            "properties": {
-                "pubmedId": {
-                    "type": "keyword"
-                },
-              "title": {
-                "type": "keyword"
-              },
-              "doi": {
-                "type": "keyword"
-              },
-              "year": {
-                    "type": "keyword"
-                },
-              "journal": {
-                "type": "keyword"
-              }
-            }
+      "properties": {
+        "articleId": {
+          "type": "keyword"
+        },
+        "title": {
+          "type": "keyword"
+        },
+        "year": {
+          "type": "keyword"
+        },
+        "journal": {
+          "type": "keyword"
         }
+      }
+    }
   }
 }

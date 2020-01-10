@@ -13,7 +13,7 @@ import click
 from utils import create_logging_instance, remove_underscore_from_end_prefix, get_record_ids, get_record_details, \
     insert_into_es
 from constants import STAGING_NODE1, DEFAULT_PREFIX, STANDARD_FAANG
-from typing import Dict, Set
+from typing import Dict, Set, List
 
 logger = create_logging_instance('fetch_articles', to_file=False)
 
@@ -34,7 +34,7 @@ logger = create_logging_instance('fetch_articles', to_file=False)
 def main(es_hosts, es_index_prefix):
     hosts = es_hosts.split(";")
     logger.info("Command line parameters")
-    logger.info("Hosts: "+str(hosts))
+    logger.info("Hosts: " + str(hosts))
 
     es_index_prefix = remove_underscore_from_end_prefix(es_index_prefix)
     logger.info(f"Index: {es_index_prefix}_article")
@@ -45,6 +45,7 @@ def main(es_hosts, es_index_prefix):
     article_details = dict()
     article_datasets: Dict[str, Set] = dict()
     dataset_count = 0
+    article_for_datasets: Dict[str, Set] = dict()
     # for all datasets existing in the Elastic search, search for the publications based on the dataset accession
     for dataset_id in datasets.keys():
         # logging progress, not related to the main algorithm
@@ -88,6 +89,8 @@ def main(es_hosts, es_index_prefix):
 
                 article_datasets.setdefault(article_id, set())
                 article_datasets[article_id].add(dataset_id)
+                article_for_datasets.setdefault(dataset_id, set())
+                article_for_datasets[dataset_id].add(article_id)
 
     logger.info(f'Retrieved {len(article_details.keys())} articles from all datasets')
     es = Elasticsearch(hosts)
@@ -114,6 +117,29 @@ def main(es_hosts, es_index_prefix):
 
     for not_needed_article_id in existing_articles:
         es.delete(index=f'{es_index_prefix}_article', doc_type="_doc", id=not_needed_article_id)
+
+    for dataset_id in article_for_datasets.keys():
+        publications: List = list()
+        for article_id in article_for_datasets[dataset_id]:
+            article_detail = article_details[article_id]
+            tmp = dict()
+            tmp['articleId'] = article_id
+            tmp['title'] = article_detail['title']
+            tmp['journal'] = article_detail['journal']
+            tmp['year'] = article_detail['year']
+            publications.append(tmp)
+        body = {
+            "doc":
+                {"paperPublished": "true",
+                 "publishedArticles": publications
+                 }
+        }
+        try:
+            es.update(index=f'{es_index_prefix}_dataset', doc_type="_doc", id=dataset_id, body=body)
+        except ValueError:
+            print("ValueError {}".format(dataset_id))
+            continue
+
 
     logger.info("Finishing importing article")
 
