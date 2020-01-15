@@ -223,8 +223,8 @@
       "type": "keyword"
     },
     "paperPublished": {
-        "type": "keyword"
-      },
+      "type": "keyword"
+    },
     "publishedArticles": {
       "properties": {
         "articleId": {
