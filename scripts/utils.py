@@ -64,10 +64,6 @@ def insert_into_es(es, es_index_prefix, doc_type, doc_id, body):
         logger.error(f"Error when try to insert into index {es_index_prefix}_{doc_type}: " + str(e.args))
 
 
-def get_datasets(host: str, es_index_prefix: str, only_faang=True) -> Set[str]:
-    return get_record_ids(host, es_index_prefix, 'dataset', only_faang)
-
-
 def get_record_ids(host: str, es_index_prefix: str, data_type: str, only_faang=True) -> Set[str]:
     """
     Get the id list of existing records stored in the Elastic Search
@@ -78,15 +74,13 @@ def get_record_ids(host: str, es_index_prefix: str, data_type: str, only_faang=T
     :return: set of FAANG dataset id
     """
     standard_field = 'standardMet'
-    if data_type == 'article':
-        standard_field = ''
     details = get_record_details(host, es_index_prefix, data_type, [standard_field])
     if len(details) == 0:
         return set()
     if only_faang:
         results = set()
         for hit in details.keys():
-            if details[hit]['standard'] == STANDARD_FAANG:
+            if data_type == 'article' or details[hit][standard_field] == STANDARD_FAANG:
                 results.add(hit)
         return results
     else:
@@ -113,7 +107,7 @@ def get_record_details(host: str, es_index_prefix: str, data_type: str, return_f
     """
     Get the subset of record details
     :param host: the Elastic Search server address
-    :param es_index_prefix: the Elastic Search dataset index
+    :param es_index_prefix: the Elastic Search index
     :param data_type: the type of records
     :param return_fields: the list of fields containing the wanted information
     :return: a dict having record id as keys, and all field values as values

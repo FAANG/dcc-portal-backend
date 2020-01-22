@@ -14,6 +14,7 @@ from utils import create_logging_instance, remove_underscore_from_end_prefix, ge
     insert_into_es
 from constants import STAGING_NODE1, DEFAULT_PREFIX, STANDARD_FAANG
 from typing import Dict, Set, List
+import pprint
 
 logger = create_logging_instance('fetch_articles', to_file=False)
 
@@ -140,20 +141,30 @@ def main(es_hosts, es_index_prefix):
 
     logger.info("Update articles within dataset index")
     update_article_info(article_basics, article_for_datasets, es, es_index_prefix, 'dataset')
+
     logger.info("Update articles within specimen index")
     # update specimen, 'specimen' 'biosampleId' are referenced to the parameters used in datasets = get_record_details
     article_for_specimens: Dict[str, Set] = extract_article_from_related_entity(datasets, article_for_datasets,
-                                                                'specimen', 'biosampleId')
-    update_article_info(article_basics, article_for_specimens, es, es_index_prefix, 'specimen')
+                                                                                'specimen', 'biosampleId')
+    specimen_with_publications = get_records_with_publications(hosts[0], es_index_prefix, 'specimen')
+    logger.info("Start to update the specimen ES")
+    update_article_info(article_basics, article_for_specimens, es, es_index_prefix, 'specimen',
+                        specimen_with_publications)
 
     logger.info("Update articles within file index")
-    article_for_files: Dict[str, Set] = extract_article_from_related_entity(datasets, article_for_datasets, 'file', 'fileId')
-    update_article_info(article_basics, article_for_files, es, es_index_prefix, 'file')
+    article_for_files: Dict[str, Set] = extract_article_from_related_entity(datasets, article_for_datasets,
+                                                                            'file', 'fileId')
+    file_with_publications = get_records_with_publications(hosts[0], es_index_prefix, 'file')
+    logger.info("Start to update the file ES")
+    update_article_info(article_basics, article_for_files, es, es_index_prefix, 'file', file_with_publications)
 
     logger.info("Update articles within organism index")
     article_for_organisms: Dict[str, Set] = extract_article_from_related_entity(specimens, article_for_specimens,
-                                                                'organism', 'biosampleId')
-    update_article_info(article_basics, article_for_organisms, es, es_index_prefix, 'organism')
+                                                                                'organism', 'biosampleId')
+    organism_with_publications = get_records_with_publications(hosts[0], es_index_prefix, 'organism')
+    logger.info("Start to update the organism ES")
+    update_article_info(article_basics, article_for_organisms, es, es_index_prefix, 'organism',
+                        organism_with_publications)
 
     logger.info("Finishing importing article")
 
@@ -193,7 +204,8 @@ def extract_article_from_related_entity(source_data, source_article_data,
     return result
 
 
-def update_article_info(article_basics, article_for_others, es, es_index_prefix, record_type) -> None:
+def update_article_info(article_basics, article_for_others, es, es_index_prefix, record_type,
+                        records_with_publication=None) -> None:
     """
     update article information in other Elasticsearch indices
     :param article_basics: the collection of article information which is displayed in the other type record detail page
@@ -201,23 +213,66 @@ def update_article_info(article_basics, article_for_others, es, es_index_prefix,
     :param es: Elastic search instance
     :param es_index_prefix: the Elastic search index prefix
     :param record_type: the type of the record
+    :param records_with_publication: the existing publication information within the records, optional
     :return:
     """
     for record_id in article_for_others.keys():
-        publications: List = list()
-        for article_id in article_for_others[record_id]:
-            publications.append(article_basics[article_id])
-        body = {
-            "doc":
-                {"paperPublished": "true",
-                 "publishedArticles": publications
-                 }
-        }
-        try:
-            es.update(index=f'{es_index_prefix}_{record_type}', doc_type="_doc", id=record_id, body=body)
-        except ValueError:
-            print(f"Update goes wrong {record_id} in {record_type}")
-            continue
+        # compare the articles already linked to the record with the newly calculated one
+        # if they are identical, that record does not need to be updated for article information
+        need_update = False
+        # if no existing data provided or record id not in the existing data
+        if records_with_publication and record_id in records_with_publication:
+            if 'publishedArticles' in records_with_publication[record_id]:
+                existing = set()
+                for article in records_with_publication[record_id]['publishedArticles']:
+                    if 'articleId' in article:
+                        existing.add(article['articleId'])
+                for article_id in article_for_others[record_id]:
+                    if article_id in existing:
+                        existing.remove(article_id)
+                    else:
+                        need_update = True
+                        break
+                if len(existing) != 0:
+                    need_update = True
+            else:
+                need_update = True
+        else:
+            need_update = True
+
+        if need_update:
+            publications: List = list()
+            for article_id in article_for_others[record_id]:
+                publications.append(article_basics[article_id])
+            body = {
+                "doc":
+                    {"paperPublished": "true",
+                    "publishedArticles": publications
+                    }
+            }
+            try:
+                es.update(index=f'{es_index_prefix}_{record_type}', doc_type="_doc", id=record_id, body=body)
+            except ValueError:
+                print(f"Update goes wrong {record_id} in {record_type}")
+                continue
+
+
+def get_records_with_publications(es_host: str, es_index_prefix: str, record_type: str):
+    """
+    Retrieve only records of specified type having publications
+    :param es_host: the Elastic Search server address
+    :param es_index_prefix: the Elastic Search index
+    :param record_type: the type of the records
+    :return: the records with publications
+    """
+    records = get_record_details(es_host, es_index_prefix, record_type, ['paperPublished', 'publishedArticles'])
+    results = dict()
+    for record_id in records.keys():
+        if 'paperPublished' in records[record_id]:
+            published = records[record_id]['paperPublished']
+            if published == 'true' or published == 'yes':
+                results[record_id] = records[record_id]
+    return results
 
 
 def parse_field(es_article, hit, es_key, api_key):

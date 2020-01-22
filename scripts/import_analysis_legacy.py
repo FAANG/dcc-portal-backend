@@ -1,7 +1,7 @@
 import click
 from constants import STAGING_NODE1
 from elasticsearch import Elasticsearch
-from utils import remove_underscore_from_end_prefix, create_logging_instance, insert_into_es, get_datasets, \
+from utils import remove_underscore_from_end_prefix, create_logging_instance, get_record_ids, \
     convert_analysis, generate_ena_api_endpoint, process_validation_result
 import requests
 import validate_analysis_record
@@ -54,7 +54,7 @@ def main(es_hosts, es_index_prefix):
     field_str = ",".join(FIELD_LIST)
     analyses = dict()
     try:
-        existing_datasets = get_datasets(hosts[0], es_index_prefix, only_faang=False)
+        existing_datasets = get_record_ids(hosts[0], es_index_prefix, 'dataset', only_faang=False)
     except KeyError:
         logger.error("No existing datasets retrieved from Elastic Search")
         logger.error("Possible causes:")
