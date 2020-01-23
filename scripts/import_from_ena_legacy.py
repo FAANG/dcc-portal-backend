@@ -10,7 +10,7 @@ from elasticsearch import Elasticsearch
 import constants
 from typing import Set, Dict, List
 from utils import determine_file_and_source, check_existsence, remove_underscore_from_end_prefix, \
-    create_logging_instance, insert_into_es, get_datasets, generate_ena_api_endpoint
+    create_logging_instance, insert_into_es, get_record_ids, generate_ena_api_endpoint
 import re
 import validate_experiment_record
 import sys
@@ -399,7 +399,7 @@ def main(es_hosts, es_index_prefix):
         logger.error("No biosamples data found in the given index, please run import_from_biosamles.py first")
         sys.exit(1)
 
-    existing_faang_datasets: Set[str] = get_datasets(hosts[0], es_index_prefix)
+    existing_faang_datasets: Set[str] = get_record_ids(hosts[0], es_index_prefix, 'dataset', only_faang=True)
     logger.info(f"There are {len(existing_faang_datasets)} FAANG datasets in the ES")
 
     # strings used to build ENA API query

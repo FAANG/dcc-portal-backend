@@ -1,173 +1,170 @@
 {
-    "dynamic": "strict",
-    "date_detection": false,
-    "properties": {
-        "specimen": {
-            "type": "keyword",
-            "fields": {
-                "std": {
-                    "type": "text",
-                    "analyzer": "standard"
-                }
+  "dynamic": "strict",
+  "date_detection": false,
+  "properties": {
+    "specimen": {
+      "type": "keyword",
+      "fields": {
+        "std": {
+          "type": "text",
+          "analyzer": "standard"
+        }
+      }
+    },
+    "organism": {
+      "type": "keyword",
+      "fields": {
+        "std": {
+          "type": "text",
+          "analyzer": "standard"
+        }
+      }
+    },
+    "species": {
+      "properties": {
+        "text": {
+          "type": "keyword",
+          "fields": {
+            "autocomp": {
+              "type": "text",
+              "analyzer": "autocomp"
             }
+          }
         },
-        "organism": {
-            "type": "keyword",
-            "fields": {
-                "std": {
-                    "type": "text",
-                    "analyzer": "standard"
-                }
-            }
+        "ontologyTerms": {
+          "type": "keyword"
+        }
+      }
+    },
+    "url": {
+      "type": "keyword",
+      "fields": {
+        "keywords": {
+          "type": "text",
+          "analyzer": "ftp_url"
+        }
+      }
+    },
+    "name": {
+      "type": "keyword"
+    },
+    "type": {
+      "type": "keyword"
+    },
+    "size": {
+      "type": "long"
+    },
+    "readableSize": {
+      "type": "keyword"
+    },
+    "checksum": {
+      "type": "keyword"
+    },
+    "checksumMethod": {
+      "type": "keyword"
+    },
+    "archive": {
+      "type": "keyword"
+    },
+    "readCount": {
+      "type": "long"
+    },
+    "baseCount": {
+      "type": "long"
+    },
+    "releaseDate": {
+      "type": "keyword"
+    },
+    "updateDate": {
+      "type": "keyword"
+    },
+    "submission": {
+      "type": "keyword"
+    },
+    "experiment": {
+      "properties": {
+        "accession": {
+          "type": "keyword"
         },
-        "species": {
-            "properties": {
-                "text": {
-                    "type": "keyword",
-                    "fields": {
-                        "autocomp": {
-                            "type": "text",
-                            "analyzer": "autocomp"
-                        }
-                    }
-                },
-                "ontologyTerms": {
-                    "type": "keyword"
-                }
-            }
+        "target": {
+          "type": "keyword"
         },
-        "url": {
-            "type": "keyword",
-            "fields": {
-                "keywords": {
-                    "type": "text",
-                    "analyzer": "ftp_url"
-                }
-            }
+        "assayType": {
+          "type": "keyword"
         },
-        "name": {
-            "type": "keyword"
+        "standardMet": {
+          "type": "keyword"
+        }
+      }
+    },
+    "study": {
+      "properties": {
+        "accession": {
+          "type": "keyword"
+        },
+        "alias": {
+          "type": "keyword"
         },
         "type": {
-            "type": "keyword"
+          "type": "keyword"
         },
-        "size": {
-            "type": "long"
+        "secondaryAccession": {
+          "type": "keyword"
         },
-        "readableSize": {
-            "type": "keyword"
-        },
-        "checksum": {
-            "type": "keyword"
-        },
-        "checksumMethod": {
-            "type": "keyword"
-        },
-        "archive": {
-            "type": "keyword"
-        },
-        "readCount": {
-            "type": "long"
-        },
-        "baseCount": {
-            "type": "long"
-        },
-        "releaseDate": {
-            "type": "keyword"
-        },
-        "updateDate": {
-            "type": "keyword"
-        },
-        "submission": {
-            "type": "keyword"
-        },
-        "experiment": {
-            "properties": {
-                "accession": {
-                    "type": "keyword"
-                },
-                "target": {
-                    "type": "keyword"
-                },
-                "assayType": {
-                    "type": "keyword"
-                },
-                "standardMet": {
-                    "type": "keyword"
-                }
-            }
-        },
-        "study": {
-            "properties": {
-                "accession": {
-                    "type": "keyword"
-                },
-                "alias": {
-                    "type": "keyword"
-                },
-                "type": {
-                    "type": "keyword"
-                },
-                "secondaryAccession": {
-                    "type": "keyword"
-                },
-                "title": {
-                    "type": "keyword"
-                }
-            }
-        },
-        "run": {
-            "properties": {
-                "accession": {
-                    "type": "keyword"
-                },
-                "alias": {
-                    "type": "keyword"
-                },
-                "platform": {
-                    "type": "keyword"
-                },
-                "instrument": {
-                    "type": "keyword"
-                },
-                "centerName": {
-                    "type": "keyword"
-                },
-                "sequencingDate": {
-                    "type": "keyword"
-                },
-                "sequencingLocation": {
-                    "type": "keyword"
-                },
-                "sequencingLatitude": {
-                    "type": "keyword"
-                },
-                "sequencingLongitude": {
-                    "type": "keyword"
-                }
-            }
-        },
-        "paperPublished": {
-        "type": "keyword"
-      },
-        "publishedArticles": {
-            "properties": {
-                "pubmedId": {
-                    "type": "keyword"
-                },
-                "title": {
-                    "type": "keyword"
-                },
-                "doi": {
-                    "type": "keyword"
-                },
-                "year": {
-                    "type": "keyword"
-                },
-                "journal": {
-                "type": "keyword"
-              }
-            }
+        "title": {
+          "type": "keyword"
         }
+      }
+    },
+    "run": {
+      "properties": {
+        "accession": {
+          "type": "keyword"
+        },
+        "alias": {
+          "type": "keyword"
+        },
+        "platform": {
+          "type": "keyword"
+        },
+        "instrument": {
+          "type": "keyword"
+        },
+        "centerName": {
+          "type": "keyword"
+        },
+        "sequencingDate": {
+          "type": "keyword"
+        },
+        "sequencingLocation": {
+          "type": "keyword"
+        },
+        "sequencingLatitude": {
+          "type": "keyword"
+        },
+        "sequencingLongitude": {
+          "type": "keyword"
+        }
+      }
+    },
+    "paperPublished": {
+      "type": "keyword"
+    },
+    "publishedArticles": {
+      "properties": {
+        "articleId": {
+          "type": "keyword"
+        },
+        "title": {
+          "type": "keyword"
+        },
+        "year": {
+          "type": "keyword"
+        },
+        "journal": {
+          "type": "keyword"
+        }
+      }
     }
+  }
 }

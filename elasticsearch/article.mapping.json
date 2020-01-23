@@ -1,16 +1,10 @@
 {
   "dynamic": "strict",
   "properties": {
-    "id": {
+    "pmcId": {
       "type": "keyword"
     },
-    "source": {
-      "type": "keyword"
-    },
-    "pmid": {
-      "type": "keyword"
-    },
-    "pmcid": {
+    "pubmedId": {
       "type": "keyword"
     },
     "doi": {
@@ -22,76 +16,36 @@
     "authorString": {
       "type": "keyword"
     },
-    "journalTitle": {
+    "journal": {
       "type": "keyword"
     },
-    "journalVolume": {
+    "issue": {
       "type": "keyword"
     },
-    "pubYear": {
+    "volume": {
       "type": "keyword"
     },
-    "journalIssn": {
+    "year": {
       "type": "keyword"
     },
-    "pageInfo": {
-      "type": "keyword"
-    },
-    "pubType": {
+    "pages": {
       "type": "keyword"
     },
     "isOpenAccess": {
       "type": "keyword"
     },
-    "inEPMC": {
+    "datasetSource": {
       "type": "keyword"
     },
-    "inPMC": {
-      "type": "keyword"
-    },
-    "hasPDF": {
-      "type": "keyword"
-    },
-    "hasBook": {
-      "type": "keyword"
-    },
-    "hasSuppl": {
-      "type": "keyword"
-    },
-    "citedByCount": {
-      "type": "keyword"
-    },
-    "hasReferences": {
-      "type": "keyword"
-    },
-    "hasTextMinedTerms": {
-      "type": "keyword"
-    },
-    "hasDbCrossReferences": {
-      "type": "keyword"
-    },
-    "hasLabsLinks": {
-      "type": "keyword"
-    },
-    "hasTMAccessionNumbers": {
-      "type": "keyword"
-    },
-    "firstPublicationDate": {
-      "type": "keyword"
-    },
-    "tmAccessionTypeList": {
+    "relatedDatasets": {
       "properties": {
-        "accessionType": {
+        "accession": {
           "type": "keyword"
-        }
-      }
-    },
-    "issue": {
-      "type": "keyword"
-    },
-    "dbCrossReferenceList": {
-      "properties": {
-        "dbName": {
+        },
+        "standardMet": {
+          "type": "keyword"
+        },
+        "species": {
           "type": "keyword"
         }
       }
