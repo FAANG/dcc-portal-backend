@@ -111,11 +111,11 @@ def main(es_hosts, es_index_prefix):
                 article_for_datasets.setdefault(dataset_id, set())
                 article_for_datasets[dataset_id].add(article_id)
 
-    logger.info(f'Retrieved {len(article_details.keys())} articles from all datasets')
+    logger.info(f'Retrieved {len(article_details)} articles from all datasets')
 
     es = Elasticsearch(hosts)
     # deal with article index
-    for article_id in article_details.keys():
+    for article_id in article_details:
         es_article = article_details[article_id]
         all_faang_datasets_flag = 'FAANG only'
         es_datasets = list()
@@ -183,7 +183,7 @@ def extract_article_from_related_entity(source_data, source_article_data,
     :return: articles for the target record
     """
     result: Dict[str, Set] = dict()
-    for source_id in source_data.keys():
+    for source_id in source_data:
         # only deal with source data having articles
         if source_id in source_article_data and source_id in source_data and relationship_key in source_data[source_id]:
             # unify to be list, in ES, it is only defined as keyword, could be list or string, files in dataset is list
@@ -216,7 +216,7 @@ def update_article_info(article_basics, article_for_others, es, es_index_prefix,
     :param records_with_publication: the existing publication information within the records, optional
     :return:
     """
-    for record_id in article_for_others.keys():
+    for record_id in article_for_others:
         # compare the articles already linked to the record with the newly calculated one
         # if they are identical, that record does not need to be updated for article information
         need_update = False
