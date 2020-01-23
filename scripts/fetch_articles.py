@@ -17,7 +17,20 @@ from typing import Dict, Set, List
 import pprint
 
 logger = create_logging_instance('fetch_articles', to_file=False)
-
+ARTICLE_MAPPING = {
+    'pmcId': 'pmcid',
+    'pubmedId': 'pmid',
+    'doi': 'doi',
+    'title': 'title',
+    'authorString': 'authorString',
+    'journal': 'journalTitle',
+    'issue': 'issue',
+    'volume': 'journalVolume',
+    'year': 'pubYear',
+    'pages': 'pageInfo',
+    'isOpenAccess': 'isOpenAccess'
+}
+ARTICLE_BASIC_FIELDS = {'title', 'year', 'journal'}
 
 @click.command()
 @click.option(
@@ -67,49 +80,37 @@ def main(es_hosts, es_index_prefix):
         # get dataset related publication using europe PMC search API
         url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/search?query={dataset_id}&format=json"
         epmc_result = requests.get(url).json()
-        hit_count = epmc_result['hitCount']
-        if hit_count != 0:
-            epmc_hits = epmc_result['resultList']['result']
-            for hit in epmc_hits:
-                # ignore preprints determined by two fields pubType and source
-                if 'pubType' in hit and hit['pubType'] == 'preprint':
-                    continue
-                if 'source' in hit and hit['source'] == 'PPR':
-                    continue
-                # determine the article id which will be used in ES, PMC id is preferred, because
-                # 1) it has PMC prefix rather than a string of digits
-                # 2) PMC guarantees open access, more likely to have dataset accession linked
-                article_id = determine_article_id(hit)
-                if len(article_id) == 0:
-                    logger.error(f"Study {dataset_id} has related article without Identifier")
-                    continue
-                # new article
-                if article_id not in article_details:
-                    es_article = dict()
-                    es_article = parse_field(es_article, hit, 'pmcId', 'pmcid')
-                    es_article = parse_field(es_article, hit, 'pubmedId', 'pmid')
-                    es_article = parse_field(es_article, hit, 'doi', 'doi')
-                    es_article = parse_field(es_article, hit, 'title', 'title')
-                    es_article = parse_field(es_article, hit, 'authorString', 'authorString')
-                    es_article = parse_field(es_article, hit, 'journal', 'journalTitle')
-                    es_article = parse_field(es_article, hit, 'issue', 'issue')
-                    es_article = parse_field(es_article, hit, 'volume', 'journalVolume')
-                    es_article = parse_field(es_article, hit, 'year', 'pubYear')
-                    es_article = parse_field(es_article, hit, 'pages', 'pageInfo')
-                    es_article = parse_field(es_article, hit, 'isOpenAccess', 'isOpenAccess')
-                    article_details[article_id] = es_article
-                    article_basic_info = dict()
-                    # the article information displayed in other entities
-                    article_basic_info['articleId'] = article_id
-                    article_basic_info = parse_field(article_basic_info, hit, 'title', 'title')
-                    article_basic_info = parse_field(article_basic_info, hit, 'journal', 'journalTitle')
-                    article_basic_info = parse_field(article_basic_info, hit, 'year', 'pubYear')
-                    article_basics[article_id] = article_basic_info
+        epmc_hits = epmc_result['resultList']['result']
+        for hit in epmc_hits:
+            # ignore preprints determined by two fields pubType and source
+            if 'pubType' in hit and hit['pubType'] == 'preprint':
+                continue
+            if 'source' in hit and hit['source'] == 'PPR':
+                continue
+            # determine the article id which will be used in ES, PMC id is preferred, because
+            # 1) it has PMC prefix rather than a string of digits
+            # 2) PMC guarantees open access, more likely to have dataset accession linked
+            article_id = determine_article_id(hit)
+            if len(article_id) == 0:
+                logger.error(f"Study {dataset_id} has related article without Identifier")
+                continue
+            # new article
+            if article_id not in article_details:
+                es_article = dict()
+                for k, v in ARTICLE_MAPPING.items():
+                    es_article = parse_field(es_article, hit, k, v)
+                article_details[article_id] = es_article
+                article_basic_info = dict()
+                # the article information displayed in other entities
+                article_basic_info['articleId'] = article_id
+                for k in ARTICLE_BASIC_FIELDS:
+                    article_basic_info = parse_field(article_basic_info, hit, k, ARTICLE_MAPPING[k])
+                article_basics[article_id] = article_basic_info
 
-                article_datasets.setdefault(article_id, set())
-                article_datasets[article_id].add(dataset_id)
-                article_for_datasets.setdefault(dataset_id, set())
-                article_for_datasets[dataset_id].add(article_id)
+            article_datasets.setdefault(article_id, set())
+            article_datasets[article_id].add(dataset_id)
+            article_for_datasets.setdefault(dataset_id, set())
+            article_for_datasets[dataset_id].add(article_id)
 
     logger.info(f'Retrieved {len(article_details)} articles from all datasets')
 
