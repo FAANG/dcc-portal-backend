@@ -220,6 +220,7 @@ def main(es_hosts, es_index_prefix):
                 exp_es = {
                     'accession': exp_id,
                     'project': record['project'],
+                    'secondaryProject': record['secondary_project'],
                     'assayType': assay_type,
                     'experimentTarget': experiment_target,
                     'sampleStorage': check_existsence(record, 'sample_storage'),

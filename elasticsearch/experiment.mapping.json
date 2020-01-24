@@ -8,6 +8,9 @@
     "project": {
       "type": "keyword"
     },
+    "secondaryProject": {
+      "type": "keyword"
+    },
     "assayType": {
       "type": "keyword"
     },
