@@ -93,6 +93,10 @@ def main(es_hosts, es_index_prefix):
     except FileNotFoundError:  # file does not exist means that no known records
         pass
 
+    # Material type can only take 6 values e.g. organism etc
+    # However it is encouraged to use more specific ontology term, e.g. primary cell culture preferred than cell culture
+    # ALL_MATERAIL_TYPES will be populated with all possible allowed terms as keys
+    # and corresponding base material type as values
     for base_material in MATERIAL_TYPES.keys():
         ALL_MATERIAL_TYPES[base_material] = base_material
         host = f"http://www.ebi.ac.uk/ols/api/terms?id={MATERIAL_TYPES[base_material]}"
@@ -152,7 +156,7 @@ def main(es_hosts, es_index_prefix):
         fetch_records_by_project_via_etag(etags_es)
 
     if TOTAL_RECORDS_TO_UPDATE == 0:
-        logger.critical("Did not obtain any records from BioSamples")
+        logger.critical("Did not obtain any records which need to be updated from BioSamples")
         sys.exit(0)
 
     # the order of importation could not be changed due to derive from
@@ -273,7 +277,7 @@ def fetch_records_by_project_via_etag(etags):
         logger.info(f"There are {v} {k} records needing update")
 
     logger.info(f"The sum is {TOTAL_RECORDS_TO_UPDATE}")
-    logger.info(f"Finish comparing etags and retrieving necessary records at {datetime.datetime.now()}")
+    logger.info(f"Finish comparing etags and retrieving necessary records")
 
 
 def unify_field_names(biosample):
@@ -325,6 +329,7 @@ def fetch_records_by_project():
             else:
                 with open(ERROR_ESSENTIAL_FILENAME , 'a') as w:
                     w.write(f"{biosample['accession']}\n")
+                    # to activate cronjob email notification
                     print(f"{biosample['accession']} does not have essential fields\n")
 
         if 'next' in response['_links']:
@@ -941,6 +946,7 @@ def populate_basic_biosample_info(doc: Dict, item: Dict):
         "ontologyTerms": check_existence(item, 'Material', 'ontologyTerms')
     }
     doc['project'] = check_existence(item, 'project', 'text')
+    doc['secondaryProject'] = check_existence(item, 'secondary project', 'text')
     doc['availability'] = check_existence(item, 'availability', 'text')
     for organization in item['organization']:
         # TODO logging to error if name or role or url do not exist

@@ -1,5 +1,5 @@
 known_columns = dict()
-common_columns = ["description", "Material", "Organism", "project", "availability", "same as"]
+common_columns = ["description", "Material", "Organism", "project", "secondary project", "availability", "same as"]
 known_columns['organism'] = [
     "Sex", "birth date", "breed", "health status", "birth location", "birth location longitude",
     "birth location latitude", "birth weight", "placental weight", "pregnancy length", "delivery timing",
