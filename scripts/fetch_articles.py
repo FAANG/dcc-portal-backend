@@ -32,6 +32,10 @@ ARTICLE_MAPPING = {
 }
 ARTICLE_BASIC_FIELDS = {'title', 'year', 'journal'}
 
+MANUAL_CURATION = {
+    'PRJEB35307': '31861495'
+}
+
 @click.command()
 @click.option(
     '--es_hosts',
@@ -81,7 +85,15 @@ def main(es_hosts, es_index_prefix):
         url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/search?query={dataset_id}&format=json"
         epmc_result = requests.get(url).json()
         epmc_hits = epmc_result['resultList']['result']
-        for hit in epmc_hits:
+
+        manual_hits = list()
+        if dataset_id in MANUAL_CURATION:
+            url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/search?query={MANUAL_CURATION[dataset_id]}" \
+                  f"&format=json"
+            manual_result = requests.get(url).json()
+            manual_hits = manual_result['resultList']['result']
+        for hit in epmc_hits + manual_hits:
+        # for hit in epmc_hits:
             # ignore preprints determined by two fields pubType and source
             if 'pubType' in hit and hit['pubType'] == 'preprint':
                 continue
