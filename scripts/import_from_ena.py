@@ -161,6 +161,7 @@ def main(es_hosts, es_index_prefix):
                 'specimen': specimen_biosample_id,
                 'organism': check_existsence(biosample_ids[specimen_biosample_id]['organism'], 'biosampleId'),
                 'species': biosample_ids[specimen_biosample_id]['organism']['organism'],
+                'secondaryProject': record['secondary_project'],
                 'url': file,
                 'name': fullname,
                 'type': types[index],
@@ -533,6 +534,7 @@ def main(es_hosts, es_index_prefix):
     # datasets contains one artificial value set with the key as 'tmp', so need to -1
     logger.info(f"There are {len(list(datasets.keys())) -  1} datasets to be processed")
 
+    logger.info('Start to import Experiments')
     validator = validate_experiment_record.ValidateExperimentRecord(experiments, RULESETS)
     validation_results = validator.validate()
     exp_validation = dict()
@@ -556,6 +558,7 @@ def main(es_hosts, es_index_prefix):
                 # index into ES so break the loop
                 break
 
+    logger.info('Start to import Files')
     for file_id in files_dict.keys():
         es_file_doc = files_dict[file_id]
         # noinspection PyTypeChecker
@@ -567,6 +570,7 @@ def main(es_hosts, es_index_prefix):
         insert_into_es(es, es_index_prefix, 'file', file_id, body)
         indexed_files[file_id] = 1
 
+    logger.info('Start to import Datasets')
     for dataset_id in datasets:
         if dataset_id == 'tmp':
             continue
