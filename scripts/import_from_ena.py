@@ -483,6 +483,10 @@ def main(es_hosts, es_index_prefix):
             # noinspection PyTypeChecker
             datasets['tmp'][dataset_id]['center_name'][record['center_name']] = 1
 
+            datasets['tmp'][dataset_id].setdefault('secondaryProject', {})
+            # noinspection PyTypeChecker
+            datasets['tmp'][dataset_id]['secondaryProject'][record['secondary_project']] = 1
+
             datasets['tmp'][dataset_id].setdefault('archive', {})
             # noinspection PyTypeChecker
             datasets['tmp'][dataset_id]['archive'][archive] = 1
@@ -618,6 +622,7 @@ def main(es_hosts, es_index_prefix):
         es_doc_dataset['tech'] = list(tech_type.keys())
         es_doc_dataset['instrument'] = list(datasets['tmp'][dataset_id]['instrument'].keys())
         es_doc_dataset['centerName'] = list(datasets['tmp'][dataset_id]['center_name'].keys())
+        es_doc_dataset['secondaryProject'] = list(datasets['tmp'][dataset_id]['secondaryProject'].keys())
         es_doc_dataset['archive'] = sorted(list(datasets['tmp'][dataset_id]['archive'].keys()))
         body = json.dumps(es_doc_dataset)
         insert_into_es(es, es_index_prefix, 'dataset', dataset_id, body)

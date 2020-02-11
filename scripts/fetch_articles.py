@@ -16,7 +16,7 @@ from constants import STAGING_NODE1, DEFAULT_PREFIX, STANDARD_FAANG
 from typing import Dict, Set, List
 import pprint
 
-logger = create_logging_instance('fetch_articles', to_file=False)
+logger = create_logging_instance('fetch_articles')
 ARTICLE_MAPPING = {
     'pmcId': 'pmcid',
     'pubmedId': 'pmid',
@@ -58,7 +58,8 @@ def main(es_hosts, es_index_prefix):
     logger.info(f"Index: {es_index_prefix}_article")
     # get existing dataset (to work out articles in file and specimen and existing specimen to calculate organism
     datasets = get_record_details(hosts[0], es_index_prefix, 'dataset',
-                                  ['standardMet', 'species', 'specimen.biosampleId', 'file.fileId'])
+                                  ['standardMet', 'secondaryProject', 'species',
+                                   'specimen.biosampleId', 'file.fileId'])
     specimens = get_record_details(hosts[0], es_index_prefix, 'specimen', ['organism.biosampleId'])
     # get existing articles
     existing_articles = get_record_ids(hosts[0], es_index_prefix, 'article', only_faang=False)
@@ -93,7 +94,6 @@ def main(es_hosts, es_index_prefix):
             manual_result = requests.get(url).json()
             manual_hits = manual_result['resultList']['result']
         for hit in epmc_hits + manual_hits:
-        # for hit in epmc_hits:
             # ignore preprints determined by two fields pubType and source
             if 'pubType' in hit and hit['pubType'] == 'preprint':
                 continue
@@ -132,6 +132,7 @@ def main(es_hosts, es_index_prefix):
         es_article = article_details[article_id]
         all_faang_datasets_flag = 'FAANG only'
         es_datasets = list()
+        secondary_projects = set()
         for dataset_id in article_datasets[article_id]:
             tmp = dict()
             tmp['accession'] = dataset_id
@@ -142,9 +143,12 @@ def main(es_hosts, es_index_prefix):
             for tmp_sp in datasets[dataset_id]['species']:
                 species.append(tmp_sp['text'])
             tmp['species'] = species
+            for tmp_2nd_project in datasets[dataset_id]['secondaryProject']:
+                secondary_projects.add(tmp_2nd_project)
             es_datasets.append(tmp)
         es_article['relatedDatasets'] = es_datasets
         es_article['datasetSource'] = all_faang_datasets_flag
+        es_article['secondaryProject'] = list(secondary_projects)
         insert_into_es(es, es_index_prefix, 'article', article_id, es_article)
         if article_id in existing_articles:
             existing_articles.remove(article_id)

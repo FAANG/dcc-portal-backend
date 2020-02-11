@@ -92,6 +92,9 @@
         "assayType": {
           "type": "keyword"
         },
+        "secondaryProject": {
+          "type": "keyword"
+        },
         "standardMet": {
           "type": "keyword"
         }
