@@ -48,6 +48,9 @@
     "name": {
       "type": "keyword"
     },
+    "secondaryProject": {
+      "type": "keyword"
+    },
     "type": {
       "type": "keyword"
     },

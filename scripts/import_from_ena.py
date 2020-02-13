@@ -161,6 +161,7 @@ def main(es_hosts, es_index_prefix):
                 'specimen': specimen_biosample_id,
                 'organism': check_existsence(biosample_ids[specimen_biosample_id]['organism'], 'biosampleId'),
                 'species': biosample_ids[specimen_biosample_id]['organism']['organism'],
+                'secondaryProject': record['secondary_project'],
                 'url': file,
                 'name': fullname,
                 'type': types[index],
@@ -483,6 +484,10 @@ def main(es_hosts, es_index_prefix):
             # noinspection PyTypeChecker
             datasets['tmp'][dataset_id]['center_name'][record['center_name']] = 1
 
+            datasets['tmp'][dataset_id].setdefault('secondaryProject', {})
+            # noinspection PyTypeChecker
+            datasets['tmp'][dataset_id]['secondaryProject'][record['secondary_project']] = 1
+
             datasets['tmp'][dataset_id].setdefault('archive', {})
             # noinspection PyTypeChecker
             datasets['tmp'][dataset_id]['archive'][archive] = 1
@@ -529,6 +534,7 @@ def main(es_hosts, es_index_prefix):
     # datasets contains one artificial value set with the key as 'tmp', so need to -1
     logger.info(f"There are {len(list(datasets.keys())) -  1} datasets to be processed")
 
+    logger.info('Start to import Experiments')
     validator = validate_experiment_record.ValidateExperimentRecord(experiments, RULESETS)
     validation_results = validator.validate()
     exp_validation = dict()
@@ -552,6 +558,7 @@ def main(es_hosts, es_index_prefix):
                 # index into ES so break the loop
                 break
 
+    logger.info('Start to import Files')
     for file_id in files_dict.keys():
         es_file_doc = files_dict[file_id]
         # noinspection PyTypeChecker
@@ -563,6 +570,7 @@ def main(es_hosts, es_index_prefix):
         insert_into_es(es, es_index_prefix, 'file', file_id, body)
         indexed_files[file_id] = 1
 
+    logger.info('Start to import Datasets')
     for dataset_id in datasets:
         if dataset_id == 'tmp':
             continue
@@ -618,6 +626,7 @@ def main(es_hosts, es_index_prefix):
         es_doc_dataset['tech'] = list(tech_type.keys())
         es_doc_dataset['instrument'] = list(datasets['tmp'][dataset_id]['instrument'].keys())
         es_doc_dataset['centerName'] = list(datasets['tmp'][dataset_id]['center_name'].keys())
+        es_doc_dataset['secondaryProject'] = list(datasets['tmp'][dataset_id]['secondaryProject'].keys())
         es_doc_dataset['archive'] = sorted(list(datasets['tmp'][dataset_id]['archive'].keys()))
         body = json.dumps(es_doc_dataset)
         insert_into_es(es, es_index_prefix, 'dataset', dataset_id, body)
