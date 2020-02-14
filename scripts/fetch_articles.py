@@ -143,8 +143,9 @@ def main(es_hosts, es_index_prefix):
             for tmp_sp in datasets[dataset_id]['species']:
                 species.append(tmp_sp['text'])
             tmp['species'] = species
-            for tmp_2nd_project in datasets[dataset_id]['secondaryProject']:
-                secondary_projects.add(tmp_2nd_project)
+            if 'secondaryProject' in datasets[dataset_id]:
+                for tmp_2nd_project in datasets[dataset_id]['secondaryProject']:
+                    secondary_projects.add(tmp_2nd_project)
             es_datasets.append(tmp)
         es_article['relatedDatasets'] = es_datasets
         es_article['datasetSource'] = all_faang_datasets_flag
