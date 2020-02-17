@@ -188,8 +188,7 @@ def retrieve_biosamples_record(es, es_index_prefix, biosample_id):
 
     # this is a tag used in the ruleset, not a standard, just happening to share the same value
     # therefore not replacing with constant
-    if 'project' in data['characteristics'] and data['characteristics']['project'][0]['text'] \
-            == 'FAANG':
+    if 'project' in data['characteristics'] and data['characteristics']['project'][0]['text'] == 'FAANG':
         return -1
     es_doc['biosampleId'] = biosample_id
     es_doc['name'] = data['name']
@@ -418,6 +417,8 @@ def main(es_hosts, es_index_prefix):
         # f"https://www.ebi.ac.uk/ena/portal/api/search/?result=read_run&format=JSON&limit=0&" \
         #    f"query=library_strategy%3D%22{term}%22%20AND%20tax_eq({species_str})&fields={field_str}"
         # extra constraint based on species and library strategy
+        # debug notes: category in records descending order RNA-Seq (32k), WGS,
+        # miRNA-Seq (4k), and others (around 1k or less)
         optional_str = f"query=library_strategy%3D%22{term}%22%20AND%20tax_eq({species_str})"
         url = generate_ena_api_endpoint('read_run', 'ena', field_str, optional_str)
         response = requests.get(url)
@@ -453,6 +454,8 @@ def main(es_hosts, es_index_prefix):
         for record in todo[category]:
             # if fail to get the related sample record, skip the record
             specimen_biosample_id = record['sample_accession']
+            if len(specimen_biosample_id) < 5: # invalid sample accession, which should be SAM[M|D|E]
+                continue
             status = retrieve_biosamples_record(es, es_index_prefix, specimen_biosample_id)
             if status != 0 and status != 200:
                 continue
@@ -615,11 +618,11 @@ def main(es_hosts, es_index_prefix):
         if dataset_id == 'tmp':
             continue
         if dataset_id in datasets['tmp'] and 'experiment' in datasets['tmp'][dataset_id]:
-            num_exps = len(list(datasets['tmp'][dataset_id]["experiment"].keys()))
+            num_exps = len(datasets['tmp'][dataset_id]["experiment"])
         printed_index = index + 1
         logger.info(f"{printed_index} {dataset_id} has {num_exps} experiments to be processed")
     # datasets contains one artificial value set with the key as 'tmp', so need to -1
-    logger.info(f"There are {len(list(datasets.keys())) -  1} datasets to be processed")
+    logger.info(f"There are {len(datasets) -  1} datasets to be processed")
 
     validator = validate_experiment_record.ValidateExperimentRecord(experiments, RULESETS)
     validation_results = validator.validate()
