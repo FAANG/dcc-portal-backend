@@ -14,7 +14,6 @@ from utils import create_logging_instance, remove_underscore_from_end_prefix, ge
     insert_into_es
 from constants import STAGING_NODE1, DEFAULT_PREFIX, STANDARD_FAANG
 from typing import Dict, Set, List
-import pprint
 
 logger = create_logging_instance('fetch_articles')
 ARTICLE_MAPPING = {
@@ -32,9 +31,6 @@ ARTICLE_MAPPING = {
 }
 ARTICLE_BASIC_FIELDS = {'title', 'year', 'journal'}
 
-MANUAL_CURATION = {
-    'PRJEB35307': '31861495'
-}
 
 @click.command()
 @click.option(
@@ -88,11 +84,14 @@ def main(es_hosts, es_index_prefix):
         epmc_hits = epmc_result['resultList']['result']
 
         manual_hits = list()
-        if dataset_id in MANUAL_CURATION:
-            url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/search?query={MANUAL_CURATION[dataset_id]}" \
-                  f"&format=json"
-            manual_result = requests.get(url).json()
-            manual_hits = manual_result['resultList']['result']
+        # if article not found directly from EuropePMC, use the information annotated in the ENA
+        if not epmc_hits:
+            xref_results = get_article_from_xref(dataset_id)
+            for xref_result in xref_results:
+                url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/search?query={xref_result}&format=json"
+                manual_result = requests.get(url).json()
+                manual_hits.append(manual_result['resultList']['result'][0])
+
         for hit in epmc_hits + manual_hits:
             # ignore preprints determined by two fields pubType and source
             if 'pubType' in hit and hit['pubType'] == 'preprint':
@@ -265,8 +264,8 @@ def update_article_info(article_basics, article_for_others, es, es_index_prefix,
             body = {
                 "doc":
                     {"paperPublished": "true",
-                    "publishedArticles": publications
-                    }
+                     "publishedArticles": publications
+                     }
             }
             try:
                 es.update(index=f'{es_index_prefix}_{record_type}', doc_type="_doc", id=record_id, body=body)
@@ -325,6 +324,16 @@ def determine_article_id(epmc_hit):
         return epmc_hit['id']
     else:
         return ""
+
+
+def get_article_from_xref(study_accession: str):
+    url = f'https://www.ebi.ac.uk/ena/xref/rest/json/search?accession={study_accession}'
+    results = list()
+    query_results = requests.get(url).json()
+    for result in query_results:
+        if result['Source'] == 'PubMed' or result['Source'] == 'EuropePMC':
+            results.append(result['Source Primary Accession'])
+    return results
 
 
 if __name__ == '__main__':
