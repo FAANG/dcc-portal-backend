@@ -14,6 +14,8 @@ class SyncHinxtonLondon:
     3. Restore from snapshot on fallback and production servers
     4. Change aliases to point to restored snapshot on fallback and production
     5. Delete old indices on fallback and production servers
+    It is essential to read https://www.elastic.co/guide/en/elasticsearch/reference/current/snapshot-restore.html
+    if you have no experience about snapshot
     """
     def __init__(self, es_staging, es_fallback, es_production, logger):
         """
@@ -47,20 +49,22 @@ class SyncHinxtonLondon:
         self.change_aliases()
         self.delete_old_indices()
 
-    def create_snapshot(self, rep_type):
+    def create_snapshot(self, rep_name):
         """
         This function will create snapshot on test server
-        :param rep_type type of repo to use (staging or production)
+        :param rep_name name of the snapshot repository
         """
         self.logger.info('Creating snapshot')
         indices = ",".join(ALIASES_IN_USE.values())
+        # indices defines specific indices to be backed up
         parameters = {
             "indices": indices,
             "ignore_unavailable": True,
             "include_global_state": False
         }
+
         self.es_staging.snapshot.create(
-            repository=rep_type, snapshot=self.snapshot_name,
+            repository=rep_name, snapshot=self.snapshot_name,
             body=parameters, wait_for_completion=True)
 
     def rsync_snapshot(self):
@@ -72,6 +76,8 @@ class SyncHinxtonLondon:
     def restore_snapshot(self):
         """
         This function will restore snapshot on fallback and production servers
+        https://www.elastic.co/guide/en/elasticsearch/reference/current/snapshots-restore-snapshot.html
+        which explains how to use renaming pattern etc. parameters
         """
         self.logger.info('Restoring snapshot')
         indices_in_use = "|".join(ALIASES_IN_USE.keys())
