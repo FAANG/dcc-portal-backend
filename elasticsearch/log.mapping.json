@@ -1,0 +1,18 @@
+{
+  "dynamic": "strict",
+  "date_detection": false,
+  "properties": {
+    "accession": {
+      "type": "keyword"
+    },
+    "type": {
+      "type": "keyword"
+    },
+    "status": {
+      "type": "keyword"
+    },
+    "detail": {
+      "type": "keyword"
+    }
+  }
+}
