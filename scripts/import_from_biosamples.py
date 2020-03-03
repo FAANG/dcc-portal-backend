@@ -1,7 +1,7 @@
 from elasticsearch import Elasticsearch
 import datetime
 # from validate_sample_record import *
-from utils import remove_underscore_from_end_prefix, create_logging_instance, insert_into_es
+from utils import remove_underscore_from_end_prefix, create_logging_instance, insert_into_es, insert_es_log
 from get_all_etags import fetch_biosample_ids
 from columns import *
 from misc import *
@@ -146,14 +146,14 @@ def main(es_hosts, es_index_prefix):
     logger.info(f"There are {len(etags_es)} records with etags_es in ES")
     logger.info(f"Finish retrieving existing etags_es")
     logger.info("Importing FAANG data")
-    # when more than half biosample records not already stored in ES, take the batch import route
+    # when more than half BioSamples records not already stored in ES, take the batch import route
     # otherwise compare each record's etag to decide
     if len(etags_es) == 0 or len(fetch_biosample_ids())/len(etags_es) > 2:
         logger.info("By project route")
-        fetch_records_by_project()
+        fetch_records_by_project(es, es_index_prefix)
     else:
         logger.info("By individual route")
-        fetch_records_by_project_via_etag(etags_es)
+        fetch_records_by_project_via_etag(etags_es, es, es_index_prefix)
 
     if TOTAL_RECORDS_TO_UPDATE == 0:
         logger.critical("Did not obtain any records which need to be updated from BioSamples")
@@ -222,7 +222,7 @@ def get_existing_etags(host: str, es_index_prefix) -> Dict[str, str]:
     return results
 
 
-def fetch_records_by_project_via_etag(etags):
+def fetch_records_by_project_via_etag(etags, es, es_index_prefix):
     global TOTAL_RECORDS_TO_UPDATE
     counts = dict()
     today = date.today().strftime('%Y-%m-%d')
@@ -238,6 +238,8 @@ def fetch_records_by_project_via_etag(etags):
                 single = unify_field_names(fetch_single_record(data[0]))
                 single['etag'] = data[1]
                 if not check_is_faang(single):
+                    sample_type = determine_sample_type(single)
+                    insert_es_log(es, es_index_prefix, sample_type, single['accession'], 'error', 'no project=FAANG')
                     continue
                 material = single['characteristics']['Material'][0]['text']
                 if material in ALL_MATERIAL_TYPES and material != ALL_MATERIAL_TYPES[material]:
@@ -264,6 +266,9 @@ def fetch_records_by_project_via_etag(etags):
                 elif material == 'pool of specimens':
                     POOL_SPECIMEN[data[0]] = single
                     TOTAL_RECORDS_TO_UPDATE += 1
+                else:
+                    insert_es_log(es, es_index_prefix, 'sample', data[0], 'error',
+                                  f'not recognized material type {material}')
                 counts.setdefault(material, 0)
                 counts[material] += 1
     if TOTAL_RECORDS_TO_UPDATE == 0:
@@ -302,6 +307,12 @@ def unify_field_names(biosample):
 
 
 def find_essential_fields(biosample: Dict) -> bool:
+    """
+    check whether the essential field(s) exist in the sample record
+    currently, essential field list only includes Material
+    :param biosample: sample record
+    :return: true if all essential fields are found
+    """
     essential_fields = ['Material']
     for essential in essential_fields:
         if essential not in biosample['characteristics']:
@@ -309,7 +320,11 @@ def find_essential_fields(biosample: Dict) -> bool:
     return True
 
 
-def fetch_records_by_project():
+def fetch_records_by_project(es, es_index_prefix):
+    """
+    Get all FAANG-labelled sample records from BioSamples using the API
+    :return:
+    """
     global TOTAL_RECORDS_TO_UPDATE
     biosamples = list()
     counts = dict()
@@ -329,6 +344,9 @@ def fetch_records_by_project():
             else:
                 with open(ERROR_ESSENTIAL_FILENAME , 'a') as w:
                     w.write(f"{biosample['accession']}\n")
+                    sample_type = determine_sample_type(biosample)
+                    insert_es_log(es, es_index_prefix, sample_type, biosample['accession'], 'error',
+                                  'missing essential fields')
                     # to activate cronjob email notification
                     print(f"{biosample['accession']} does not have essential fields\n")
 
@@ -339,6 +357,8 @@ def fetch_records_by_project():
 
     for i, biosample in enumerate(biosamples):
         if not check_is_faang(biosample):
+            sample_type = determine_sample_type(biosample)
+            insert_es_log(es, es_index_prefix, sample_type, biosample['accession'], 'error', 'no project=FAANG')
             continue
         material = biosample['characteristics']['Material'][0]['text']
         if material in ALL_MATERIAL_TYPES and material != ALL_MATERIAL_TYPES[material]:
@@ -364,6 +384,24 @@ def fetch_records_by_project():
         TOTAL_RECORDS_TO_UPDATE += v
         logger.info(f"There are {v} {k} records needing update")
     logger.info(f"The sum is {TOTAL_RECORDS_TO_UPDATE}")
+
+
+def determine_sample_type(biosample):
+    """
+    Determine the sample type, organism, specimen or sample (no value provided)
+    currently only Material is treated as essential fields, i.e. sample type expected to be 'sample'
+    :param biosample: sample record
+    :return: sample type
+    """
+    sample_type = 'sample'
+    if 'Material' in biosample['characteristics']:
+        material = biosample['characteristics']['Material'][0]['text']
+        if material in ALL_MATERIAL_TYPES and material != ALL_MATERIAL_TYPES[material]:
+            material = ALL_MATERIAL_TYPES[material]
+        sample_type = material
+        if sample_type != 'organism':
+            sample_type = 'specimen'
+    return sample_type
 
 
 def fetch_single_record(biosample_id):
@@ -572,7 +610,7 @@ def process_specimens(es, es_index_prefix) -> None:
                     }
                 )
 
-        successful = add_organism(accession, organism_accession)
+        successful = add_organism(es, es_index_prefix, accession, organism_accession)
         if not successful:
             continue
 
@@ -583,11 +621,13 @@ def process_specimens(es, es_index_prefix) -> None:
         converted[accession] = doc_for_update
     import_into_es(converted, es_index_prefix, 'specimen', es)
 
-def add_organism(specimen_accession, organism_accession):
+def add_organism(es, es_index_prefix, specimen_accession, organism_accession):
     try:
         if organism_accession not in ORGANISM_FOR_SPECIMEN:
             add_organism_info_for_specimen(organism_accession, fetch_single_record(organism_accession))
     except:
+        insert_es_log(es,es_index_prefix, 'specimen', specimen_accession, 'error',
+                      f"No animal information for given organism accession {organism_accession}")
         print(f"Encounter error when trying to retrieve animal information by accesion {organism_accession} "
               f"for specimen {specimen_accession}")
         return False
@@ -637,7 +677,7 @@ def process_cell_specimens(es, es_index_prefix) -> None:
             for cell_type in item['characteristics']['cell type']:
                 doc_for_update['cellSpecimen']['cellType'].append(cell_type)
         doc_for_update['alternativeId'] = get_alternative_id(relatioships)
-        successful = add_organism(accession, organism_accession)
+        successful = add_organism(es, es_index_prefix, accession, organism_accession)
         if not successful:
             continue
         doc_for_update['organism'] = ORGANISM_FOR_SPECIMEN[organism_accession]
@@ -708,7 +748,7 @@ def process_cell_cultures(es, es_index_prefix) -> None:
             'ontologyTerms': check_existence(item, 'cell type', 'ontologyTerms')
         }
         doc_for_update['alternativeId'] = get_alternative_id(relationships)
-        successful = add_organism(accession, organism_accession)
+        successful = add_organism(es, es_index_prefix, accession, organism_accession)
         if not successful:
             continue
         doc_for_update['organism'] = ORGANISM_FOR_SPECIMEN[organism_accession]
@@ -1120,15 +1160,23 @@ def import_into_es(data, index_prefix, my_type, es):
     for biosample_id in sorted(list(data.keys())):
         INDEXED_SAMPLES[biosample_id] = 1
         es_doc = data[biosample_id]
+        error_messages = list()
+        status = ''
         for ruleset in RULESETS:
             if validation_results[ruleset]['detail'][biosample_id]['status'] == 'error':
+                status = 'error'
+                error_messages.append(f"error\t{ruleset}\t"
+                                      f"{validation_results[ruleset]['detail'][biosample_id]['message']}")
                 logger.error(f"{biosample_id}\t{my_type}\terror\t"
                              f"{ruleset}\t{validation_results[ruleset]['detail'][biosample_id]['message']}")
             else:
                 es_doc['standardMet'] = constants.STANDARDS[ruleset]
+                status = validation_results[ruleset]['detail'][biosample_id]['status']
+                error_messages.append(f"{status}\t{ruleset}\t"
+                                      f"{validation_results[ruleset]['detail'][biosample_id]['message']}")
                 break
         body = json.dumps(es_doc)
-
+        insert_es_log(es, index_prefix, my_type, biosample_id, status, ";".join(error_messages))
         insert_into_es(es, index_prefix, my_type, biosample_id, body)
 
 

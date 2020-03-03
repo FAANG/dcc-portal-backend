@@ -64,6 +64,25 @@ def insert_into_es(es, es_index_prefix, doc_type, doc_id, body):
         logger.error(f"Error when try to insert into index {es_index_prefix}_{doc_type}: " + str(e.args))
 
 
+def insert_es_log(es, es_index_prefix, doc_type, doc_id, status, detail):
+    """
+    insert a log entry for the data record into ES
+    :param es: elasticsearch python library instance
+    :param es_index_prefix: form the string <es_index_prefix>_log, which is the index tge log entry will be written into
+    :param doc_type: the type of the data record
+    :param doc_id: the id of the data record
+    :param status: the status of the data record during importation, one of 'pass', 'warning', 'error'
+    :param detail: the detail of the import log, empty if the status is pass
+    """
+    doc = {
+        'accession': doc_id,
+        'type': doc_type,
+        'status': status,
+        'detail': detail
+    }
+    insert_into_es(es, es_index_prefix, 'log', doc_id, doc)
+
+
 def get_record_ids(host: str, es_index_prefix: str, data_type: str, only_faang=True) -> Set[str]:
     """
     Get the id list of existing records stored in the Elastic Search
