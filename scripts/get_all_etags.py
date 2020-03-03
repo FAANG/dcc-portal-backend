@@ -4,10 +4,14 @@ import requests
 from datetime import date
 ETAG = []
 ETAG_IDS = []
-
+ACCESSION_API = 'https://www.ebi.ac.uk/biosamples/accessions?filter=attr:project:FAANG&size=100000'
 
 def main():
     biosample_ids = fetch_biosample_ids()
+    if len(biosample_ids) < 5000:
+        print(f"The number of returned BioSamples accessions is {len(biosample_ids)}, "
+              f"less than 5000 and very suspicious.\n"
+              f"Please manually check {ACCESSION_API}")
     asyncio.get_event_loop().run_until_complete(fetch_all_etags(biosample_ids))
     if len(biosample_ids) != len(ETAG_IDS):
         for my_id in biosample_ids:
@@ -36,7 +40,7 @@ async def fetch_etag(session, my_id):
 
 
 def fetch_biosample_ids():
-    return requests.get("https://www.ebi.ac.uk/biosamples/accessions?project=FAANG&limit=100000").json()
+    return requests.get(ACCESSION_API).json()
 
 
 if __name__ == "__main__":
