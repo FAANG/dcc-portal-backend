@@ -23,6 +23,9 @@
     "versionLastStandardMet": {
       "type": "keyword"
     },
+    "libraryName": {
+      "type": "keyword"
+    },
     "sampleStorage": {
       "type": "keyword"
     },

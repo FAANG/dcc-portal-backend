@@ -227,6 +227,7 @@ def main(es_hosts, es_index_prefix):
                     'secondaryProject': record['secondary_project'],
                     'assayType': assay_type,
                     'experimentTarget': experiment_target,
+                    'libraryName': check_existsence(record, 'library_name'),
                     'sampleStorage': check_existsence(record, 'sample_storage'),
                     'sampleStorageProcessing': record['sample_storage_processing'],
                     'samplingToPreparationInterval': {
@@ -699,6 +700,14 @@ def get_known_errors():
 
 
 def replace_alias_with_accession(study: str, to_be_replaced: str) -> str:
+    """
+    During the ENA submission, the alias used in the fields other than alias would not be replaced with the accession,
+    for example ISU-USDA-FAANG-AlvMac-ChIPseq-C10CON2H-27me3 used in the control experiment field would not be replaced
+    with the accession ERX3212573 in the same study
+    :param study: the ENA study where the alias should exist
+    :param to_be_replaced: the alias
+    :return: the replaced accession, if the given to_be_replaced is a valid accession, return that value straightaway
+    """
     match = re.search(r'^(S|E|D)RX\d+$', to_be_replaced)
     # NOTE: Does not check whether the accession exists or not which should be done with validation service
     if match:  # valid experiment accessions.
