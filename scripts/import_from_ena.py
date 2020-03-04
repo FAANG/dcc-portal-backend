@@ -8,7 +8,7 @@ import click
 from constants import TECHNOLOGIES, STANDARDS, STAGING_NODE1, STANDARD_LEGACY, STANDARD_FAANG
 from elasticsearch import Elasticsearch
 from utils import determine_file_and_source, check_existsence, remove_underscore_from_end_prefix, \
-    create_logging_instance, insert_into_es, generate_ena_api_endpoint
+    create_logging_instance, insert_into_es, generate_ena_api_endpoint, insert_es_log
 import validate_experiment_record
 import validate_record
 import sys
@@ -45,7 +45,6 @@ def main(es_hosts, es_index_prefix):
     :param es_index_prefix: the index prefix points to a particular version of data
     :return:
     """
-
     hosts = es_hosts.split(";")
     logger.info("Command line parameters")
     logger.info("Hosts: "+str(hosts))
@@ -63,6 +62,7 @@ def main(es_hosts, es_index_prefix):
         sys.exit(1)
     known_errors = get_known_errors()
     new_errors = dict()
+    datasets_missing_specimens = dict()
 
     ruleset_version = validate_record.ValidateRecord.get_ruleset_version()
     logger.info(f"Current experiment ruleset version: {ruleset_version}")
@@ -77,8 +77,9 @@ def main(es_hosts, es_index_prefix):
     studies_from_api = dict()
     exps_in_dataset = dict()
     for record in data:
-        studies_from_api.setdefault(record['study_accession'], 0)
-        studies_from_api[record['study_accession']] += 1
+        dataset_id = record['study_accession']
+        studies_from_api.setdefault(dataset_id, 0)
+        studies_from_api[dataset_id] += 1
         library_strategy = record['library_strategy']
         assay_type = record['assay_type']
         experiment_target = record['experiment_target']
@@ -149,11 +150,13 @@ def main(es_hosts, es_index_prefix):
             # if the ena records contains biosample records which have not been in FAANG data portal (biosample_ids)
             # and not been reported before (known_errors) then these records need to be reported
             if specimen_biosample_id not in biosample_ids:
-                if (record['study_accession'] not in known_errors) \
-                        or (record['study_accession'] in known_errors
-                            and specimen_biosample_id not in known_errors[record['study_accession']]):
-                    new_errors.setdefault(record['study_accession'], {})
-                    new_errors[record['study_accession']][specimen_biosample_id] = 1
+                datasets_missing_specimens.setdefault(dataset_id, list())
+                datasets_missing_specimens[dataset_id].append(specimen_biosample_id)
+                if (dataset_id not in known_errors) \
+                        or (dataset_id in known_errors
+                            and specimen_biosample_id not in known_errors[dataset_id]):
+                    new_errors.setdefault(dataset_id, {})
+                    new_errors[dataset_id][specimen_biosample_id] = 1
                 continue
             fullname = file.split("/")[-1]
             filename = fullname.split(".")[0]
@@ -192,7 +195,7 @@ def main(es_hosts, es_index_prefix):
                     'sequencingLongitude': record['sequencing_longitude']
                 },
                 'study': {
-                    'accession': record['study_accession'],
+                    'accession': dataset_id,
                     'alias': record['study_alias'],
                     'title': record['study_title'],
                     # TODO it is mandatory field
@@ -331,10 +334,10 @@ def main(es_hosts, es_index_prefix):
                         section_info['chipTarget'] = record['chip_target']
                         original_control_experiment = record['control_experiment']
                         converted_control_experiment = \
-                            replace_alias_with_accession(record['study_accession'], original_control_experiment)
+                            replace_alias_with_accession(dataset_id, original_control_experiment)
                         if not converted_control_experiment:
                             logger.error(f"given control experiment value {original_control_experiment} could not be "
-                                         f"found with the same study {record['study_accession']} "
+                                         f"found with the same study {dataset_id} "
                                          f"for experiment {exp_id}")
                             continue
                         section_info['controlExperiment'] = converted_control_experiment
@@ -460,7 +463,6 @@ def main(es_hosts, es_index_prefix):
             # if exp_id not in experiments:
             # dataset (study) has mutliple experiments/runs/files/specimens_list so collection information into datasets
             # and process it after iteration of all files
-            dataset_id = record['study_accession']
             exps_in_dataset[exp_id] = dataset_id
             es_doc_dataset = dict()
             if dataset_id in datasets:
@@ -540,12 +542,12 @@ def main(es_hosts, es_index_prefix):
     exp_validation = dict()
     for exp_id in sorted(experiments.keys()):
         exp_es = experiments[exp_id]
+        error_messages = list()
+        status = ''
         for ruleset in RULESETS:
             if validation_results[ruleset]['detail'][exp_id]['status'] == 'error':
-                # TODO logging to error
-                # logger.info(f"{exp_id}\t{exps_in_dataset[exp_id]}\tExperiment\terror\t"
-                #            f"{validation_results[ruleset]['detail'][exp_id]['message']}")
-                pass
+                status = 'error'
+                error_messages.append(f"error\t{ruleset}\t{validation_results[ruleset]['detail'][exp_id]['message']}")
             else:
                 # only indexing when meeting standard
                 exp_validation[exp_id] = STANDARDS[ruleset]
@@ -555,8 +557,13 @@ def main(es_hosts, es_index_prefix):
                 body = json.dumps(exp_es)
                 insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
 
+                status = validation_results[ruleset]['detail'][exp_id]['status']
+                error_messages.append(f"{status}\t{ruleset}\t"
+                                      f"{validation_results[ruleset]['detail'][exp_id]['message']}")
+
                 # index into ES so break the loop
                 break
+        insert_es_log(es, es_index_prefix, 'experiment', exp_id, status, ";".join(error_messages))
 
     logger.info('Start to import Files')
     for file_id in files_dict.keys():
@@ -594,6 +601,12 @@ def main(es_hosts, es_index_prefix):
                 pass
         num_valid_exps = len(only_valid_exps.keys())
         if num_valid_exps == 0:
+            msg = 'no valid experiments to be imported'
+            if dataset_id in datasets_missing_specimens:
+                missing_specimens = datasets_missing_specimens[dataset_id]
+                msg = msg + "; specimens " + ",".join(missing_specimens) + " missing"
+                datasets_missing_specimens.pop(dataset_id)
+            insert_es_log(es, es_index_prefix, 'dataset', dataset_id, 'warning', msg)
             logger.warning(f"dataset {dataset_id} has no valid experiments, skipped.")
             continue
         es_doc_dataset['standardMet'] = dataset_standard
@@ -636,6 +649,11 @@ def main(es_hosts, es_index_prefix):
             for biosample in sorted(tmp.keys()):
                 logger.warning(f"{biosample} from {study} does not exist in BioSamples at the moment\n")
                 w.write(f"{study}\t{biosample}\n")
+
+    for dataset_id in datasets_missing_specimens:
+        missing_specimens = datasets_missing_specimens[dataset_id]
+        msg = "specimens " + ",".join(missing_specimens) + " missing"
+        insert_es_log(es, es_index_prefix, 'dataset', dataset_id, 'warning', msg)
 
 
 def get_ena_data():
