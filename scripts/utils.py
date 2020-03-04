@@ -334,9 +334,13 @@ def generate_ena_api_endpoint(result: str, data_portal: str, fields: str, option
 def process_validation_result(analyses, es, es_index_prefix, validation_results, ruleset_version, rulesets, logger_in):
     analysis_validation = dict()
     for analysis_accession, analysis_es in analyses.items():
+        status = ''
+        msgs = list()
         for ruleset in rulesets:
             if validation_results[ruleset]['detail'][analysis_accession]['status'] == 'error':
+                status = 'error'
                 message = validation_results[ruleset]['detail'][analysis_accession]['message']
+                msgs.append(f"error\t{ruleset}\t{message}")
                 logger_in.info(f"{analysis_accession}\tAnalysis\terror\t{message}")
             else:
                 # only indexing when meeting standard
@@ -364,5 +368,9 @@ def process_validation_result(analyses, es, es_index_prefix, validation_results,
                 analysis_es.pop('urls')
                 body = json.dumps(analysis_es)
                 insert_into_es(es, es_index_prefix, 'analysis', analysis_accession, body)
+                status = validation_results[ruleset]['detail'][analysis_accession]['status']
+                message = validation_results[ruleset]['detail'][analysis_accession]['message']
+                msgs.append(f"{status}\t{ruleset}\t{message}")
                 # index into ES so break the loop
                 break
+        insert_es_log(es, es_index_prefix, 'analysis', analysis_accession, status, ";".join(msgs))
