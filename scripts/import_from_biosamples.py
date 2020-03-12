@@ -1,12 +1,11 @@
 from elasticsearch import Elasticsearch
-import datetime
-# from validate_sample_record import *
-from utils import remove_underscore_from_end_prefix, create_logging_instance, insert_into_es, insert_es_log
+from datetime import datetime
+from utils import remove_underscore_from_end_prefix, insert_into_es, insert_es_log, \
+    insert_es_system_log, get_line_number
 from get_all_etags import fetch_biosample_ids
 from columns import *
 from misc import *
 from typing import Dict
-from datetime import date
 import validate_organism_record
 import validate_specimen_record
 import requests
@@ -44,8 +43,6 @@ MATERIAL_TYPES = {
 }
 ALL_MATERIAL_TYPES = dict()
 
-logger = create_logging_instance('import_biosamples')
-
 
 @click.command()
 @click.option(
@@ -71,10 +68,15 @@ def main(es_hosts, es_index_prefix):
     """
     global ETAGS_CACHE
     global ALL_MATERIAL_TYPES
-    today = date.today().strftime('%Y-%m-%d')
+    # initialize ES first as needed to do logging
+    hosts = es_hosts.split(";")
+    es = Elasticsearch(hosts)
+
+    today = datetime.now().strftime('%Y-%m-%d')
     cache_filename = f"etag_list_{today}.txt"
     if not os.path.isfile(cache_filename):
-        logger.info("Could not find today etag cache file. Generating")
+        insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                             'Could not find today etag cache file. Generating')
         os.system("python3 get_all_etags.py")
     try:
         with open(cache_filename, 'r') as f:
@@ -83,7 +85,8 @@ def main(es_hosts, es_index_prefix):
                 data = line.split("\t")
                 ETAGS_CACHE[data[0]] = data[1]
     except FileNotFoundError:
-        logger.error(f"Could not find the local etag cache file etag_list_{today}.txt")
+        insert_es_system_log(es, 'import_biosamples', 'error', get_line_number(),
+                             f'Could not find the local etag cache file etag_list_{today}.txt')
         sys.exit(1)
     try:
         with open(ERROR_ESSENTIAL_FILENAME, 'r') as f:
@@ -128,54 +131,59 @@ def main(es_hosts, es_index_prefix):
             for term in terms:
                 ALL_MATERIAL_TYPES[term['label']] = base_material
 
-    hosts = es_hosts.split(";")
-    logger.info("Command line parameters")
-    logger.info("Hosts: "+str(hosts))
+    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                         'Command line parameters')
+    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                         'Hosts: '+str(hosts))
+
     es_index_prefix = remove_underscore_from_end_prefix(es_index_prefix)
     if es_index_prefix:
-        logger.info("Index_prefix:"+es_index_prefix)
+        insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), f'Index_prefix: {es_index_prefix}')
 
     ruleset_version = validate_organism_record.ValidateOrganismRecord.get_ruleset_version()
-    es = Elasticsearch(hosts)
+    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'The program starts')
+    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                         f'Current ruleset version is {ruleset_version}')
+    etags_es: Dict[str, str] = get_existing_etags(hosts[0], es, es_index_prefix)
 
-    logger.info(f"The program starts")
-    logger.info(f"Current ruleset version is {ruleset_version}")
+    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                         f"There are {len(etags_es)} records with etags_es in ES")
+    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                         'Finish retrieving existing etags_es')
+    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                         'Importing FAANG data')
 
-    etags_es: Dict[str, str] = get_existing_etags(hosts[0], es_index_prefix)
-
-    logger.info(f"There are {len(etags_es)} records with etags_es in ES")
-    logger.info(f"Finish retrieving existing etags_es")
-    logger.info("Importing FAANG data")
     # when more than half BioSamples records not already stored in ES, take the batch import route
     # otherwise compare each record's etag to decide
     if len(etags_es) == 0 or len(fetch_biosample_ids())/len(etags_es) > 2:
-        logger.info("By project route")
+        insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'By project route')
         fetch_records_by_project(es, es_index_prefix)
     else:
-        logger.info("By individual route")
+        insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'By individual route')
         fetch_records_by_project_via_etag(etags_es, es, es_index_prefix)
 
     if TOTAL_RECORDS_TO_UPDATE == 0:
-        logger.critical("Did not obtain any records which need to be updated from BioSamples")
+        insert_es_system_log(es, 'import_biosamples', 'critical', get_line_number(),
+                             'Did not obtain any records which need to be updated from BioSamples')
         sys.exit(0)
 
     # the order of importation could not be changed due to derive from
-    logger.info("Indexing organism starts")
+    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Indexing organism starts')
     process_organisms(es, es_index_prefix)
 
-    logger.info("Indexing specimen from organism starts")
+    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Indexing specimen from organism starts')
     process_specimens(es, es_index_prefix)
 
-    logger.info("Indexing cell specimens starts")
+    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Indexing cell specimen starts')
     process_cell_specimens(es, es_index_prefix)
 
-    logger.info("Indexing cell culture starts")
+    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Indexing cell culture starts')
     process_cell_cultures(es, es_index_prefix)
 
-    logger.info("Indexing pool of specimen starts")
+    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Indexing pool of specimen starts')
     process_pool_specimen(es, es_index_prefix)
 
-    logger.info("Indexing cell line starts")
+    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Indexing cell line starts')
     process_cell_lines(es, es_index_prefix)
 
     all_organism_list = list(ORGANISM.keys())
@@ -195,13 +203,14 @@ def main(es_hosts, es_index_prefix):
         union[acc]['source'].append('specimen')
     for acc in union:
         if union[acc]['count'] == 1:
-            logger.warning(f"{acc} only in source {union[acc]['source']}")
+            insert_es_system_log(es, 'import_biosamples', 'warning', get_line_number(),
+                                 f"{acc} only in source {union[acc]['source']}")
     clean_elasticsearch(f'{es_index_prefix}_specimen', es)
     clean_elasticsearch(f'{es_index_prefix}_organism', es)
-    logger.info(f"Program ends")
+    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Program ends')
 
 
-def get_existing_etags(host: str, es_index_prefix) -> Dict[str, str]:
+def get_existing_etags(host: str, es, es_index_prefix) -> Dict[str, str]:
     """
     Function gets etags from organisms and specimens in elastic search
     :return: list of etags
@@ -217,7 +226,8 @@ def get_existing_etags(host: str, es_index_prefix) -> Dict[str, str]:
                 if 'etag' in result['_source']:
                     results[result['_source']['biosampleId']] = result['_source']['etag']
         except KeyError:
-            logger.error(f"Failing to get hits from result {url}")
+            insert_es_system_log(es, 'import_biosamples', 'error', get_line_number(),
+                                 f'Failing to get hits from result {url}')
             exit()
     return results
 
@@ -225,7 +235,7 @@ def get_existing_etags(host: str, es_index_prefix) -> Dict[str, str]:
 def fetch_records_by_project_via_etag(etags, es, es_index_prefix):
     global TOTAL_RECORDS_TO_UPDATE
     counts = dict()
-    today = date.today().strftime('%Y-%m-%d')
+    today = datetime.now().strftime('%Y-%m-%d')
     with open("etag_list_{}.txt".format(today), 'r') as f:
         for line in f:
             line = line.rstrip()
@@ -272,17 +282,22 @@ def fetch_records_by_project_via_etag(etags, es, es_index_prefix):
                 counts.setdefault(material, 0)
                 counts[material] += 1
     if TOTAL_RECORDS_TO_UPDATE == 0:
-        logger.info("All records have not been modified since last importation.")
-        logger.info(f"Exit program at {datetime.datetime.now()}")
+        insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                             'All records have not been modified since last importation.')
+        insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                             f'Exit program at {datetime.now()}')
         if counts:
-            logger.warning("Some records with wrong material type have been found")
-            logger.warning(counts)
+            insert_es_system_log(es, 'import_biosamples', 'warning', get_line_number(),
+                                 f'Some records with wrong material type have been found: ({counts})')
         sys.exit(0)
     for k, v in counts.items():
-        logger.info(f"There are {v} {k} records needing update")
+        insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                             f'There are {v} {k} records needing update')
 
-    logger.info(f"The sum is {TOTAL_RECORDS_TO_UPDATE}")
-    logger.info(f"Finish comparing etags and retrieving necessary records")
+    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                         f'The total number of records to be updated is {TOTAL_RECORDS_TO_UPDATE}')
+    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                         f'Finish comparing etags and retrieving necessary records')
 
 
 def unify_field_names(biosample):
@@ -330,9 +345,10 @@ def fetch_records_by_project(es, es_index_prefix):
     counts = dict()
 
     url = 'https://www.ebi.ac.uk/biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG'
-    logger.info("Size of local etag cache: "+str(len(ETAGS_CACHE)))
+    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                         f'Size of local etag cache: {str(len(ETAGS_CACHE))}')
     while url:
-        logger.info(f"Fetching data from {url}")
+        insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), f'Fetching data from {url}')
         response = requests.get(url).json()
         for biosample in response['_embedded']['samples']:
             if biosample['accession'] in known_missing_essential_records:
@@ -382,8 +398,13 @@ def fetch_records_by_project(es, es_index_prefix):
         counts[material] += 1
     for k, v in counts.items():
         TOTAL_RECORDS_TO_UPDATE += v
-        logger.info(f"There are {v} {k} records needing update")
-    logger.info(f"The sum is {TOTAL_RECORDS_TO_UPDATE}")
+        insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                             f'There are {v} {k} records needing update')
+        # logger.info(f"There are {v} {k} records needing update")
+
+    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                         f'The total number of records to be updated is {TOTAL_RECORDS_TO_UPDATE}')
+    # logger.info(f"The sum is {TOTAL_RECORDS_TO_UPDATE}")
 
 
 def determine_sample_type(biosample):
@@ -620,6 +641,7 @@ def process_specimens(es, es_index_prefix) -> None:
         ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
         converted[accession] = doc_for_update
     import_into_es(converted, es_index_prefix, 'specimen', es)
+
 
 def add_organism(es, es_index_prefix, specimen_accession, organism_accession):
     try:
@@ -1014,7 +1036,8 @@ def extract_custom_field(doc, item, material_type):
     """
     characteristics = item['characteristics'].copy()
     if material_type not in known_columns:
-        logger.error(f"Please update known_columns constants in columns.py for missing material type {material_type}")
+        # to invoke cron job notification
+        print(f"Please update known_columns constants in columns.py for missing material type {material_type}")
         sys.exit(0)
     for column in common_columns + known_columns[material_type]:
         if column in characteristics:
@@ -1056,7 +1079,6 @@ def get_health_status(item):
     elif 'health status at collection' in item['characteristics']:
         key = 'health status at collection'
     else:
-        logger.debug("Health status was not provided")
         return health_status
     for status in item['characteristics'][key]:
         health_status.append(
@@ -1167,8 +1189,6 @@ def import_into_es(data, index_prefix, my_type, es):
                 status = 'error'
                 error_messages.append(f"error\t{ruleset}\t"
                                       f"{validation_results[ruleset]['detail'][biosample_id]['message']}")
-                logger.error(f"{biosample_id}\t{my_type}\terror\t"
-                             f"{ruleset}\t{validation_results[ruleset]['detail'][biosample_id]['message']}")
             else:
                 es_doc['standardMet'] = constants.STANDARDS[ruleset]
                 status = validation_results[ruleset]['detail'][biosample_id]['status']

@@ -8,6 +8,8 @@ import requests
 from constants import STANDARDS, STANDARD_FAANG, TYPES
 from elasticsearch import Elasticsearch
 from misc import convert_readable
+from datetime import datetime
+from inspect import currentframe
 
 
 def create_logging_instance(name, level=logging.INFO, to_file=True):
@@ -39,6 +41,24 @@ def create_logging_instance(name, level=logging.INFO, to_file=True):
     new_logger.addHandler(f_handler)
     new_logger.setLevel(level)
     return new_logger
+
+
+def insert_es_system_log(es, script, level, line, detail):
+    now = datetime.now()
+
+    doc = {
+        'script': script,
+        'level': level,
+        'timestamp': now,
+        'line': line,
+        'detail': detail
+    }
+    es.create(index='sys_log', doc_type='_doc', body=doc, id=f'{script}-{now}', refresh=True)
+
+
+def get_line_number():
+    cf = currentframe()
+    return cf.f_back.f_lineno
 
 
 logger = create_logging_instance('utils')
@@ -374,3 +394,5 @@ def process_validation_result(analyses, es, es_index_prefix, validation_results,
                 # index into ES so break the loop
                 break
         insert_es_log(es, es_index_prefix, 'analysis', analysis_accession, status, ";".join(msgs))
+
+
