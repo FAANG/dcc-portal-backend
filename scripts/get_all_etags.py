@@ -40,7 +40,8 @@ async def fetch_etag(session, my_id):
 
 
 def fetch_biosample_ids():
-    return requests.get(ACCESSION_API).json()
+    result = requests.get(ACCESSION_API).json()
+    return result['_embedded']['accessions']
 
 
 if __name__ == "__main__":
