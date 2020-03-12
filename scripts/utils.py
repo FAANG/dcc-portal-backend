@@ -43,17 +43,22 @@ def create_logging_instance(name, level=logging.INFO, to_file=True):
     return new_logger
 
 
-def insert_es_system_log(es, script, level, line, detail):
+def write_system_log(es, script, level: str, line, detail, to_es=True):
     now = datetime.now()
-
-    doc = {
-        'script': script,
-        'level': level,
-        'timestamp': now,
-        'line': line,
-        'detail': detail
-    }
-    es.create(index='sys_log', doc_type='_doc', body=doc, id=f'{script}-{now}', refresh=True)
+    if to_es:
+        tmp = es.count(index='sys_log')
+        current_count = tmp['count'] + 1
+        doc = {
+            'serial': current_count,
+            'script': script,
+            'level': level,
+            'timestamp': now,
+            'line': line,
+            'detail': detail
+        }
+        es.create(index='sys_log', doc_type='_doc', body=doc, id=f'{script}-{now}', refresh=True)
+    else:
+        print(f'{now} - {script} - {level.upper()} - line {line} - {detail}')
 
 
 def get_line_number():

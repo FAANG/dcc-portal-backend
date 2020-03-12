@@ -1,7 +1,7 @@
 from elasticsearch import Elasticsearch
 from datetime import datetime
 from utils import remove_underscore_from_end_prefix, insert_into_es, insert_es_log, \
-    insert_es_system_log, get_line_number
+    write_system_log, get_line_number
 from get_all_etags import fetch_biosample_ids
 from columns import *
 from misc import *
@@ -32,6 +32,7 @@ TOTAL_RECORDS_TO_UPDATE = 0
 ETAGS_CACHE = dict()
 ERROR_ESSENTIAL_FILENAME = 'biosamples_without_essential_fields.txt'
 known_missing_essential_records = set()
+to_es_flag = True
 
 MATERIAL_TYPES = {
     "organism": "OBI_0100026",
@@ -58,8 +59,14 @@ ALL_MATERIAL_TYPES = dict()
          'faang_build_1_ then the indices will be faang_build_1_organism etc.'
          'If not provided, then work on the aliases'
 )
+@click.option(
+    '--to_es',
+    default="true",
+    help='Specify how to deal with the system log either writing to es or printing out. '
+         'It only allows two values: true (to es) or false (print to the terminal)'
+)
 # TODO check single or double quotes
-def main(es_hosts, es_index_prefix):
+def main(es_hosts, es_index_prefix, to_es: str):
     """
     Main function that will import data from biosamples
     :param es_hosts: elasticsearch hosts where the data import into
@@ -68,15 +75,24 @@ def main(es_hosts, es_index_prefix):
     """
     global ETAGS_CACHE
     global ALL_MATERIAL_TYPES
+    global to_es_flag
     # initialize ES first as needed to do logging
     hosts = es_hosts.split(";")
     es = Elasticsearch(hosts)
 
+    if to_es.lower() == 'false':
+        to_es_flag = False
+    elif to_es.lower() == 'true':
+        pass
+    else:
+        print('to_es parameter can only accept value of true or false')
+        exit(1)
+
     today = datetime.now().strftime('%Y-%m-%d')
     cache_filename = f"etag_list_{today}.txt"
     if not os.path.isfile(cache_filename):
-        insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
-                             'Could not find today etag cache file. Generating')
+        write_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                         'Could not find today etag cache file. Generating', to_es_flag)
         os.system("python3 get_all_etags.py")
     try:
         with open(cache_filename, 'r') as f:
@@ -85,8 +101,8 @@ def main(es_hosts, es_index_prefix):
                 data = line.split("\t")
                 ETAGS_CACHE[data[0]] = data[1]
     except FileNotFoundError:
-        insert_es_system_log(es, 'import_biosamples', 'error', get_line_number(),
-                             f'Could not find the local etag cache file etag_list_{today}.txt')
+        write_system_log(es, 'import_biosamples', 'error', get_line_number(),
+                         f'Could not find the local etag cache file etag_list_{today}.txt', to_es_flag)
         sys.exit(1)
     try:
         with open(ERROR_ESSENTIAL_FILENAME, 'r') as f:
@@ -131,59 +147,58 @@ def main(es_hosts, es_index_prefix):
             for term in terms:
                 ALL_MATERIAL_TYPES[term['label']] = base_material
 
-    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
-                         'Command line parameters')
-    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
-                         'Hosts: '+str(hosts))
+    write_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Command line parameters', to_es_flag)
+    write_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Hosts: ' + str(hosts), to_es_flag)
 
     es_index_prefix = remove_underscore_from_end_prefix(es_index_prefix)
     if es_index_prefix:
-        insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), f'Index_prefix: {es_index_prefix}')
+        write_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                         f'Index_prefix: {es_index_prefix}', to_es_flag)
 
     ruleset_version = validate_organism_record.ValidateOrganismRecord.get_ruleset_version()
-    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'The program starts')
-    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
-                         f'Current ruleset version is {ruleset_version}')
+    write_system_log(es, 'import_biosamples', 'info', get_line_number(), 'The program starts', to_es_flag)
+    write_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                     f'Current ruleset version is {ruleset_version}', to_es_flag)
     etags_es: Dict[str, str] = get_existing_etags(hosts[0], es, es_index_prefix)
 
-    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
-                         f"There are {len(etags_es)} records with etags_es in ES")
-    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
-                         'Finish retrieving existing etags_es')
-    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
-                         'Importing FAANG data')
+    write_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                     f"There are {len(etags_es)} records with etags_es in ES", to_es_flag)
+    write_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                     'Finish retrieving existing etags_es', to_es_flag)
+    write_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Importing FAANG data', to_es_flag)
 
     # when more than half BioSamples records not already stored in ES, take the batch import route
     # otherwise compare each record's etag to decide
     if len(etags_es) == 0 or len(fetch_biosample_ids())/len(etags_es) > 2:
-        insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'By project route')
+        write_system_log(es, 'import_biosamples', 'info', get_line_number(), 'By project route', to_es_flag)
         fetch_records_by_project(es, es_index_prefix)
     else:
-        insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'By individual route')
+        write_system_log(es, 'import_biosamples', 'info', get_line_number(), 'By individual route', to_es_flag)
         fetch_records_by_project_via_etag(etags_es, es, es_index_prefix)
 
     if TOTAL_RECORDS_TO_UPDATE == 0:
-        insert_es_system_log(es, 'import_biosamples', 'critical', get_line_number(),
-                             'Did not obtain any records which need to be updated from BioSamples')
+        write_system_log(es, 'import_biosamples', 'critical', get_line_number(),
+                         'Did not obtain any records which need to be updated from BioSamples', to_es_flag)
         sys.exit(0)
 
     # the order of importation could not be changed due to derive from
-    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Indexing organism starts')
+    write_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Indexing organism starts', to_es_flag)
     process_organisms(es, es_index_prefix)
 
-    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Indexing specimen from organism starts')
+    write_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                     'Indexing specimen from organism starts', to_es_flag)
     process_specimens(es, es_index_prefix)
 
-    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Indexing cell specimen starts')
+    write_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Indexing cell specimen starts', to_es_flag)
     process_cell_specimens(es, es_index_prefix)
 
-    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Indexing cell culture starts')
+    write_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Indexing cell culture starts', to_es_flag)
     process_cell_cultures(es, es_index_prefix)
 
-    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Indexing pool of specimen starts')
+    write_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Indexing pool of specimen starts', to_es_flag)
     process_pool_specimen(es, es_index_prefix)
 
-    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Indexing cell line starts')
+    write_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Indexing cell line starts', to_es_flag)
     process_cell_lines(es, es_index_prefix)
 
     all_organism_list = list(ORGANISM.keys())
@@ -203,11 +218,11 @@ def main(es_hosts, es_index_prefix):
         union[acc]['source'].append('specimen')
     for acc in union:
         if union[acc]['count'] == 1:
-            insert_es_system_log(es, 'import_biosamples', 'warning', get_line_number(),
-                                 f"{acc} only in source {union[acc]['source']}")
+            write_system_log(es, 'import_biosamples', 'warning', get_line_number(),
+                             f"{acc} only in source {union[acc]['source']}", to_es_flag)
     clean_elasticsearch(f'{es_index_prefix}_specimen', es)
     clean_elasticsearch(f'{es_index_prefix}_organism', es)
-    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Program ends')
+    write_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Program ends', to_es_flag)
 
 
 def get_existing_etags(host: str, es, es_index_prefix) -> Dict[str, str]:
@@ -226,8 +241,8 @@ def get_existing_etags(host: str, es, es_index_prefix) -> Dict[str, str]:
                 if 'etag' in result['_source']:
                     results[result['_source']['biosampleId']] = result['_source']['etag']
         except KeyError:
-            insert_es_system_log(es, 'import_biosamples', 'error', get_line_number(),
-                                 f'Failing to get hits from result {url}')
+            write_system_log(es, 'import_biosamples', 'error', get_line_number(),
+                             f'Failing to get hits from result {url}', to_es_flag)
             exit()
     return results
 
@@ -282,22 +297,21 @@ def fetch_records_by_project_via_etag(etags, es, es_index_prefix):
                 counts.setdefault(material, 0)
                 counts[material] += 1
     if TOTAL_RECORDS_TO_UPDATE == 0:
-        insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
-                             'All records have not been modified since last importation.')
-        insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
-                             f'Exit program at {datetime.now()}')
+        write_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                         'All records have not been modified since last importation.', to_es_flag)
+        write_system_log(es, 'import_biosamples', 'info', get_line_number(), 'Exit program', to_es_flag)
         if counts:
-            insert_es_system_log(es, 'import_biosamples', 'warning', get_line_number(),
-                                 f'Some records with wrong material type have been found: ({counts})')
+            write_system_log(es, 'import_biosamples', 'warning', get_line_number(),
+                             f'Some records with wrong material type have been found: ({counts})', to_es_flag)
         sys.exit(0)
     for k, v in counts.items():
-        insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
-                             f'There are {v} {k} records needing update')
+        write_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                         f'There are {v} {k} records needing update', to_es_flag)
 
-    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
-                         f'The total number of records to be updated is {TOTAL_RECORDS_TO_UPDATE}')
-    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
-                         f'Finish comparing etags and retrieving necessary records')
+    write_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                     f'The total number of records to be updated is {TOTAL_RECORDS_TO_UPDATE}', to_es_flag)
+    write_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                     f'Finish comparing etags and retrieving necessary records', to_es_flag)
 
 
 def unify_field_names(biosample):
@@ -345,10 +359,10 @@ def fetch_records_by_project(es, es_index_prefix):
     counts = dict()
 
     url = 'https://www.ebi.ac.uk/biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG'
-    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
-                         f'Size of local etag cache: {str(len(ETAGS_CACHE))}')
+    write_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                     f'Size of local etag cache: {str(len(ETAGS_CACHE))}', to_es_flag)
     while url:
-        insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(), f'Fetching data from {url}')
+        write_system_log(es, 'import_biosamples', 'info', get_line_number(), f'Fetching data from {url}', to_es_flag)
         response = requests.get(url).json()
         for biosample in response['_embedded']['samples']:
             if biosample['accession'] in known_missing_essential_records:
@@ -398,12 +412,12 @@ def fetch_records_by_project(es, es_index_prefix):
         counts[material] += 1
     for k, v in counts.items():
         TOTAL_RECORDS_TO_UPDATE += v
-        insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
-                             f'There are {v} {k} records needing update')
+        write_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                         f'There are {v} {k} records needing update', to_es_flag)
         # logger.info(f"There are {v} {k} records needing update")
 
-    insert_es_system_log(es, 'import_biosamples', 'info', get_line_number(),
-                         f'The total number of records to be updated is {TOTAL_RECORDS_TO_UPDATE}')
+    write_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                     f'The total number of records to be updated is {TOTAL_RECORDS_TO_UPDATE}', to_es_flag)
     # logger.info(f"The sum is {TOTAL_RECORDS_TO_UPDATE}")
 
 
