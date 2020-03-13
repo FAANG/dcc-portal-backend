@@ -8,7 +8,7 @@ import click
 from constants import TECHNOLOGIES, STANDARDS, STAGING_NODE1, STANDARD_LEGACY, STANDARD_FAANG
 from elasticsearch import Elasticsearch
 from utils import determine_file_and_source, check_existsence, remove_underscore_from_end_prefix, \
-    create_logging_instance, insert_into_es, generate_ena_api_endpoint, insert_es_log
+    write_system_log, insert_into_es, generate_ena_api_endpoint, insert_es_log, get_line_number
 import validate_experiment_record
 import validate_record
 import sys
@@ -19,8 +19,8 @@ from misc import convert_readable, get_filename_from_url
 
 RULESETS = ["FAANG Experiments", "FAANG Legacy Experiments"]
 
-logger = create_logging_instance('import_ena')
 
+to_es_flag = True
 alias_cache = dict()
 
 @click.command()
@@ -37,8 +37,14 @@ alias_cache = dict()
          'faang_build_1_ then the indices will be faang_build_1_experiment etc.'
          'If not provided, then work on the aliases, e.g. experiment'
 )
+@click.option(
+    '--to_es',
+    default="true",
+    help='Specify how to deal with the system log either writing to es or printing out. '
+         'It only allows two values: true (to es) or false (print to the terminal)'
+)
 # TODO check single or double quotes
-def main(es_hosts, es_index_prefix):
+def main(es_hosts: str, es_index_prefix: str, to_es: str):
     """
     Main function that will import data from ena
     :param es_hosts: elasticsearch hosts where the data import into
@@ -46,29 +52,33 @@ def main(es_hosts, es_index_prefix):
     :return:
     """
     hosts = es_hosts.split(";")
-    logger.info("Command line parameters")
-    logger.info("Hosts: "+str(hosts))
+    es = Elasticsearch(hosts)
+    write_system_log(es, 'import_ena', 'info', get_line_number(), 'Command line parameters', to_es_flag)
+    write_system_log(es, 'import_ena', 'info', get_line_number(), f'Hosts: {str(hosts)}', to_es_flag)
+
     es_index_prefix = remove_underscore_from_end_prefix(es_index_prefix)
     if es_index_prefix:
-        logger.info("Index_prefix:"+es_index_prefix)
+        write_system_log(es, 'import_ena', 'info', get_line_number(), f'Index prefix: {es_index_prefix}', to_es_flag)
 
-    es = Elasticsearch(hosts)
-
-    logger.info(f"Get current specimens stored in the corresponding ES index {es_index_prefix}_specimen")
+    write_system_log(es, 'import_ena', 'info', get_line_number(), f'Get current specimens stored in the corresponding '
+                                                                  f'ES index {es_index_prefix}_specimen', to_es_flag)
     biosample_ids = get_all_specimen_ids(hosts[0], es_index_prefix)
 
     if not biosample_ids:
-        logger.error("No specimen data found in the given index, please run import_from_biosamles.py first")
+        write_system_log(es, 'import_ena', 'error', get_line_number(),
+                         'No specimen data found in the given index, please run import_from_biosamles.py first',
+                         to_es_flag)
         sys.exit(1)
     known_errors = get_known_errors()
     new_errors = dict()
     datasets_missing_specimens = dict()
 
     ruleset_version = validate_record.ValidateRecord.get_ruleset_version()
-    logger.info(f"Current experiment ruleset version: {ruleset_version}")
+    write_system_log(es, 'import_ena', 'info', get_line_number(),
+                     f'Current experiment ruleset version: {ruleset_version}', to_es_flag)
 
-    logger.info("Retrieving data from ENA")
-    data = get_ena_data()
+    write_system_log(es, 'import_ena', 'info', get_line_number(), 'Retrieving data from ENA', to_es_flag)
+    data = get_ena_data(es)
 
     indexed_files = dict()
     datasets = dict()
@@ -337,9 +347,10 @@ def main(es_hosts, es_index_prefix):
                         converted_control_experiment = \
                             replace_alias_with_accession(dataset_id, original_control_experiment)
                         if not converted_control_experiment:
-                            logger.error(f"given control experiment value {original_control_experiment} could not be "
-                                         f"found with the same study {dataset_id} "
-                                         f"for experiment {exp_id}")
+                            msg = f'given control experiment value {original_control_experiment} could not ' \
+                                  f'be found with the same study {dataset_id} for experiment {exp_id}'
+                            insert_es_log(es, es_index_prefix, 'experiment', exp_id, 'error', msg)
+                            write_system_log(es, 'import_ena', 'error', get_line_number(), msg, to_es_flag)
                             continue
                         section_info['controlExperiment'] = converted_control_experiment
                         exp_es['ChIP-seq DNA-binding'] = section_info
@@ -387,7 +398,7 @@ def main(es_hosts, es_index_prefix):
                         },
                         'librarySelection': record['faang_library_selection']
                     }
-                elif assay_type == 'CAGE-seq': # CAGE-seq
+                elif assay_type == 'CAGE-seq':  # CAGE-seq
                     cage_protocol = record['cage_protocol']
                     cage_protocol_name = get_filename_from_url(cage_protocol, f"{exp_id} CAGE-seq protocol")
                     exp_es['CAGE-seq'] = {
@@ -523,7 +534,7 @@ def main(es_hosts, es_index_prefix):
             datasets[dataset_id] = es_doc_dataset
     # end of loop for record in data:
 
-    logger.info("The dataset list:")
+    write_system_log(es, 'import_ena', 'info', get_line_number(), 'The dataset list:', to_es_flag)
     dataset_ids = sorted(list(studies_from_api.keys()))
     for index, dataset_id in enumerate(dataset_ids):
         num_exps = 0
@@ -532,12 +543,14 @@ def main(es_hosts, es_index_prefix):
             # noinspection PyTypeChecker
             num_exps = len(list(datasets['tmp'][dataset_id]["experiment"].keys()))
         printed_index = index + 1
-        logger.info(f"{printed_index} {dataset_id} has {studies_from_api[dataset_id]} runs from api and {num_exps} "
-                    f"experiments to be processed")
+        write_system_log(es, 'import_ena', 'info', get_line_number(),
+                         f'{printed_index} {dataset_id} has {studies_from_api[dataset_id]} runs from api '
+                         f'and {num_exps} experiments to be processed', to_es_flag)
     # datasets contains one artificial value set with the key as 'tmp', so need to -1
-    logger.info(f"There are {len(list(datasets.keys())) -  1} datasets to be processed")
+    write_system_log(es, 'import_ena', 'info', get_line_number(),
+                     f'There are {len(list(datasets.keys())) -  1} datasets to be processed', to_es_flag)
 
-    logger.info('Start to import Experiments')
+    write_system_log(es, 'import_ena', 'info', get_line_number(), 'Start to import Experiments', to_es_flag)
     validator = validate_experiment_record.ValidateExperimentRecord(experiments, RULESETS)
     validation_results = validator.validate()
     exp_validation = dict()
@@ -566,7 +579,7 @@ def main(es_hosts, es_index_prefix):
                 break
         insert_es_log(es, es_index_prefix, 'experiment', exp_id, status, ";".join(error_messages))
 
-    logger.info('Start to import Files')
+    write_system_log(es, 'import_ena', 'info', get_line_number(), 'Start to import Files', to_es_flag)
     for file_id in files_dict.keys():
         es_file_doc = files_dict[file_id]
         # noinspection PyTypeChecker
@@ -578,7 +591,7 @@ def main(es_hosts, es_index_prefix):
         insert_into_es(es, es_index_prefix, 'file', file_id, body)
         indexed_files[file_id] = 1
 
-    logger.info('Start to import Datasets')
+    write_system_log(es, 'import_ena', 'info', get_line_number(), 'Start to import Datasets', to_es_flag)
     for dataset_id in datasets:
         if dataset_id == 'tmp':
             continue
@@ -608,7 +621,8 @@ def main(es_hosts, es_index_prefix):
                 msg = msg + "; specimens " + ",".join(missing_specimens) + " missing"
                 datasets_missing_specimens.pop(dataset_id)
             insert_es_log(es, es_index_prefix, 'dataset', dataset_id, 'warning', msg)
-            logger.warning(f"dataset {dataset_id} has no valid experiments, skipped.")
+            write_system_log(es, 'import_ena', 'warning', get_line_number(),
+                             f'dataset {dataset_id} has no valid experiments, skipped.', to_es_flag)
             continue
         es_doc_dataset['standardMet'] = dataset_standard
         specimens_dict = datasets['tmp'][dataset_id]['specimen']
@@ -648,7 +662,10 @@ def main(es_hosts, es_index_prefix):
         for study in new_errors:
             tmp = new_errors[study]
             for biosample in sorted(tmp.keys()):
-                logger.warning(f"{biosample} from {study} does not exist in BioSamples at the moment\n")
+                write_system_log(es, 'import_ena', 'warning', get_line_number(),
+                                 f'{biosample} from {study} does not exist in BioSamples at the moment', to_es_flag)
+                insert_es_log(es, es_index_prefix, 'specimen', biosample, 'warning',
+                              f'referenced in {study} but not found in BioSamples')
                 w.write(f"{study}\t{biosample}\n")
 
     for dataset_id in datasets_missing_specimens:
@@ -657,14 +674,15 @@ def main(es_hosts, es_index_prefix):
         insert_es_log(es, es_index_prefix, 'dataset', dataset_id, 'warning', msg)
 
 
-def get_ena_data():
+def get_ena_data(es):
     """
-    This function will fetch data from ena FAANG data portal ruead_run result
+    This function will fetch data from ena FAANG data portal read_run result
+    :param es: the Elastic search instance to write log
     :return: json representation of data from ena
     """
     # 'https://www.ebi.ac.uk/ena/portal/api/search/?result=read_run&format=JSON&limit=0&dataPortal=faang&fields=all'
     url = generate_ena_api_endpoint('read_run', 'faang', 'all')
-    logger.info(f"Getting data from {url}")
+    write_system_log(es, 'import_ena', 'info', get_line_number(), f'Getting data from {url}', to_es_flag)
     response = requests.get(url).json()
     return response
 
@@ -677,7 +695,7 @@ def get_all_specimen_ids(host, es_index_prefix):
     if not host.endswith(":9200"):
         host = host + ":9200"
     results = dict()
-    url = f'http://{host}/{es_index_prefix}_specimen/_search?size=100000&q=standardMet:FAANG'
+    url = f'http://{host}/{es_index_prefix}_specimen/_search?size=100000'
     response = requests.get(url).json()
     for item in response['hits']['hits']:
         results[item['_id']] = item['_source']
@@ -690,12 +708,15 @@ def get_known_errors():
     :return: dictionary with study as a key and biosample as a values
     """
     known_errors = dict()
-    with open('ena_not_in_biosample.txt', 'r') as f:
-        for line in f:
-            line = line.rstrip()
-            study, biosample = line.split("\t")
-            known_errors.setdefault(study, {})
-            known_errors[study][biosample] = 1
+    try:
+        with open('ena_not_in_biosample.txt', 'r') as f:
+            for line in f:
+                line = line.rstrip()
+                study, biosample = line.split("\t")
+                known_errors.setdefault(study, {})
+                known_errors[study][biosample] = 1
+    except FileNotFoundError:
+        pass
     return known_errors
 
 

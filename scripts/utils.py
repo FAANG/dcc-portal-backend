@@ -99,11 +99,13 @@ def insert_es_log(es, es_index_prefix, doc_type, doc_id, status, detail):
     :param status: the status of the data record during importation, one of 'pass', 'warning', 'error'
     :param detail: the detail of the import log, empty if the status is pass
     """
+    now = datetime.now()
     doc = {
         'accession': doc_id,
         'type': doc_type,
         'status': status,
-        'detail': detail
+        'detail': detail,
+        'last_update': now
     }
     insert_into_es(es, es_index_prefix, 'log', doc_id, doc)
 

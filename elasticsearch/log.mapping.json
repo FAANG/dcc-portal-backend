@@ -13,6 +13,9 @@
     },
     "detail": {
       "type": "keyword"
+    },
+    "last_update": {
+      "type": "date"
     }
   }
 }
