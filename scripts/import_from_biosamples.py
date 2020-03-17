@@ -71,6 +71,7 @@ def main(es_hosts, es_index_prefix, to_es: str):
     Main function that will import data from biosamples
     :param es_hosts: elasticsearch hosts where the data import into
     :param es_index_prefix: the index prefix points to a particular version of data
+    :param to_es: determine whether to output log to Elasticsearch (True) or terminal (False, printing)
     :return:
     """
     global ETAGS_CACHE

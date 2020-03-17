@@ -49,10 +49,22 @@ def main(es_hosts: str, es_index_prefix: str, to_es: str):
     Main function that will import data from ena
     :param es_hosts: elasticsearch hosts where the data import into
     :param es_index_prefix: the index prefix points to a particular version of data
+    :param to_es: determine whether to output log to Elasticsearch (True) or terminal (False, printing)
     :return:
     """
+    global to_es_flag
+    # initialize ES first as needed to do logging
     hosts = es_hosts.split(";")
     es = Elasticsearch(hosts)
+
+    if to_es.lower() == 'false':
+        to_es_flag = False
+    elif to_es.lower() == 'true':
+        pass
+    else:
+        print('to_es parameter can only accept value of true or false')
+        exit(1)
+
     write_system_log(es, 'import_ena', 'info', get_line_number(), 'Command line parameters', to_es_flag)
     write_system_log(es, 'import_ena', 'info', get_line_number(), f'Hosts: {str(hosts)}', to_es_flag)
 
@@ -729,12 +741,11 @@ def replace_alias_with_accession(study: str, to_be_replaced: str) -> str:
     :param to_be_replaced: the alias
     :return: the replaced accession, if the given to_be_replaced is a valid accession, return that value straightaway
     """
-    match = re.search(r'^(S|E|D)RX\d+$', to_be_replaced)
+    match = re.search(r'^([SED])RX\d+$', to_be_replaced)
     # NOTE: Does not check whether the accession exists or not which should be done with validation service
     if match:  # valid experiment accessions.
         return to_be_replaced
     
-    alias_accession_map = dict()
     if study not in alias_cache:
         alias_cache.setdefault(study, dict())
         url = generate_ena_api_endpoint('read_experiment', 'ena', 'experiment_accession,experiment_alias')
