@@ -19,9 +19,9 @@ from misc import convert_readable, get_filename_from_url
 
 RULESETS = ["FAANG Experiments", "FAANG Legacy Experiments"]
 
-
 to_es_flag = True
 alias_cache = dict()
+
 
 @click.command()
 @click.option(
@@ -684,6 +684,8 @@ def main(es_hosts: str, es_index_prefix: str, to_es: str):
         missing_specimens = datasets_missing_specimens[dataset_id]
         msg = "specimens " + ",".join(missing_specimens) + " missing"
         insert_es_log(es, es_index_prefix, 'dataset', dataset_id, 'warning', msg)
+
+    write_system_log(es, 'import_ena', 'info', get_line_number(), 'Finish importing ena', to_es_flag)
 
 
 def get_ena_data(es):
