@@ -10,12 +10,14 @@ Using the example above, each individual sample between SAMN11119414-SAMN1111946
 import requests
 from elasticsearch import Elasticsearch
 import click
-from utils import create_logging_instance, remove_underscore_from_end_prefix, get_record_ids, get_record_details, \
-    insert_into_es
+from utils import write_system_log, get_line_number, remove_underscore_from_end_prefix, get_record_ids, \
+    get_record_details, insert_into_es
 from constants import STAGING_NODE1, DEFAULT_PREFIX, STANDARD_FAANG
 from typing import Dict, Set, List
 
-logger = create_logging_instance('fetch_articles')
+
+SCRIPT_NAME = 'fetch_article'
+
 ARTICLE_MAPPING = {
     'pmcId': 'pmcid',
     'pubmedId': 'pmid',
@@ -31,6 +33,9 @@ ARTICLE_MAPPING = {
 }
 ARTICLE_BASIC_FIELDS = {'title', 'year', 'journal'}
 
+to_es_flag = True
+es = None
+
 
 @click.command()
 @click.option(
@@ -45,13 +50,38 @@ ARTICLE_BASIC_FIELDS = {'title', 'year', 'journal'}
     help='Specify the Elastic Search index prefix, e.g. '
          'faang_build_1 then the index to work on will be faang_build_1_article.'
 )
-def main(es_hosts, es_index_prefix):
+@click.option(
+    '--to_es',
+    default="true",
+    help='Specify how to deal with the system log either writing to es or printing out. '
+         'It only allows two values: true (to es) or false (print to the terminal)'
+)
+def main(es_hosts, es_index_prefix, to_es):
+    """
+    Main function that will import publications for all entities
+    :param es_hosts: elasticsearch hosts where the data import into
+    :param es_index_prefix: the index prefix points to a particular version of data
+    :param to_es: determine whether to output log to Elasticsearch (True) or terminal (False, printing)
+    :return:
+    """
+    global to_es_flag
+    if to_es.lower() == 'false':
+        to_es_flag = False
+    elif to_es.lower() == 'true':
+        pass
+    else:
+        print('to_es parameter can only accept value of true or false')
+        exit(1)
+
+    global es
     hosts = es_hosts.split(";")
-    logger.info("Command line parameters")
-    logger.info("Hosts: " + str(hosts))
+    es = Elasticsearch(hosts)
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Start fetching articles', to_es_flag)
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Command line parameters', to_es_flag)
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), f'Hosts: {str(hosts)}', to_es_flag)
 
     es_index_prefix = remove_underscore_from_end_prefix(es_index_prefix)
-    logger.info(f"Index: {es_index_prefix}_article")
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), f'Index: {es_index_prefix}_article', to_es_flag)
     # get existing dataset (to work out articles in file and specimen and existing specimen to calculate organism
     datasets = get_record_details(hosts[0], es_index_prefix, 'dataset',
                                   ['standardMet', 'secondaryProject', 'species',
@@ -59,8 +89,10 @@ def main(es_hosts, es_index_prefix):
     specimens = get_record_details(hosts[0], es_index_prefix, 'specimen', ['organism.biosampleId'])
     # get existing articles
     existing_articles = get_record_ids(hosts[0], es_index_prefix, 'article', only_faang=False)
-    logger.info("The number of existing datasets: " + str(len(datasets)))
-    logger.info("The number of existing articles: " + str(len(existing_articles)))
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
+                     f'The number of existing datasets: {str(len(datasets))}', to_es_flag)
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
+                     f'The number of existing articles: {str(len(existing_articles))}', to_es_flag)
     # detailed article information which is used to insert into article ES index, keys are article id
     article_details = dict()
     # basic article information which is used in related records, e.g. specimen, dataset etc, keys are article id
@@ -77,7 +109,8 @@ def main(es_hosts, es_index_prefix):
         # logging progress, not related to the main algorithm
         dataset_count = dataset_count + 1
         if dataset_count % 200 == 0:
-            logger.info(f'Processed {dataset_count} datasets')
+            write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), f'Processed {dataset_count} datasets',
+                             to_es_flag)
         # get dataset related publication using europe PMC search API
         url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/search?query={dataset_id}&format=json"
         epmc_result = requests.get(url).json()
@@ -103,7 +136,8 @@ def main(es_hosts, es_index_prefix):
             # 2) PMC guarantees open access, more likely to have dataset accession linked
             article_id = determine_article_id(hit)
             if len(article_id) == 0:
-                logger.error(f"Study {dataset_id} has related article without Identifier")
+                write_system_log(es, SCRIPT_NAME, 'error', get_line_number(),
+                                 f'Study {dataset_id} has related article without Identifier', to_es_flag)
                 continue
             # new article
             if article_id not in article_details:
@@ -123,9 +157,9 @@ def main(es_hosts, es_index_prefix):
             article_for_datasets.setdefault(dataset_id, set())
             article_for_datasets[dataset_id].add(article_id)
 
-    logger.info(f'Retrieved {len(article_details)} articles from all datasets')
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
+                     f'Retrieved {len(article_details)} articles from all datasets', to_es_flag)
 
-    es = Elasticsearch(hosts)
     # deal with article index
     for article_id in article_details:
         es_article = article_details[article_id]
@@ -156,34 +190,34 @@ def main(es_hosts, es_index_prefix):
     for not_needed_article_id in existing_articles:
         es.delete(index=f'{es_index_prefix}_article', doc_type="_doc", id=not_needed_article_id)
 
-    logger.info("Update articles within dataset index")
-    update_article_info(article_basics, article_for_datasets, es, es_index_prefix, 'dataset')
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Update articles within dataset index', to_es_flag)
+    update_article_info(article_basics, article_for_datasets, es_index_prefix, 'dataset')
 
-    logger.info("Update articles within specimen index")
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Update articles within specimen index', to_es_flag)
     # update specimen, 'specimen' 'biosampleId' are referenced to the parameters used in datasets = get_record_details
     article_for_specimens: Dict[str, Set] = extract_article_from_related_entity(datasets, article_for_datasets,
                                                                                 'specimen', 'biosampleId')
     specimen_with_publications = get_records_with_publications(hosts[0], es_index_prefix, 'specimen')
-    logger.info("Start to update the specimen ES")
-    update_article_info(article_basics, article_for_specimens, es, es_index_prefix, 'specimen',
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Start to update the specimen ES', to_es_flag)
+    update_article_info(article_basics, article_for_specimens, es_index_prefix, 'specimen',
                         specimen_with_publications)
 
-    logger.info("Update articles within file index")
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Update articles within file index', to_es_flag)
     article_for_files: Dict[str, Set] = extract_article_from_related_entity(datasets, article_for_datasets,
                                                                             'file', 'fileId')
     file_with_publications = get_records_with_publications(hosts[0], es_index_prefix, 'file')
-    logger.info("Start to update the file ES")
-    update_article_info(article_basics, article_for_files, es, es_index_prefix, 'file', file_with_publications)
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Start to update the file ES', to_es_flag)
+    update_article_info(article_basics, article_for_files, es_index_prefix, 'file', file_with_publications)
 
-    logger.info("Update articles within organism index")
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Update articles within organism index', to_es_flag)
     article_for_organisms: Dict[str, Set] = extract_article_from_related_entity(specimens, article_for_specimens,
                                                                                 'organism', 'biosampleId')
     organism_with_publications = get_records_with_publications(hosts[0], es_index_prefix, 'organism')
-    logger.info("Start to update the organism ES")
-    update_article_info(article_basics, article_for_organisms, es, es_index_prefix, 'organism',
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Start to update the organism ES', to_es_flag)
+    update_article_info(article_basics, article_for_organisms, es_index_prefix, 'organism',
                         organism_with_publications)
 
-    logger.info("Finishing importing article")
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Finishing importing article', to_es_flag)
 
 
 def extract_article_from_related_entity(source_data, source_article_data,
@@ -221,13 +255,12 @@ def extract_article_from_related_entity(source_data, source_article_data,
     return result
 
 
-def update_article_info(article_basics, article_for_others, es, es_index_prefix, record_type,
+def update_article_info(article_basics, article_for_others, es_index_prefix, record_type,
                         records_with_publication=None) -> None:
     """
     update article information in other Elasticsearch indices
     :param article_basics: the collection of article information which is displayed in the other type record detail page
     :param article_for_others: the list of records need to be updated with the articles
-    :param es: Elastic search instance
     :param es_index_prefix: the Elastic search index prefix
     :param record_type: the type of the record
     :param records_with_publication: the existing publication information within the records, optional
