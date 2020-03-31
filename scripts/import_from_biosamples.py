@@ -90,11 +90,13 @@ def main(es_hosts, es_index_prefix, to_es: str):
         exit(1)
 
     today = datetime.now().strftime('%Y-%m-%d')
-    cache_filename = f"etag_list_{today}.txt"
+    cache_filename = f'etag_list_{today}.txt'
     if not os.path.isfile(cache_filename):
         write_system_log(es, 'import_biosamples', 'info', get_line_number(),
                          'Could not find today etag cache file. Generating', to_es_flag)
-        os.system("python3 get_all_etags.py")
+        code_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+        etag_script_file = f'{code_dir}{os.sep}get_all_etags.py'
+        os.system(f'python3 {etag_script_file}')
     try:
         with open(cache_filename, 'r') as f:
             for line in f:
