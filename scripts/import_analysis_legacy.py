@@ -1,10 +1,12 @@
 import click
 from constants import STAGING_NODE1
 from elasticsearch import Elasticsearch
-from utils import remove_underscore_from_end_prefix, create_logging_instance, get_record_ids, \
+from utils import remove_underscore_from_end_prefix, write_system_log, get_line_number, get_record_ids, \
     convert_analysis, generate_ena_api_endpoint, process_validation_result
 import requests
 import validate_analysis_record
+
+SCRIPT_NAME = 'import_analysis_legacy'
 
 RULESETS = ["FAANG Legacy Analyses"]
 EVA_SPECIES = ['Chicken', 'Cow', 'Goat', 'Horse', 'Pig', 'Sheep']
@@ -15,9 +17,8 @@ FIELD_LIST = [
     "broker_name", "pipeline_name", "pipeline_version", "assembly_type", "accession", "description", "germline"
 ]
 
-
-logger = create_logging_instance('import_analysis_legacy')
-
+to_es_flag = True
+es = None
 
 @click.command()
 @click.option(
@@ -33,20 +34,40 @@ logger = create_logging_instance('import_analysis_legacy')
          'faang_build_1_ then the indices will be faang_build_1_experiment etc.'
          'If not provided, then work on the aliases, e.g. experiment'
 )
+@click.option(
+    '--to_es',
+    default="true",
+    help='Specify how to deal with the system log either writing to es or printing out. '
+         'It only allows two values: true (to es) or false (print to the terminal)'
+)
 # TODO check single or double quotes
-def main(es_hosts, es_index_prefix):
+def main(es_hosts, es_index_prefix, to_es: str):
     """
     Main function that will import analysis data from ena
     :param es_hosts: elasticsearch hosts where the data import into
     :param es_index_prefix: the index prefix points to a particular version of data
+    :param to_es: determine whether to output log to Elasticsearch (True) or terminal (False, printing)
     :return:
     """
+    global to_es_flag
+    if to_es.lower() == 'false':
+        to_es_flag = False
+    elif to_es.lower() == 'true':
+        pass
+    else:
+        print('to_es parameter can only accept value of true or false')
+        exit(1)
+
+    global es
     hosts = es_hosts.split(";")
-    logger.info("Command line parameters")
-    logger.info("Hosts: "+str(hosts))
+    es = Elasticsearch(hosts)
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Start importing analysis legacy', to_es_flag)
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Command line parameters', to_es_flag)
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), f'Hosts: {str(hosts)}', to_es_flag)
     es_index_prefix = remove_underscore_from_end_prefix(es_index_prefix)
     if es_index_prefix:
-        logger.info("Index_prefix:"+es_index_prefix)
+        write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
+                         f'Index_prefix: {es_index_prefix}', to_es_flag)
 
     es = Elasticsearch(hosts)
 
@@ -56,10 +77,13 @@ def main(es_hosts, es_index_prefix):
     try:
         existing_datasets = get_record_ids(hosts[0], es_index_prefix, 'dataset', only_faang=False)
     except KeyError:
-        logger.error("No existing datasets retrieved from Elastic Search")
-        logger.error("Possible causes:")
-        logger.error("1 missing/wrong value for parameter es_index_prefix")
-        logger.error("2 ES server has connection issue, index does not exist etc.")
+        write_system_log(es, SCRIPT_NAME, 'error', get_line_number(),
+                         'No existing datasets retrieved from Elastic Search', to_es_flag)
+        write_system_log(es, SCRIPT_NAME, 'error', get_line_number(), 'Possible causes:', to_es_flag)
+        write_system_log(es, SCRIPT_NAME, 'error', get_line_number(),
+                         '1 missing/wrong value for parameter es_index_prefix', to_es_flag)
+        write_system_log(es, SCRIPT_NAME, 'error', get_line_number(),
+                         '2 ES server has connection issue, index does not exist etc.', to_es_flag)
         exit()
 
     for study_accession in eva_datasets:
@@ -101,23 +125,28 @@ def main(es_hosts, es_index_prefix):
             count = len(analyses)
             if count % 50 == 0 and str(count) not in displayed:
                 displayed.add(str(count))
-                logger.info(f"Processed {count} analysis records")
+                write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
+                                 f'Processed {count} analysis records:', to_es_flag)
         # end of analysis list for one study loop
     # end of all studies loop
 
-    logger.info("Total analyses to be validated: " + str(len(analyses)))
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
+                     f'Total analyses to be validated: {str(len(analyses))}', to_es_flag)
     validator = validate_analysis_record.ValidateAnalysisRecord(analyses, RULESETS)
     validation_results = validator.validate()
     ruleset_version = validator.get_ruleset_version()
-    process_validation_result(analyses, es, es_index_prefix, validation_results, ruleset_version, RULESETS, logger)
+    process_validation_result(analyses, es, es_index_prefix, validation_results, ruleset_version, RULESETS, to_es_flag)
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Finish importing analysis legacy', to_es_flag)
 
 
 def get_eva_dataset_list():
     species_str = ",".join(EVA_SPECIES)
-    logger.info(f"Species to retrieve from EVA: {species_str}")
-    url = f"http://www.ebi.ac.uk/eva/webservices/rest/v1/meta/studies/all?species={species_str}"
+    write_system_log(es, 'import_analysis_legacy', 'info', get_line_number(),
+                     f'Species to retrieve from EVA: {species_str}', to_es_flag)
+    url = f'http://www.ebi.ac.uk/eva/webservices/rest/v1/meta/studies/all?species={species_str}'
     data = requests.get(url).json()
-    logger.info(f"Total number of datasets in EVA: {data['response'][0]['numResults']}")
+    write_system_log(es, 'import_analysis_legacy', 'info', get_line_number(),
+                     f"Total number of datasets in EVA: {data['response'][0]['numResults']}", to_es_flag)
     eva_datasets = list()
     for record in data['response'][0]['result']:
         eva_datasets.append(record['id'])

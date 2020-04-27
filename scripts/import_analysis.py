@@ -1,16 +1,15 @@
 import click
 from constants import STAGING_NODE1
 from elasticsearch import Elasticsearch
-from utils import remove_underscore_from_end_prefix, create_logging_instance, get_record_ids, \
+from utils import remove_underscore_from_end_prefix, write_system_log, get_line_number, get_record_ids, \
     convert_analysis, generate_ena_api_endpoint, process_validation_result
 from misc import get_filename_from_url
 import requests
 import validate_analysis_record
 
+SCRIPT_NAME = 'import_analysis'
+
 RULESETS = ["FAANG Analyses", "FAANG Legacy Analyses"]
-
-logger = create_logging_instance('import_analysis')
-
 
 @click.command()
 @click.option(
@@ -26,26 +25,42 @@ logger = create_logging_instance('import_analysis')
          'faang_build_1_ then the indices will be faang_build_1_experiment etc.'
          'If not provided, then work on the aliases, e.g. experiment'
 )
+@click.option(
+    '--to_es',
+    default="true",
+    help='Specify how to deal with the system log either writing to es or printing out. '
+         'It only allows two values: true (to es) or false (print to the terminal)'
+)
 # TODO check single or double quotes
-def main(es_hosts, es_index_prefix):
+def main(es_hosts, es_index_prefix, to_es: str):
     """
     Main function that will import analysis data from ena
     :param es_hosts: elasticsearch hosts where the data import into
     :param es_index_prefix: the index prefix points to a particular version of data
+    :param to_es: determine whether to output log to Elasticsearch (True) or terminal (False, printing)
     :return:
     """
+    to_es_flag = True
+    if to_es.lower() == 'false':
+        to_es_flag = False
+    elif to_es.lower() == 'true':
+        pass
+    else:
+        print('to_es parameter can only accept value of true or false')
+        exit(1)
+
     hosts = es_hosts.split(";")
-    logger.info("Command line parameters")
-    logger.info("Hosts: "+str(hosts))
+    es = Elasticsearch(hosts)
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Start importing analysis', to_es_flag)
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Command line parameters', to_es_flag)
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), f'Hosts: {str(hosts)}', to_es_flag)
     es_index_prefix = remove_underscore_from_end_prefix(es_index_prefix)
     if es_index_prefix:
-        logger.info("Index_prefix:"+es_index_prefix)
-
-    es = Elasticsearch(hosts)
+        write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), f'Index_prefix: {es_index_prefix}', to_es_flag)
 
     # "https://www.ebi.ac.uk/ena/portal/api/search/?result=analysis&format=JSON&limit=0&fields=all&dataPortal=faang"
     url = generate_ena_api_endpoint('analysis', 'faang', 'all')
-    logger.info(f"Getting data from {url}")
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), f'Getting data from {url}', to_es_flag)
     data = requests.get(url).json()
     analyses = dict()
     existing_datasets = get_record_ids(hosts[0], es_index_prefix, 'dataset', only_faang=False)
@@ -90,7 +105,8 @@ def main(es_hosts, es_index_prefix):
     validator = validate_analysis_record.ValidateAnalysisRecord(analyses, RULESETS)
     validation_results = validator.validate()
     ruleset_version = validator.get_ruleset_version()
-    process_validation_result(analyses, es, es_index_prefix, validation_results, ruleset_version, RULESETS, logger)
+    process_validation_result(analyses, es, es_index_prefix, validation_results, ruleset_version, RULESETS, to_es_flag)
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Finish importing analysis', to_es_flag)
 
 
 if __name__ == "__main__":

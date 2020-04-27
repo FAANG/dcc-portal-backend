@@ -11,7 +11,8 @@ FIELDS_TO_BE_REMOVED = [
     'accession',  # validation tool use fixed id field
     # not in the ruleset
     'standardMet',
-    'versionLastStandardMet'
+    'versionLastStandardMet',
+    'libraryName'
 ]
 
 logger = utils.create_logging_instance('validate_experiment')
