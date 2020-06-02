@@ -1027,19 +1027,57 @@ def populate_basic_biosample_info(doc: Dict, item: Dict):
     doc['project'] = check_existence(item, 'project', 'text')
     doc['secondaryProject'] = check_existence(item, 'secondary project', 'text')
     doc['availability'] = check_existence(item, 'availability', 'text')
-    for organization in item['organization']:
-        # TODO logging to error if name or role or url do not exist
-        organization.setdefault('Name', None)
-        organization.setdefault('Role', None)
-        organization.setdefault('URL', None)
-        doc.setdefault('organization', [])
-        doc['organization'].append(
-            {
-                'name': organization['Name'],
-                'role': organization['Role'],
-                'URL': organization['URL']
-            }
-        )
+
+    if 'organization' in item:
+        for organization in item['organization']:
+            # TODO logging to error if name or role or url do not exist
+            organization.setdefault('Name', None)
+            organization.setdefault('Role', None)
+            organization.setdefault('URL', None)
+            doc.setdefault('organization', [])
+            doc['organization'].append(
+                {
+                    'name': organization['Name'],
+                    'role': organization['Role'],
+                    'URL': organization['URL']
+                }
+            )
+    else:
+        # the new validation service treat the organization details as other attributes in the characteristics with
+        # fixed attribute names
+        # multiple values are allowed, but the related attributes should match, values are separated by ;
+        tmp_organizations = dict()
+        organization_fields = ['organization name', 'organization role', 'organization uri']
+        for field_name in organization_fields:
+            if field_name in item['characteristics']:
+                tmp_organizations.setdefault(field_name, list())
+                for tmp in item['characteristics'][field_name]:
+                    tmp_organizations[field_name].append(tmp['text'])
+        if len(tmp_organizations) == len(organization_fields):  # all fields found
+            # check all sub fields hold the same length records, if not, skip for now
+            # initial value to be 0, if having mismatch set to -1, same length then will be the actual length
+            number_organization = 0
+            for field_name in tmp_organizations:
+                if number_organization == 0:
+                    number_organization = len(tmp_organizations[field_name])
+                else:
+                    if number_organization != len(tmp_organizations[field_name]):
+                        number_organization = -1
+                        break
+            if number_organization > 0:
+                doc.setdefault('organization', [])
+                for idx in range(number_organization):
+                    doc['organization'].append(
+                        {
+                            'name': tmp_organizations['organization name'][idx],
+                            'role': tmp_organizations['organization role'][idx],
+                            'URL': tmp_organizations['organization uri'][idx]
+                        }
+                    )
+        else:
+            # TODO: report error
+            pass
+
     return doc
 
 
