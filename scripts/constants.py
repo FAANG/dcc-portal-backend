@@ -33,7 +33,7 @@ ALIASES_IN_USE = {
 }
 
 # Current indices in use
-TYPES = ['organism', 'specimen', 'file', 'experiment', 'dataset', 'analysis', 'article']
+TYPES = ['organism', 'specimen', 'file', 'experiment', 'dataset', 'analysis', 'article', 'log']
 
 # Paths for rsync command (is used during syncing process between staging and production elasticsearch servers)
 FROM = '/nfs/public/rw/reseq-info/elastic_search_staging/snapshot_repo/es6_faang_repo/'
@@ -56,25 +56,32 @@ SPECIES_DICT = {
 # create_protocol
 # Universities abbreviations to use in create_protocols script
 UNIVERSITIES = {
-    "ROSLIN": "Roslin Institute (Edinburgh, UK)",
-    "INRA": "French National Institute for Agricultural Research",
-    "WUR": "Wageningen University and Research",
-    "UCD": "University of California, Davis (USA)",
-    "USU": "Utah State University (USA)",
-    "DEDJTR": "Department of Economic Development, Jobs, Transport and Resources (Bundoora, Australia)",
-    "FBN": "Leibniz Institute for Farm Animal Biology (Dummerstorf, Germany)",
-    "TAMU": "Texas A&M University",
-    "UIC": "University of Illinois at Chicago (USA)",
+    "AGR": "AgResearch (New Zealand)",
+    "AGS": "Agroscope (Switzerland)",
+    "DEDJTR": "Department of Economic Development, Jobs, Transport and "
+              "Resources (Bundoora, Australia)",
+    "EHU": "University of the Basque Country (Spain)",
     "ESTEAM": "ESTeam Paris SUD (France)",
-    "ISU": "Iowa State University",
+    "FBN": "Leibniz Institute for Farm Animal Biology (Dummerstorf, Germany)",
+    "INRA": "French National Institute for Agricultural Research (France)",
+    "INRAE": "National Research Institute for Agriculture, Food and "
+             "Environment (France）",
+    "ISU": "Iowa State University (USA)",
     "KU": "Konkuk University (Seoul, Korea)",
     "NUID": "University College Dublin (Dublin, Ireland)",
     "NMBU": "Norwegian University of Life Sciences (Norway)",
+    "ROSLIN": "Roslin Institute (Edinburgh, UK)",
+    "TAMU": "Texas A&M University (USA)",
+    "UCD": "University of California, Davis (USA)",
+    "UIC": "University of Illinois at Chicago (USA)",
     "UIUC": "University of Illinois at Urbana–Champaign (USA)",
     "UD": "University of Delaware (USA)",
     "UDL": "University of Lleida (Catalonia, Spain)",
     "ULE": "University of León (León, Spain)",
-    "USDA": "The United States Department of Agriculture",
+    "USDA": "The United States Department of Agriculture (USA)",
+    "USMARC": "United States Meat Animal Research Center (USA)",
+    "USU": "Utah State University (USA)",
+    "WSU": "Washington State University(USA)"
 }
 
 # create_summary

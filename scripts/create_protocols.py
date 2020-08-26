@@ -23,7 +23,7 @@ class CreateProtocols:
         Main function that will run function to create protocols
         """
         self.create_sample_protocol()
-        self.create_experiment_protocol()
+        # self.create_experiment_protocol()
 
     def create_sample_protocol(self):
         """
@@ -33,43 +33,69 @@ class CreateProtocols:
         results = self.es_staging.search(index="specimen", size=1000000)
         entries = {}
         for result in results["hits"]["hits"]:
-            if "specimenFromOrganism" in result["_source"] and 'specimenCollectionProtocol' in \
+            if "specimenFromOrganism" in result["_source"] and \
+                    'specimenCollectionProtocol' in \
                     result['_source']['specimenFromOrganism']:
-                key = result['_source']['specimenFromOrganism']['specimenCollectionProtocol']['filename']
-                url = result['_source']['specimenFromOrganism']['specimenCollectionProtocol']['url']
-                try:
-                    protocol_type = \
-                        result['_source']['specimenFromOrganism']['specimenCollectionProtocol']['url'].split("/")[5]
-                except Exception as e:
-                    self.logger.warning("Error was: {}, URL was: {}".format(
-                        e.args[0],
-                        result['_source']['specimenFromOrganism']['specimenCollectionProtocol']['url']
-                    ))
-                    protocol_type = ""
-                parsed = key.split("_")
-                if parsed[0] in UNIVERSITIES:
-                    name = UNIVERSITIES[parsed[0]]
-                    protocol_name = " ".join(parsed[2:-1])
-                    date = parsed[-1].split(".")[0]
-                    entries.setdefault(key, {"specimen": [], "universityName": "", "protocolDate": "",
-                                             "protocolName": "", "key": "", "url": "", "protocolType": ""})
-                    specimen = dict()
-                    specimen["id"] = result["_id"]
-                    specimen["organismPartCellType"] = result["_source"]["cellType"]["text"]
-                    specimen["organism"] = result["_source"]["organism"]["organism"]["text"]
-                    specimen["breed"] = result["_source"]["organism"]["breed"]["text"]
-                    specimen["derivedFrom"] = result["_source"]["derivedFrom"]
+                specimen_name = 'specimenFromOrganism'
+                protocol_name = 'specimenCollectionProtocol'
+            elif 'poolOfSpecimens' in result['_source'] and \
+                    'poolCreationProtocol' in \
+                    result['_source']['poolOfSpecimens']:
+                specimen_name = 'poolOfSpecimens'
+                protocol_name = 'poolCreationProtocol'
+            elif 'cellSpecimen' in result['_source'] and \
+                    'purificationProtocol' in result['_source']['cellSpecimen']:
+                specimen_name = 'cellSpecimen'
+                protocol_name = 'purificationProtocol'
+            elif 'cellCulture' in result['_source'] and \
+                    'cellCultureProtocol' in result['_source']['cellCulture']:
+                specimen_name = 'cellCulture'
+                protocol_name = 'cellCultureProtocol'
+            elif 'cellLine' in result['_source'] and \
+                    'cultureProtocol' in result['_source']['cellLine']:
+                specimen_name = 'cellLine'
+                protocol_name = 'cultureProtocol'
+            else:
+                continue
+            key = result['_source'][specimen_name][protocol_name]['filename']
+            url = result['_source'][specimen_name][protocol_name]['url']
+            try:
+                protocol_type = url.split("/")[5]
+            except Exception as e:
+                self.logger.warning("Error was: {}, URL was: {}".format(
+                    e.args[0],
+                    result['_source'][specimen_name][protocol_name]['url']
+                ))
+                continue
+            parsed = key.split("_")
+            if parsed[0] in UNIVERSITIES:
+                name = UNIVERSITIES[parsed[0]]
+                protocol_name = " ".join(parsed[2:-1])
+                date = parsed[-1].split(".")[0]
+                entries.setdefault(key, {"specimen": [], "universityName": "",
+                                         "protocolDate": "",
+                                         "protocolName": "", "key": "",
+                                         "url": "", "protocolType": ""})
+                specimen = dict()
+                specimen["id"] = result["_id"]
+                specimen["organismPartCellType"] = result["_source"][
+                    "cellType"]["text"]
+                specimen["organism"] = result["_source"]["organism"][
+                    "organism"]["text"]
+                specimen["breed"] = result["_source"]["organism"]["breed"][
+                    "text"]
+                specimen["derivedFrom"] = result["_source"]["derivedFrom"]
 
-                    entries[key]["specimen"].append(specimen)
-                    entries[key]['universityName'] = name
-                    entries[key]['protocolDate'] = date[0:4]
-                    entries[key]["protocolName"] = protocol_name
-                    entries[key]["key"] = key
-                    if protocol_type in ["analysis", "assays", "samples"]:
-                        entries[key]["protocolType"] = protocol_type
-                    entries[key]["url"] = url
+                entries[key]["specimen"].append(specimen)
+                entries[key]['universityName'] = name
+                entries[key]['protocolDate'] = date[0:4]
+                entries[key]["protocolName"] = protocol_name
+                entries[key]["key"] = key
+                entries[key]["protocolType"] = protocol_type
+                entries[key]["url"] = url
         for item in entries:
-            self.es_staging.index(index='protocol_samples', doc_type="_doc", id=item, body=entries[item])
+            self.es_staging.index(index='protocol_samples',
+                                  doc_type="_doc", id=item, body=entries[item])
 
     def create_experiment_protocol(self):
         """
