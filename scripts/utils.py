@@ -8,6 +8,8 @@ import requests
 from constants import STANDARDS, STANDARD_FAANG, TYPES
 from elasticsearch import Elasticsearch
 from misc import convert_readable
+from datetime import datetime
+from inspect import currentframe
 
 
 def create_logging_instance(name, level=logging.INFO, to_file=True):
@@ -41,6 +43,29 @@ def create_logging_instance(name, level=logging.INFO, to_file=True):
     return new_logger
 
 
+def write_system_log(es, script, level: str, line, detail, to_es=True):
+    now = datetime.now()
+    if to_es:
+        tmp = es.count(index='sys_log')
+        current_count = tmp['count'] + 1
+        doc = {
+            'serial': current_count,
+            'script': script,
+            'level': level,
+            'timestamp': now,
+            'line': line,
+            'detail': detail
+        }
+        es.create(index='sys_log', doc_type='_doc', body=doc, id=f'{script}-{now}', refresh=True)
+    else:
+        print(f'{now} - {script} - {level.upper()} - line {line} - {detail}')
+
+
+def get_line_number():
+    cf = currentframe()
+    return cf.f_back.f_lineno
+
+
 logger = create_logging_instance('utils')
 logging.getLogger('elasticsearch').setLevel(logging.WARNING)
 
@@ -62,6 +87,27 @@ def insert_into_es(es, es_index_prefix, doc_type, doc_id, body):
         es.create(index=f'{es_index_prefix}_{doc_type}', doc_type="_doc", id=doc_id, body=body)
     except Exception as e:
         logger.error(f"Error when try to insert into index {es_index_prefix}_{doc_type}: " + str(e.args))
+
+
+def insert_es_log(es, es_index_prefix, doc_type, doc_id, status, detail):
+    """
+    insert a log entry for the data record into ES
+    :param es: elasticsearch python library instance
+    :param es_index_prefix: form the string <es_index_prefix>_log, which is the index tge log entry will be written into
+    :param doc_type: the type of the data record
+    :param doc_id: the id of the data record
+    :param status: the status of the data record during importation, one of 'pass', 'warning', 'error'
+    :param detail: the detail of the import log, empty if the status is pass
+    """
+    now = datetime.now()
+    doc = {
+        'accession': doc_id,
+        'type': doc_type,
+        'status': status,
+        'detail': detail,
+        'last_update': now
+    }
+    insert_into_es(es, es_index_prefix, 'log', doc_id, doc)
 
 
 def get_record_ids(host: str, es_index_prefix: str, data_type: str, only_faang=True) -> Set[str]:
@@ -312,13 +358,18 @@ def generate_ena_api_endpoint(result: str, data_portal: str, fields: str, option
            f"result={result}&format=JSON&limit=0&{optional}&fields={fields}&dataPortal={data_portal}"
 
 
-def process_validation_result(analyses, es, es_index_prefix, validation_results, ruleset_version, rulesets, logger_in):
+def process_validation_result(analyses, es, es_index_prefix, validation_results, ruleset_version, rulesets, to_es_flag):
     analysis_validation = dict()
     for analysis_accession, analysis_es in analyses.items():
+        status = ''
+        msgs = list()
         for ruleset in rulesets:
             if validation_results[ruleset]['detail'][analysis_accession]['status'] == 'error':
+                status = 'error'
                 message = validation_results[ruleset]['detail'][analysis_accession]['message']
-                logger_in.info(f"{analysis_accession}\tAnalysis\terror\t{message}")
+                msgs.append(f"error\t{ruleset}\t{message}")
+                write_system_log(es, 'import_analysis', 'info', get_line_number(),
+                                 f'{analysis_accession}\tAnalysis\terror\t{message}', to_es_flag)
             else:
                 # only indexing when meeting standard
                 analysis_validation[analysis_accession] = STANDARDS[ruleset]
@@ -345,5 +396,11 @@ def process_validation_result(analyses, es, es_index_prefix, validation_results,
                 analysis_es.pop('urls')
                 body = json.dumps(analysis_es)
                 insert_into_es(es, es_index_prefix, 'analysis', analysis_accession, body)
+                status = validation_results[ruleset]['detail'][analysis_accession]['status']
+                message = validation_results[ruleset]['detail'][analysis_accession]['message']
+                msgs.append(f"{status}\t{ruleset}\t{message}")
                 # index into ES so break the loop
                 break
+        insert_es_log(es, es_index_prefix, 'analysis', analysis_accession, status, ";".join(msgs))
+
+

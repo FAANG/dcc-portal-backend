@@ -1,0 +1,24 @@
+{
+  "dynamic": "strict",
+  "date_detection": false,
+  "properties": {
+    "serial": {
+      "type": "integer"
+    },
+    "script": {
+      "type": "keyword"
+    },
+    "level": {
+      "type": "keyword"
+    },
+    "timestamp": {
+      "type": "date"
+    },
+    "line": {
+      "type": "integer"
+    },
+    "detail": {
+      "type": "keyword"
+    }
+  }
+}
