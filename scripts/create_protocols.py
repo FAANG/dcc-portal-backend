@@ -1,3 +1,5 @@
+import os
+import datetime
 from elasticsearch import Elasticsearch
 
 from constants import *
@@ -6,12 +8,14 @@ from utils import *
 
 class CreateProtocols:
     """
-    This class will create indexes for http://data.faang.org/protocol/samples (create_sample_protocol)
-    and http://data.faang.org/protocol/experiments (create_experiment_protocol)
+    This class will create indexes for http://data.faang.org/protocol/samples
+    (create_sample_protocol) and http://data.faang.org/protocol/experiments
+    (create_experiment_protocol)
     """
     def __init__(self, es_staging, logger):
         """
-        Initialize es_staging with elasticsearch object and logger with logger object
+        Initialize es_staging with elasticsearch object and logger with logger
+        object
         :param es_staging: es staging object
         :param logger: logger object
         """
@@ -24,6 +28,7 @@ class CreateProtocols:
         """
         self.create_sample_protocol()
         # self.create_experiment_protocol()
+        # self.create_analysis_protocol()
 
     def create_sample_protocol(self):
         """
@@ -33,121 +38,114 @@ class CreateProtocols:
         results = self.es_staging.search(index="specimen", size=1000000)
         entries = {}
         for result in results["hits"]["hits"]:
+            # Choose field name for specimen type and protocol
             if "specimenFromOrganism" in result["_source"] and \
                     'specimenCollectionProtocol' in \
                     result['_source']['specimenFromOrganism']:
-                specimen_name = 'specimenFromOrganism'
-                protocol_name = 'specimenCollectionProtocol'
+                specimen = 'specimenFromOrganism'
+                protocol = 'specimenCollectionProtocol'
             elif 'poolOfSpecimens' in result['_source'] and \
                     'poolCreationProtocol' in \
                     result['_source']['poolOfSpecimens']:
-                specimen_name = 'poolOfSpecimens'
-                protocol_name = 'poolCreationProtocol'
+                specimen = 'poolOfSpecimens'
+                protocol = 'poolCreationProtocol'
             elif 'cellSpecimen' in result['_source'] and \
                     'purificationProtocol' in result['_source']['cellSpecimen']:
-                specimen_name = 'cellSpecimen'
-                protocol_name = 'purificationProtocol'
+                specimen = 'cellSpecimen'
+                protocol = 'purificationProtocol'
             elif 'cellCulture' in result['_source'] and \
                     'cellCultureProtocol' in result['_source']['cellCulture']:
-                specimen_name = 'cellCulture'
-                protocol_name = 'cellCultureProtocol'
+                specimen = 'cellCulture'
+                protocol = 'cellCultureProtocol'
             elif 'cellLine' in result['_source'] and \
                     'cultureProtocol' in result['_source']['cellLine']:
-                specimen_name = 'cellLine'
-                protocol_name = 'cultureProtocol'
+                specimen = 'cellLine'
+                protocol = 'cultureProtocol'
             else:
                 continue
-            key = result['_source'][specimen_name][protocol_name]['filename']
-            url = result['_source'][specimen_name][protocol_name]['url']
-            try:
-                protocol_type = url.split("/")[5]
-            except Exception as e:
-                self.logger.warning("Error was: {}, URL was: {}".format(
-                    e.args[0],
-                    result['_source'][specimen_name][protocol_name]['url']
-                ))
-                continue
-            parsed = key.split("_")
-            if parsed[0] in UNIVERSITIES:
-                name = UNIVERSITIES[parsed[0]]
-                protocol_name = " ".join(parsed[2:-1])
-                date = parsed[-1].split(".")[0]
-                entries.setdefault(key, {"specimen": [], "universityName": "",
+            if result['_source'][specimen][protocol]['filename']:
+                key = result['_source'][specimen][protocol]['filename']
+                url = result['_source'][specimen][protocol]['url']
+                # TODO: special case, will need to update all specimens
+                if 'NMBU_SOP_Isolation_of_Monocyte-derived_Macrophages_from_' \
+                   'Blood_of_Norwegian_Red_Cattle_20171219.pdf' in key:
+                    key = os.path.basename(key)
+                parsed = key.strip().split("_")
+                # Custom protocols, only protocol_name is known
+                if parsed[0] not in UNIVERSITIES and parsed[0] != 'WUR':
+                    protocol_name = key
+                    university_name = None
+                    date = None
+                else:
+                    # Parsing university name
+                    if parsed[0] == 'WUR':
+                        university_name = 'WUR'
+                    else:
+                        university_name = UNIVERSITIES[parsed[0]]
+                    # Parsing protocol name
+                    if 'SOP' in parsed:
+                        protocol_name = " ".join(parsed[2:-1])
+                    else:
+                        protocol_name = " ".join(parsed[1:-1])
+                    # Parsing date
+                    for fmt in ['%Y%m%d', '%d%m%Y']:
+                        try:
+                            date = datetime.strptime(
+                                parsed[-1].split(".pdf")[0], fmt)
+                        except ValueError:
+                            date = None
+
+                # Adding information about specimens
+                entries.setdefault(key, {"specimens": [], "universityName": "",
                                          "protocolDate": "",
                                          "protocolName": "", "key": "",
-                                         "url": "", "protocolType": ""})
+                                         "url": ""})
                 specimen = dict()
                 specimen["id"] = result["_id"]
-                specimen["organismPartCellType"] = result["_source"][
-                    "cellType"]["text"]
+                if 'cellType' in result['_source']:
+                    specimen["organismPartCellType"] = result["_source"][
+                        "cellType"]["text"]
+                else:
+                    specimen['organismPartCellType'] = None
                 specimen["organism"] = result["_source"]["organism"][
                     "organism"]["text"]
                 specimen["breed"] = result["_source"]["organism"]["breed"][
                     "text"]
                 specimen["derivedFrom"] = result["_source"]["derivedFrom"]
 
-                entries[key]["specimen"].append(specimen)
-                entries[key]['universityName'] = name
-                entries[key]['protocolDate'] = date[0:4]
+                entries[key]["specimens"].append(specimen)
+                entries[key]['universityName'] = university_name
+                entries[key]['protocolDate'] = date
                 entries[key]["protocolName"] = protocol_name
                 entries[key]["key"] = key
-                entries[key]["protocolType"] = protocol_type
                 entries[key]["url"] = url
-        for item in entries:
-            self.es_staging.index(index='protocol_samples',
-                                  doc_type="_doc", id=item, body=entries[item])
+
+        for protocol_name, protocol_data in entries.items():
+            if es_staging.exists('protocols_samples', id=protocol_name):
+                es_staging.update(
+                    'protocols_samples', id=protocol_name,
+                    body={
+                        'doc': protocol_data
+                    }
+                )
+            else:
+                es_staging.create(
+                    'protocols_samples', id=protocol_name,
+                    body=protocol_data
+                )
+
 
     def create_experiment_protocol(self):
         """
         This function will create protocols data for experiments
         """
-        return_results = {}
-        results = self.es_staging.search(index="experiment", size=1000000)
+        pass
 
-        def expand_object(data, assay='', target='', accession='', storage='', processing=''):
-            for key in data:
-                if isinstance(data[key], dict):
-                    if 'filename' in data[key]:
-                        if data[key]['filename'] != '' and data[key]['filename'] is not None:
-                            if assay == '' and target == '' and accession == '' and storage == '' and processing == '':
-                                data_key = "{}-{}-{}".format(key, data['assayType'], data['experimentTarget'])
-                                # remove all spaces to form a key
-                                data_key = "".join(data_key.split())
-                                data_experiment = dict()
-                                data_experiment['accession'] = data['accession']
-                                data_experiment['sampleStorage'] = data['sampleStorage']
-                                data_experiment['sampleStorageProcessing'] = data['sampleStorageProcessing']
-                                return_results.setdefault(data_key, {'name': key,
-                                                                     'experimentTarget': data['experimentTarget'],
-                                                                     'assayType': data['assayType'],
-                                                                     'key': data_key,
-                                                                     'url': data[key]['url'],
-                                                                     'filename': data[key]['filename'],
-                                                                     'experiments': []})
-                                return_results[data_key]['experiments'].append(data_experiment)
-                            else:
-                                data_key = "{}-{}-{}".format(key, assay, target)
-                                data_key = "".join(data_key.split())
-                                data_experiment = dict()
-                                data_experiment['accession'] = accession
-                                data_experiment['sampleStorage'] = storage
-                                data_experiment['sampleStorageProcessing'] = processing
-                                return_results.setdefault(data_key, {'name': key,
-                                                                     'experimentTarget': target,
-                                                                     'assayType': assay,
-                                                                     'key': data_key,
-                                                                     'url': data[key]['url'],
-                                                                     'filename': data[key]['filename'],
-                                                                     'experiments': []})
-                                return_results[data_key]['experiments'].append(data_experiment)
-                    else:
-                        expand_object(data[key], data['assayType'], data['experimentTarget'], data['accession'],
-                                      data['sampleStorage'], data['sampleStorageProcessing'])
-
-        for item in results['hits']['hits']:
-            expand_object(item['_source'])
-        for item in return_results:
-            self.es_staging.index(index='protocol_files', doc_type="_doc", id=item, body=return_results[item])
+    def create_analysis_protocol(self):
+        """
+        This function will create protocols data for analyses
+        """
+        pass
 
 
 if __name__ == "__main__":

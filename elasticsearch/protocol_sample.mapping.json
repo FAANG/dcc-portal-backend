@@ -16,10 +16,7 @@
     "url": {
       "type": "keyword"
     },
-    "protocolType": {
-      "type": "keyword"
-    },
-    "specimen": {
+    "specimens": {
       "properties": {
         "id": {
           "type": "keyword"
