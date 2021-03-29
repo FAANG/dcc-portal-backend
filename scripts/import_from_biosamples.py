@@ -15,6 +15,7 @@ import click
 import os
 import os.path
 import constants
+import pandas as pd
 
 INDEXED_SAMPLES = dict()
 ORGANISM = dict()
@@ -54,7 +55,7 @@ ALL_MATERIAL_TYPES = dict()
 )
 @click.option(
     '--es_index_prefix',
-    default="",
+    default="faang_build_3",
     help='Specify the Elastic Search index prefix, e.g. '
          'faang_build_1_ then the indices will be faang_build_1_organism etc.'
          'If not provided, then work on the aliases'
@@ -254,51 +255,53 @@ def fetch_records_by_project_via_etag(etags, es, es_index_prefix):
     global TOTAL_RECORDS_TO_UPDATE
     counts = dict()
     today = datetime.now().strftime('%Y-%m-%d')
-    with open("etag_list_{}.txt".format(today), 'r') as f:
-        for line in f:
-            line = line.rstrip()
-            data = line.split("\t")
-            # etag in ES matches the live version, no change
-            if data[0] in etags and etags[data[0]] and etags[data[0]] == data[1]:
-                INDEXED_SAMPLES[data[0]] = 1
-                continue
+
+    def get_single_biosample_and_categorise(data):
+        global TOTAL_RECORDS_TO_UPDATE
+        # etag in ES matches the live version, no change
+        if data[0] in etags and etags[data[0]] and etags[data[0]] == data[1]:
+            INDEXED_SAMPLES[data[0]] = 1
+            return
+        else:
+            single = unify_field_names(fetch_single_record(data[0]))
+            single['etag'] = data[1]
+            if not check_is_faang(single):
+                sample_type = determine_sample_type(single)
+                insert_es_log(es, es_index_prefix, sample_type, single['accession'], 'error', 'no project=FAANG')
+                return
+            material = single['characteristics']['Material'][0]['text']
+            if material in ALL_MATERIAL_TYPES and material != ALL_MATERIAL_TYPES[material]:
+                material = ALL_MATERIAL_TYPES[material]
+                single['characteristics']['Material'][0]['text'] = material
+                single['characteristics']['Material'][0]['ontologyTerms'][0] = MATERIAL_TYPES[material]
+            if material == 'organism':
+                ORGANISM[data[0]] = single
+                # this may seem to be duplicate, however necessary: any unrecognized material type will be stored
+                # in counts, but will not be loaded into ES and need to inform FAANG DCC
+                TOTAL_RECORDS_TO_UPDATE += 1
+            elif material == 'specimen from organism':
+                SPECIMEN_FROM_ORGANISM[data[0]] = single
+                TOTAL_RECORDS_TO_UPDATE += 1
+            elif material == 'cell specimen':
+                CELL_SPECIMEN[data[0]] = single
+                TOTAL_RECORDS_TO_UPDATE += 1
+            elif material == 'cell culture':
+                CELL_CULTURE[data[0]] = single
+                TOTAL_RECORDS_TO_UPDATE += 1
+            elif material == 'cell line':
+                CELL_LINE[data[0]] = single
+                TOTAL_RECORDS_TO_UPDATE += 1
+            elif material == 'pool of specimens':
+                POOL_SPECIMEN[data[0]] = single
+                TOTAL_RECORDS_TO_UPDATE += 1
             else:
-                single = unify_field_names(fetch_single_record(data[0]))
-                single['etag'] = data[1]
-                if not check_is_faang(single):
-                    sample_type = determine_sample_type(single)
-                    insert_es_log(es, es_index_prefix, sample_type, single['accession'], 'error', 'no project=FAANG')
-                    continue
-                material = single['characteristics']['Material'][0]['text']
-                if material in ALL_MATERIAL_TYPES and material != ALL_MATERIAL_TYPES[material]:
-                    material = ALL_MATERIAL_TYPES[material]
-                    single['characteristics']['Material'][0]['text'] = material
-                    single['characteristics']['Material'][0]['ontologyTerms'][0] = MATERIAL_TYPES[material]
-                if material == 'organism':
-                    ORGANISM[data[0]] = single
-                    # this may seem to be duplicate, however necessary: any unrecognized material type will be stored
-                    # in counts, but will not be loaded into ES and need to inform FAANG DCC
-                    TOTAL_RECORDS_TO_UPDATE += 1
-                elif material == 'specimen from organism':
-                    SPECIMEN_FROM_ORGANISM[data[0]] = single
-                    TOTAL_RECORDS_TO_UPDATE += 1
-                elif material == 'cell specimen':
-                    CELL_SPECIMEN[data[0]] = single
-                    TOTAL_RECORDS_TO_UPDATE += 1
-                elif material == 'cell culture':
-                    CELL_CULTURE[data[0]] = single
-                    TOTAL_RECORDS_TO_UPDATE += 1
-                elif material == 'cell line':
-                    CELL_LINE[data[0]] = single
-                    TOTAL_RECORDS_TO_UPDATE += 1
-                elif material == 'pool of specimens':
-                    POOL_SPECIMEN[data[0]] = single
-                    TOTAL_RECORDS_TO_UPDATE += 1
-                else:
-                    insert_es_log(es, es_index_prefix, 'sample', data[0], 'error',
-                                  f'not recognized material type {material}')
-                counts.setdefault(material, 0)
-                counts[material] += 1
+                insert_es_log(es, es_index_prefix, 'sample', data[0], 'error',
+                                f'not recognized material type {material}')
+            counts.setdefault(material, 0)
+            counts[material] += 1
+
+    df = pd.read_csv("etag_list_{}.txt".format(today), delimiter = "\t", header=None)
+    df.apply(lambda data: get_single_biosample_and_categorise(data), axis=1)
     if TOTAL_RECORDS_TO_UPDATE == 0:
         write_system_log(es, 'import_biosamples', 'info', get_line_number(),
                          'All records have not been modified since last importation.', to_es_flag)
@@ -361,38 +364,27 @@ def fetch_records_by_project(es, es_index_prefix):
     biosamples = list()
     counts = dict()
 
-    url = 'https://www.ebi.ac.uk/biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG'
-    write_system_log(es, 'import_biosamples', 'info', get_line_number(),
-                     f'Size of local etag cache: {str(len(ETAGS_CACHE))}', to_es_flag)
-    while url:
-        write_system_log(es, 'import_biosamples', 'info', get_line_number(), f'Fetching data from {url}', to_es_flag)
-        response = requests.get(url).json()
-        for biosample in response['_embedded']['samples']:
-            if biosample['accession'] in known_missing_essential_records:
-                continue
-            biosample = unify_field_names(biosample)
-            if find_essential_fields(biosample):
-                biosample['etag'] = ETAGS_CACHE[biosample['accession']]
-                biosamples.append(biosample)
-            else:
-                with open(ERROR_ESSENTIAL_FILENAME , 'a') as w:
-                    w.write(f"{biosample['accession']}\n")
-                    sample_type = determine_sample_type(biosample)
-                    insert_es_log(es, es_index_prefix, sample_type, biosample['accession'], 'error',
-                                  'missing essential fields')
-                    # to activate cronjob email notification
-                    print(f"{biosample['accession']} does not have essential fields\n")
-
-        if 'next' in response['_links']:
-            url = response['_links']['next']['href']
+    def get_valid_biosamples(biosample):
+        if biosample['accession'] in known_missing_essential_records:
+            return
+        biosample = unify_field_names(biosample)
+        if find_essential_fields(biosample):
+            biosample['etag'] = ETAGS_CACHE[biosample['accession']]
+            biosamples.append(biosample)
         else:
-            url = ''
+            with open(ERROR_ESSENTIAL_FILENAME , 'a') as w:
+                w.write(f"{biosample['accession']}\n")
+                sample_type = determine_sample_type(biosample)
+                insert_es_log(es, es_index_prefix, sample_type, biosample['accession'], 'error',
+                                'missing essential fields')
+                # to activate cronjob email notification
+                print(f"{biosample['accession']} does not have essential fields\n")
 
-    for i, biosample in enumerate(biosamples):
+    def categorise_biosamples(biosample):
         if not check_is_faang(biosample):
             sample_type = determine_sample_type(biosample)
             insert_es_log(es, es_index_prefix, sample_type, biosample['accession'], 'error', 'no project=FAANG')
-            continue
+            return
         material = biosample['characteristics']['Material'][0]['text']
         if material in ALL_MATERIAL_TYPES and material != ALL_MATERIAL_TYPES[material]:
             material = ALL_MATERIAL_TYPES[material]
@@ -413,6 +405,24 @@ def fetch_records_by_project(es, es_index_prefix):
             POOL_SPECIMEN[biosample['accession']] = biosample
         counts.setdefault(material, 0)
         counts[material] += 1
+
+    url = 'https://www.ebi.ac.uk/biosamples/samples?size=1000&filter=attr%3Aproject%3AFAANG'
+    write_system_log(es, 'import_biosamples', 'info', get_line_number(),
+                     f'Size of local etag cache: {str(len(ETAGS_CACHE))}', to_es_flag)
+    while url:
+        write_system_log(es, 'import_biosamples', 'info', get_line_number(), f'Fetching data from {url}', to_es_flag)
+        response = requests.get(url).json()
+        df = pd.DataFrame(response['_embedded']['samples'])
+        # collect valid biosamples to import
+        df.apply(lambda biosample: get_valid_biosamples(biosample), axis=1)
+        if 'next' in response['_links']:
+            url = response['_links']['next']['href']
+        else:
+            url = ''
+    # categorise biosamples based on material types
+    df = pd.DataFrame(biosamples)
+    df.apply(lambda biosample: categorise_biosamples(biosample), axis=1)
+        
     for k, v in counts.items():
         TOTAL_RECORDS_TO_UPDATE += v
         write_system_log(es, 'import_biosamples', 'info', get_line_number(),
@@ -500,8 +510,9 @@ def process_organisms(es, es_index_prefix) -> None:
     which extracts the data and insert into elasticsearch
     """
     converted = dict()
-    for accession, item in ORGANISM.items():
+    def get_processed_organism_data(item):
         doc_for_update = dict()
+        accession = item['accession']
         doc_for_update['organism'] = {
             "text": check_existence(item, 'Organism', 'text'),
             "ontologyTerms": check_existence(item, 'Organism', 'ontologyTerms')
@@ -560,8 +571,10 @@ def process_organisms(es, es_index_prefix) -> None:
                 'text': check_existence(item, 'strain', 'text'),
                 'ontologyTerms': check_existence(item, 'strain', 'ontologyTerms')
             }
-
         converted[accession] = doc_for_update
+
+    organism_df = pd.DataFrame(list(ORGANISM.values()))
+    organism_df.apply(lambda organism: get_processed_organism_data(organism), axis=1)
     import_into_es(converted, es_index_prefix, 'organism', es)
 
 
@@ -572,8 +585,9 @@ def process_specimens(es, es_index_prefix) -> None:
     :param es_index_prefix: the index prefix (build version)
     """
     converted = dict()
-    for accession, item in SPECIMEN_FROM_ORGANISM.items():
+    def get_processed_specimen_data(item):
         doc_for_update = dict()
+        accession = item['accession']
         relationships = parse_relationship(item)
         url = check_existence(item, 'specimen collection protocol', 'text')
         organism_accession = None
@@ -647,16 +661,17 @@ def process_specimens(es, es_index_prefix) -> None:
                         'ontologyTerms': health_status['ontologyTerms'][0]
                     }
                 )
-
         successful = add_organism(es, es_index_prefix, accession, organism_accession)
         if not successful:
-            continue
-
+            return
         doc_for_update['organism'] = ORGANISM_FOR_SPECIMEN[organism_accession]
         doc_for_update['alternativeId'] = get_alternative_id(relationships)
         ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
         ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
         converted[accession] = doc_for_update
+    
+    specimen_df = pd.DataFrame(list(SPECIMEN_FROM_ORGANISM.values()))
+    specimen_df.apply(lambda specimen: get_processed_specimen_data(specimen), axis=1)
     import_into_es(converted, es_index_prefix, 'specimen', es)
 
 
@@ -680,8 +695,9 @@ def process_cell_specimens(es, es_index_prefix) -> None:
     :param es_index_prefix: the index prefix (build version)
     """
     converted = dict()
-    for accession, item in CELL_SPECIMEN.items():
+    def get_processed_cell_specimen_data(item):
         doc_for_update = dict()
+        accession = item['accession']
         relatioships = parse_relationship(item)
         url = check_existence(item, 'purification protocol', 'text')
         filename = get_filename_from_url(url, accession)
@@ -718,11 +734,14 @@ def process_cell_specimens(es, es_index_prefix) -> None:
         doc_for_update['alternativeId'] = get_alternative_id(relatioships)
         successful = add_organism(es, es_index_prefix, accession, organism_accession)
         if not successful:
-            continue
+            return
         doc_for_update['organism'] = ORGANISM_FOR_SPECIMEN[organism_accession]
         ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
         ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
         converted[accession] = doc_for_update
+    
+    cell_specimen_df = pd.DataFrame(list(CELL_SPECIMEN.values()))
+    cell_specimen_df.apply(lambda cell_specimen: get_processed_cell_specimen_data(cell_specimen), axis=1)
     import_into_es(converted, es_index_prefix, 'specimen', es)
 
 
@@ -733,8 +752,9 @@ def process_cell_cultures(es, es_index_prefix) -> None:
     :param es_index_prefix: the index prefix (build version)
     """
     converted = dict()
-    for accession, item in CELL_CULTURE.items():
+    def get_processed_cell_culture_data(item):
         doc_for_update = dict()
+        accession = item['accession']
         relationships = parse_relationship(item)
         url = check_existence(item, 'cell culture protocol', 'text')
         filename = get_filename_from_url(url, accession)
@@ -789,11 +809,14 @@ def process_cell_cultures(es, es_index_prefix) -> None:
         doc_for_update['alternativeId'] = get_alternative_id(relationships)
         successful = add_organism(es, es_index_prefix, accession, organism_accession)
         if not successful:
-            continue
+            return
         doc_for_update['organism'] = ORGANISM_FOR_SPECIMEN[organism_accession]
         ORGANISM_REFERRED_BY_SPECIMEN.setdefault(organism_accession, 0)
         ORGANISM_REFERRED_BY_SPECIMEN[organism_accession] += 1
         converted[accession] = doc_for_update
+    
+    cell_culture_df = pd.DataFrame(list(CELL_CULTURE.values()))
+    cell_culture_df.apply(lambda cell_culture: get_processed_cell_culture_data(cell_culture), axis=1)
     import_into_es(converted, es_index_prefix, 'specimen', es)
 
 
@@ -803,11 +826,10 @@ def process_pool_specimen(es, es_index_prefix) -> None:
     :param es: Elasticsearch object
     :param es_index_prefix: the index prefix (build version)
     """
-    global SPECIMEN_FROM_ORGANISM
-    global SPECIMEN_ORGANISM_RELATIONSHIP
     converted = dict()
-    for accession, item in POOL_SPECIMEN.items():
+    def get_processed_pool_specimen_data(item):
         doc_for_update = dict()
+        accession = item['accession']
         relationships = parse_relationship(item)
         url = check_existence(item, 'pool creation protocol', 'text')
         filename = get_filename_from_url(url, accession)
@@ -905,6 +927,9 @@ def process_pool_specimen(es, es_index_prefix) -> None:
                 doc_for_update['organism'].setdefault(field_name, {})
                 doc_for_update['organism'][field_name]['text'] = ";".join(values)
         converted[accession] = doc_for_update
+    
+    pool_specimen_df = pd.DataFrame(list(POOL_SPECIMEN.values()))
+    pool_specimen_df.apply(lambda pool_specimen: get_processed_pool_specimen_data(pool_specimen), axis=1)
     import_into_es(converted, es_index_prefix, 'specimen', es)
 
 
@@ -915,8 +940,9 @@ def process_cell_lines(es, es_index_prefix) -> None:
     :param es_index_prefix: the index prefix (build version)
     """
     converted = dict()
-    for accession, item in CELL_LINE.items():
+    def get_processed_cell_line_data(item):
         doc_for_update = dict()
+        accession = item['accession']
         relationships = parse_relationship(item)
         url = check_existence(item, 'culture protocol', 'text')
         if url:
@@ -984,6 +1010,9 @@ def process_cell_lines(es, es_index_prefix) -> None:
         for field_name in ['organism', 'sex', 'breed']:
             doc_for_update['organism'][field_name] = doc_for_update['cellLine'][field_name]
         converted[accession] = doc_for_update
+    
+    cell_line_df = pd.DataFrame(list(CELL_LINE.values()))
+    cell_line_df.apply(lambda cell_line: get_processed_cell_line_data(cell_line), axis=1)
     import_into_es(converted, es_index_prefix, 'specimen', es)
 
 
@@ -1262,14 +1291,16 @@ def clean_elasticsearch(index, es):
     :param es: elasticsearch object
     """
     data = es.search(index=index, size=100000, _source="_id,standardMet")
-    for hit in data['hits']['hits']:
+    df = pd.DataFrame( data['hits']['hits'])
+
+    def delete_record(hit):
         if hit['_id'] not in INDEXED_SAMPLES:
             # Legacy (basic) data imported in import_from_ena_legacy, not here, so could not be cleaned
-            to_be_cleaned = True
             if 'standardMet' in hit['_source'] and hit['_source']['standardMet'] == constants.STANDARD_BASIC:
-                to_be_cleaned = False
-            if to_be_cleaned:
-                es.delete(index=index, doc_type='_doc', id=hit['_id'])
+                return
+            # es.delete(index=index, doc_type='_doc', id=hit['_id'])
+
+    df.apply(lambda hit: delete_record(hit), axis=1)
 
 
 if __name__ == "__main__":
