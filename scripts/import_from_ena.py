@@ -16,12 +16,21 @@ import json
 import requests
 import re
 from misc import convert_readable, get_filename_from_url
+import pandas as pd
+import copy
 
 RULESETS = ["FAANG Experiments", "FAANG Legacy Experiments"]
 
 to_es_flag = True
+es = ''
+ruleset_version = ''
 alias_cache = dict()
-
+new_errors = dict()
+datasets_missing_specimens = dict()
+indexed_files = dict()
+datasets = dict()
+experiments = dict()
+files_dict = dict()
 
 @click.command()
 @click.option(
@@ -32,7 +41,7 @@ alias_cache = dict()
 )
 @click.option(
     '--es_index_prefix',
-    default="",
+    default="faang_build_3",
     help='Specify the Elastic Search index prefix, e.g. '
          'faang_build_1_ then the indices will be faang_build_1_experiment etc.'
          'If not provided, then work on the aliases, e.g. experiment'
@@ -52,7 +61,8 @@ def main(es_hosts: str, es_index_prefix: str, to_es: str):
     :param to_es: determine whether to output log to Elasticsearch (True) or terminal (False, printing)
     :return:
     """
-    global to_es_flag
+    global to_es_flag, es, ruleset_version
+
     # initialize ES first as needed to do logging
     hosts = es_hosts.split(";")
     es = Elasticsearch(hosts)
@@ -81,105 +91,329 @@ def main(es_hosts: str, es_index_prefix: str, to_es: str):
                          'No specimen data found in the given index, please run import_from_biosamles.py first',
                          to_es_flag)
         sys.exit(1)
+    
     known_errors = get_known_errors()
-    new_errors = dict()
-    datasets_missing_specimens = dict()
-
     ruleset_version = validate_record.ValidateRecord.get_ruleset_version()
     write_system_log(es, 'import_ena', 'info', get_line_number(),
                      f'Current experiment ruleset version: {ruleset_version}', to_es_flag)
-
     write_system_log(es, 'import_ena', 'info', get_line_number(), 'Retrieving data from ENA', to_es_flag)
     data = get_ena_data(es)
+    df = pd.DataFrame(data)
 
-    indexed_files = dict()
-    datasets = dict()
-    experiments = dict()
-    files_dict = dict()
-    studies_from_api = dict()
-    exps_in_dataset = dict()
-    for record in data:
+    # some studies use non-standard values or miss value for assay type, library strategy and experiment target
+    # standardize them below based on the 1-to-1 relationship in the ruleset
+    # assign assay type according to library strategy
+    df['assay_type'] = df.apply(lambda record: assign_assay_type(record), axis=1)
+
+    # update some experiment target values
+    # assign value to experiment target if empty according to assay type
+    df['experiment_target'] = df.apply(lambda record: assign_exp_target(record), axis=1)
+
+    # one experiment could have multiple runs/files, therefore experiment info needs to be collected once
+    exp_df = df.drop_duplicates(subset=['experiment_accession'], keep='first')
+    exp_df.apply(lambda record: get_experiments_data(record), axis=1)
+
+    # get files and datasets
+    df.apply(lambda record: get_datasets_files_data(record, biosample_ids, known_errors), axis=1)
+
+    # log runs, experiments and datasets to be processed
+    write_system_log(es, 'import_ena', 'info', get_line_number(), 'The dataset list:', to_es_flag)
+    dataset_ids_df = df.groupby(['study_accession']).size().reset_index(name='counts')
+    dataset_ids_df.apply(lambda record: log_runs_exp_datasets(record), axis=1)
+    # datasets contains one artificial value set with the key as 'tmp', so need to -1
+    write_system_log(es, 'import_ena', 'info', get_line_number(),
+                     f'There are {len(list(datasets.keys())) -  1} datasets to be processed', to_es_flag)
+    
+    # Validate and Import Experiments
+    write_system_log(es, 'import_ena', 'info', get_line_number(), 'Start to import Experiments', to_es_flag)
+    validator = validate_experiment_record.ValidateExperimentRecord(experiments, RULESETS)
+    validation_results = validator.validate()
+    exp_validation = dict()
+    experiments_df = pd.DataFrame(list(experiments.values()))
+    experiments_df.apply(lambda exp: import_experiment(exp, validation_results, exp_validation, es_index_prefix), axis=1) 
+    
+    # Import Files
+    write_system_log(es, 'import_ena', 'info', get_line_number(), 'Start to import Files', to_es_flag)
+    files_df = pd.DataFrame(list(files_dict.values()))
+    files_df.apply(lambda file_doc: import_file(file_doc, exp_validation, es_index_prefix), axis=1)
+
+    # Import Datasets
+    write_system_log(es, 'import_ena', 'info', get_line_number(), 'Start to import Datasets', to_es_flag)
+    datasets2 = copy.deepcopy(datasets)
+    datasets2.pop('tmp', None) # datasets with key 'tmp' need not be imported
+    dataset_df = pd.DataFrame(list(datasets2.values()))
+    dataset_df.apply(lambda dataset: import_dataset(dataset, exp_validation, es_index_prefix), axis=1)
+
+    # save newly found errors to file
+    with open('ena_not_in_biosample.txt', 'a') as w:
+        for study in new_errors:
+            tmp = new_errors[study]
+            for biosample in sorted(tmp.keys()):
+                write_system_log(es, 'import_ena', 'warning', get_line_number(),
+                                 f'{biosample} from {study} does not exist in BioSamples at the moment', to_es_flag)
+                insert_es_log(es, es_index_prefix, 'specimen', biosample, 'warning',
+                              f'referenced in {study} but not found in BioSamples')
+                w.write(f"{study}\t{biosample}\n")
+
+    # log missing specimens to elastic search
+    for dataset_id in datasets_missing_specimens:
+        missing_specimens = datasets_missing_specimens[dataset_id]
+        msg = "specimens " + ",".join(missing_specimens) + " missing"
+        insert_es_log(es, es_index_prefix, 'dataset', dataset_id, 'warning', msg)
+
+    write_system_log(es, 'import_ena', 'info', get_line_number(), 'Finish importing ena', to_es_flag)
+    
+def import_experiment(exp_es, validation_results, exp_validation, es_index_prefix):
+    '''
+    This function indexes experiment if it meets standards
+    and imports the experiment into elasticsearch
+    '''
+    exp_id = exp_es['accession']
+    error_messages = list()
+    status = ''
+    for ruleset in RULESETS:
+        if validation_results[ruleset]['detail'][exp_id]['status'] == 'error':
+            status = 'error'
+            error_messages.append(f"error\t{ruleset}\t{validation_results[ruleset]['detail'][exp_id]['message']}")
+        else:
+            # only indexing when meeting standard
+            exp_validation[exp_id] = STANDARDS[ruleset]
+            exp_es['standardMet'] = STANDARDS[ruleset]
+            if exp_es['standardMet'] == STANDARD_FAANG:
+                exp_es['versionLastStandardMet'] = ruleset_version
+            body = json.dumps(exp_es.to_dict())
+            insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
+            status = validation_results[ruleset]['detail'][exp_id]['status']
+            error_messages.append(f"{status}\t{ruleset}\t"
+                                    f"{validation_results[ruleset]['detail'][exp_id]['message']}")
+            # index into ES so break the loop
+            break
+    insert_es_log(es, es_index_prefix, 'experiment', exp_id, status, ";".join(error_messages))
+
+def import_file(es_file_doc, exp_validation, es_index_prefix):
+    '''
+    This function imports file into elasticsearch
+    '''
+    file_id = es_file_doc['name'].split(".")[0]
+    exp_id = es_file_doc['experiment']['accession']
+    if exp_id not in exp_validation:
+        return
+    es_file_doc['experiment']['standardMet'] = exp_validation[exp_id]
+    body = json.dumps(es_file_doc.to_dict())
+    insert_into_es(es, es_index_prefix, 'file', file_id, body)
+    indexed_files[file_id] = 1
+
+def import_dataset(es_doc_dataset, exp_validation, es_index_prefix):
+    '''
+    This function imports dataset into elasticsearch
+    '''
+    dataset_id = es_doc_dataset['accession']
+    exps = datasets['tmp'][dataset_id]["experiment"]
+    only_valid_exps = dict()
+    dataset_standard = STANDARD_FAANG
+    experiment_type = dict()
+    tech_type = dict()
+    for exp_id in exps:
+        if exp_id in exp_validation:
+            if exp_validation[exp_id] == STANDARD_LEGACY:
+                dataset_standard = STANDARD_LEGACY
+            only_valid_exps[exp_id] = exps[exp_id]
+            assay_type = exps[exp_id]['assayType']
+            tech_type.setdefault(TECHNOLOGIES[assay_type], 0)
+            tech_type[TECHNOLOGIES[assay_type]] += 1
+            experiment_type.setdefault(assay_type, 0)
+            experiment_type[assay_type] += 1
+    num_valid_exps = len(only_valid_exps.keys())
+    if num_valid_exps == 0:
+        msg = 'no valid experiments to be imported'
+        if dataset_id in datasets_missing_specimens:
+            missing_specimens = datasets_missing_specimens[dataset_id]
+            msg = msg + "; specimens " + ",".join(missing_specimens) + " missing"
+            datasets_missing_specimens.pop(dataset_id)
+        insert_es_log(es, es_index_prefix, 'dataset', dataset_id, 'warning', msg)
+        write_system_log(es, 'import_ena', 'warning', get_line_number(),
+                            f'dataset {dataset_id} has no valid experiments, skipped.', to_es_flag)
+        return
+    es_doc_dataset['standardMet'] = dataset_standard
+    specimens_dict = datasets['tmp'][dataset_id]['specimen']
+    species = dict()
+    specimens_list = list()
+    for specimen in specimens_dict:
+        specimen_detail = biosample_ids[specimen]
+        es_doc_specimen = {
+            'biosampleId': specimen_detail['biosampleId'],
+            'material': specimen_detail['material'],
+            'cellType': specimen_detail['cellType'],
+            'organism': specimen_detail['organism']['organism'],
+            'sex': specimen_detail['organism']['sex'],
+            'breed': specimen_detail['organism']['breed']
+        }
+        specimens_list.append(es_doc_specimen)
+        species[specimen_detail['organism']['organism']['text']] = specimen_detail['organism']['organism']
+    es_doc_dataset['specimen'] = sorted(specimens_list, key=lambda k: k['biosampleId'])
+    es_doc_dataset['species'] = list(species.values())
+    file_arr = datasets['tmp'][dataset_id]['file'].values()
+    valid_files = list()
+    for file_entry in sorted(file_arr, key=lambda k: k['name']):
+        file_id = file_entry['fileId']
+        if file_id in indexed_files:
+            valid_files.append(file_entry)
+    es_doc_dataset['file'] = valid_files
+    es_doc_dataset['experiment'] = list(only_valid_exps.values())
+    es_doc_dataset['assayType'] = list(experiment_type.keys())
+    es_doc_dataset['tech'] = list(tech_type.keys())
+    es_doc_dataset['instrument'] = list(datasets['tmp'][dataset_id]['instrument'].keys())
+    es_doc_dataset['centerName'] = list(datasets['tmp'][dataset_id]['center_name'].keys())
+    es_doc_dataset['secondaryProject'] = list(datasets['tmp'][dataset_id]['secondaryProject'].keys())
+    es_doc_dataset['archive'] = sorted(list(datasets['tmp'][dataset_id]['archive'].keys()))
+    body = json.dumps(es_doc_dataset.to_dict())
+    insert_into_es(es, es_index_prefix, 'dataset', dataset_id, body)
+
+def assign_assay_type(record):
+    '''
+    This function will standardize assay types based on the 1-to-1 relationship 
+    in the ruleset and assign assay type according to library strategy
+    '''
+    assay_type = record['assay_type']
+    library_strategy = record['library_strategy']
+    if assay_type == '':
+        if library_strategy == 'Bisulfite-Seq':
+            return 'methylation profiling by high throughput sequencing'
+        elif library_strategy == 'DNase-Hypersensitivity':
+            return 'DNase-Hypersensitivity seq'
+    elif assay_type == 'whole genome sequencing':
+        return 'whole genome sequencing assay'
+    return assay_type
+
+def assign_exp_target(record):
+    '''
+    This function will assign value to experiment target if empty,
+    according to the assay type
+    '''
+    assay_type = record['assay_type']
+    experiment_target = record['experiment_target']
+    assay_type_exp_target_mapping = {
+        'ATAC-seq' : 'open_chromatin_region',
+        'methylation profiling by high throughput sequencing': 'DNA methylation',
+        'DNase-Hypersensitivity seq': 'open_chromatin_region',
+        'Hi-C': 'chromatin',
+        'whole genome sequencing assay': 'input DNA',
+        'CAGE-seq': 'TSS'
+    }
+    if experiment_target == 'EFO_0005031':
+        return 'input DNA'
+    elif experiment_target == 'CHEBI_33697':
+        return 'RNA'
+    elif len(experiment_target) == 0 and assay_type in assay_type_exp_target_mapping.keys():
+        return assay_type_exp_target_mapping[assay_type]
+    return experiment_target
+
+def log_runs_exp_datasets(record):
+    '''
+    This function will log the no. of runs and experiments for 
+    the datasets associated with the given record
+    '''
+    dataset_id = record['study_accession']
+    num_runs = record['counts']
+    num_exps = 0
+    # noinspection PyTypeChecker
+    if dataset_id in datasets['tmp'] and 'experiment' in datasets['tmp'][dataset_id]:
+        # noinspection PyTypeChecker
+        num_exps = len(list(datasets['tmp'][dataset_id]["experiment"].keys()))
+    printed_index = record.name + 1
+    write_system_log(es, 'import_ena', 'info', get_line_number(),
+                     f'{printed_index} {dataset_id} has {num_runs} runs from api '
+                     f'and {num_exps} experiments to be processed', to_es_flag)
+
+def get_datasets_files_data(record, biosample_ids, known_errors):
+    """
+    This function will collect information about datasets 
+    and files associated with the given record
+    """
+    dataset_id = record['study_accession']
+    library_strategy = record['library_strategy']
+    assay_type = record['assay_type']
+    experiment_target = record['experiment_target']
+
+    if assay_type == 'ChIP-seq' and experiment_target.lower() != 'input dna':
+        target_used_in_file = record['chip_target']
+    else:
+        target_used_in_file = experiment_target
+
+    file_type, source_type = determine_file_and_source(record)
+
+    if file_type == '':
+        return
+    if file_type == 'fastq':
+        archive = 'ENA'
+    elif file_type == 'cram_index':
+        archive = 'ENA'
+        file_type = 'submitted'
+        source_type = 'ftp'
+    else:
+        archive = 'SRA'
+
+    files = record[f"{file_type}_{source_type}"].split(";")
+    sizes = record[f"{file_type}_bytes"].split(";")
+    if file_type == 'fastq':
+        types = ['fastq'] * len(files)
+    else:
+        types = record['submitted_format'].split(";")
+    if len(files) != len(types) or len(files) != len(sizes) or len(types) == 0:
+        return
+    # for ENA, it is fixed to MD5 as the checksum method
+    checksums = record[f"{file_type}_md5"].split(";")
+
+    specimen_biosample_id = record['sample_accession']
+    # if the ena records contains biosample records which have not been in FAANG data portal (biosample_ids)
+    # and not been reported before (known_errors) then these records need to be reported
+    if specimen_biosample_id not in biosample_ids:
+        datasets_missing_specimens.setdefault(dataset_id, list())
+        datasets_missing_specimens[dataset_id].append(specimen_biosample_id)
+        if (dataset_id not in known_errors) \
+                or (dataset_id in known_errors
+                    and specimen_biosample_id not in known_errors[dataset_id]):
+            new_errors.setdefault(dataset_id, {})
+            new_errors[dataset_id][specimen_biosample_id] = 1
+    else:
+        exp_id = record['experiment_accession']
         dataset_id = record['study_accession']
-        studies_from_api.setdefault(dataset_id, 0)
-        studies_from_api[dataset_id] += 1
-        library_strategy = record['library_strategy']
-        assay_type = record['assay_type']
-        experiment_target = record['experiment_target']
-        if experiment_target == 'EFO_0005031':
-            experiment_target = 'input DNA'
-        if experiment_target == 'CHEBI_33697':
-            experiment_target = 'RNA'
-        # some studies use non-standard values or miss value for assay type, library strategy and experiment target
-        # standardize them below based on the 1-to-1 relationship in the ruleset
-        # assign assay type according to library strategy
-        if assay_type == '':
-            if library_strategy == 'Bisulfite-Seq':
-                assay_type = 'methylation profiling by high throughput sequencing'
-            elif library_strategy == 'DNase-Hypersensitivity':
-                assay_type = 'DNase-Hypersensitivity seq'
-        if assay_type == 'whole genome sequencing':
-            assay_type = 'whole genome sequencing assay'
-        # assign value to experiment target if empty according to assay type
-        if assay_type == 'ATAC-seq':
-            if len(experiment_target) == 0:
-                experiment_target = 'open_chromatin_region'
-        elif assay_type == 'methylation profiling by high throughput sequencing':
-            if len(experiment_target) == 0:
-                experiment_target = 'DNA methylation'
-        elif assay_type == 'DNase-Hypersensitivity seq':
-            if len(experiment_target) == 0:
-                experiment_target = 'open_chromatin_region'
-        elif assay_type == 'Hi-C':
-            if len(experiment_target) == 0:
-                experiment_target = 'chromatin'
-        elif assay_type == 'whole genome sequencing assay':
-            if len(experiment_target) == 0:
-                experiment_target = 'input DNA'
-        elif assay_type == 'CAGE-seq':
-            if len(experiment_target) == 0:
-                experiment_target = 'TSS'
-
-        if assay_type == 'ChIP-seq' and experiment_target.lower() != 'input dna':
-            target_used_in_file = record['chip_target']
+        # dataset (study) has mutliple experiments/runs/files/specimens_list so collection information into datasets
+        # and process it after iteration of all files
+        exps_in_dataset = dict()
+        exps_in_dataset[exp_id] = dataset_id
+        es_doc_dataset = dict()
+        if dataset_id in datasets:
+            es_doc_dataset = datasets[dataset_id]
         else:
-            target_used_in_file = experiment_target
+            es_doc_dataset['accession'] = dataset_id
+            es_doc_dataset['alias'] = record['study_alias']
+            es_doc_dataset['title'] = record['study_title']
+            es_doc_dataset['secondaryAccession'] = record['secondary_study_accession']
 
-        file_type, source_type = determine_file_and_source(record)
+        datasets.setdefault('tmp', {})
+        datasets['tmp'].setdefault(dataset_id, {})
+        datasets['tmp'][dataset_id].setdefault('specimen', {})
+        # noinspection PyTypeChecker
+        datasets['tmp'][dataset_id]['specimen'][specimen_biosample_id] = 1
 
-        if file_type == '':
-            continue
-        if file_type == 'fastq':
-            archive = 'ENA'
-        elif file_type == 'cram_index':
-            archive = 'ENA'
-            file_type = 'submitted'
-            source_type = 'ftp'
-        else:
-            archive = 'SRA'
+        datasets['tmp'][dataset_id].setdefault('instrument', {})
+        # noinspection PyTypeChecker
+        datasets['tmp'][dataset_id]['instrument'][record['instrument_model']] = 1
 
-        files = record[f"{file_type}_{source_type}"].split(";")
-        sizes = record[f"{file_type}_bytes"].split(";")
-        if file_type == 'fastq':
-            types = ['fastq'] * len(files)
-        else:
-            types = record['submitted_format'].split(";")
-        if len(files) != len(types) or len(files) != len(sizes) or len(types) == 0:
-            continue
-        # for ENA, it is fixed to MD5 as the checksum method
-        checksums = record[f"{file_type}_md5"].split(";")
+        datasets['tmp'][dataset_id].setdefault('center_name', {})
+        # noinspection PyTypeChecker
+        datasets['tmp'][dataset_id]['center_name'][record['center_name']] = 1
+
+        datasets['tmp'][dataset_id].setdefault('secondaryProject', {})
+        # noinspection PyTypeChecker
+        datasets['tmp'][dataset_id]['secondaryProject'][record['secondary_project']] = 1
+
+        datasets['tmp'][dataset_id].setdefault('archive', {})
+        # noinspection PyTypeChecker
+        datasets['tmp'][dataset_id]['archive'][archive] = 1
+
         for index, file in enumerate(files):
-            specimen_biosample_id = record['sample_accession']
-            # if the ena records contains biosample records which have not been in FAANG data portal (biosample_ids)
-            # and not been reported before (known_errors) then these records need to be reported
-            if specimen_biosample_id not in biosample_ids:
-                datasets_missing_specimens.setdefault(dataset_id, list())
-                datasets_missing_specimens[dataset_id].append(specimen_biosample_id)
-                if (dataset_id not in known_errors) \
-                        or (dataset_id in known_errors
-                            and specimen_biosample_id not in known_errors[dataset_id]):
-                    new_errors.setdefault(dataset_id, {})
-                    new_errors[dataset_id][specimen_biosample_id] = 1
-                continue
             fullname = file.split("/")[-1]
             filename = fullname.split(".")[0]
             es_file_doc = {
@@ -226,298 +460,6 @@ def main(es_hosts: str, es_index_prefix: str, to_es: str):
                 }
             }
             files_dict[filename] = es_file_doc
-            exp_id = record['experiment_accession']
-            # one experiment could have multiple runs/files, therefore experiment info needs to be collected once
-            if exp_id not in experiments:
-                experiment_protocol = None
-                experiment_protocol_filename = None
-                if 'experimental_protocol' in record and record['experimental_protocol']:
-                    experiment_protocol = record['experimental_protocol']
-                    experiment_protocol_filename = get_filename_from_url(experiment_protocol,
-                                                                         f"{exp_id} experiment protocol")
-
-                extraction_protocol = None
-                extraction_protocol_filename = None
-                if 'extraction_protocol' in record and record['extraction_protocol']:
-                    extraction_protocol = record['extraction_protocol']
-                    extraction_protocol_filename = get_filename_from_url(extraction_protocol,
-                                                                         f"{exp_id} extraction protocol")
-
-                exp_es = {
-                    'accession': exp_id,
-                    'project': record['project'],
-                    'secondaryProject': record['secondary_project'],
-                    'assayType': assay_type,
-                    'experimentTarget': experiment_target,
-                    'libraryName': check_existsence(record, 'library_name'),
-                    'sampleStorage': check_existsence(record, 'sample_storage'),
-                    'sampleStorageProcessing': record['sample_storage_processing'],
-                    'samplingToPreparationInterval': {
-                        'text': check_existsence(record, 'sample_prep_interval'),
-                        'unit': check_existsence(record, 'sample_prep_interval_units')
-                    },
-                    'experimentalProtocol': {
-                        'url': experiment_protocol,
-                        'filename': experiment_protocol_filename
-                    },
-                    'extractionProtocol': {
-                        'url': extraction_protocol,
-                        'filename': extraction_protocol_filename
-                    },
-                    'libraryPreparationLocation': check_existsence(record, 'library_prep_location'),
-                    'libraryPreparationDate': {
-                        'text': check_existsence(record, 'library_prep_date'),
-                        'unit': check_existsence(record, 'library_prep_date_format')
-                    },
-                    'sequencingLocation': check_existsence(record, 'sequencing_location'),
-                    'sequencingDate': {
-                        'text': check_existsence(record, 'sequencing_date'),
-                        'unit': check_existsence(record, 'sequencing_date_format')
-                    }
-                }
-                if 'library_prep_longitude' in record and len(record['library_prep_longitude']) > 0:
-                    exp_es['libraryPreparationLocationLongitude'] = {
-                        'text': record['library_prep_longitude'],
-                        'unit': 'decimal degrees'
-                    }
-                if 'library_prep_latitude' in record and len(record['library_prep_latitude']) > 0:
-                    exp_es['libraryPreparationLocationLatitude'] = {
-                        'text': record['library_prep_latitude'],
-                        'unit': 'decimal degrees'
-                    }
-                if 'sequencing_longitude' in record and len(record['sequencing_longitude']) > 0:
-                    exp_es['sequencingLocationLongitude'] = {
-                        'text': record['sequencing_longitude'],
-                        'unit': 'decimal degrees'
-                    }
-                if 'sequencing_latitude' in record and len(record['sequencing_latitude']) > 0:
-                    exp_es['sequencingLocationLatitude'] = {
-                        'text': record['sequencing_latitude'],
-                        'unit': 'decimal degrees'
-                    }
-                # deal with technology specific data
-                if assay_type == 'ATAC-seq':  # ATAC-seq
-                    transposase_protocol = record['transposase_protocol']
-                    transposase_protocol_filename = get_filename_from_url(transposase_protocol,
-                                                                          f"{exp_id} ATAC transposase protocol")
-                    exp_es['ATAC-seq'] = {
-                        'transposaseProtocol': {
-                            'url': transposase_protocol,
-                            'filename': transposase_protocol_filename
-                        }
-                    }
-                elif assay_type == 'methylation profiling by high throughput sequencing':  # BS-Seq
-                    conversion_protocol = None
-                    conversion_protocol_filename = None
-                    pcr_isolation_protocol = None
-                    pcr_isolation_protocol_filename = None
-                    if 'bisulfite_protocol' in record:
-                        conversion_protocol = record['bisulfite_protocol']
-                        conversion_protocol_filename = get_filename_from_url(conversion_protocol,
-                                                                             f"{exp_id} BS conversion protocol")
-                    if 'pcr_isolation_protocol' in record:
-                        pcr_isolation_protocol = record['pcr_isolation_protocol']
-                        pcr_isolation_protocol_filename = get_filename_from_url(pcr_isolation_protocol,
-                                                                                f"{exp_id} BS pcr protocol")
-                    exp_es['BS-seq'] = {
-                        'librarySelection': record['faang_library_selection'],
-                        'bisulfiteConversionProtocol': {
-                            'url': conversion_protocol,
-                            'filename': conversion_protocol_filename
-                        },
-                        'pcrProductIsolationProtocol': {
-                            'url': pcr_isolation_protocol,
-                            'filename': pcr_isolation_protocol_filename
-                        },
-                        'bisulfiteConversionPercent': record['bisulfite_percent'],
-                        'restrictionEnzyme': record['restriction_enzyme']
-                    }
-                    # in the old ruleset, mistake made to allow RBBS instead of RRBS,
-                    # so the statement below must be there until old data gets curated
-                    if exp_es['BS-seq']['librarySelection'] == 'RBBS':
-                        exp_es['BS-seq']['librarySelection'] = 'RRBS'
-                elif assay_type == 'ChIP-seq':  # ChIP-seq
-                    chip_protocol = record['chip_protocol']
-                    chip_protocol_filename = get_filename_from_url(chip_protocol, f"{exp_id} chip protocol")
-                    section_info = {
-                        'chipProtocol': {
-                            'url': chip_protocol,
-                            'filename': chip_protocol_filename
-                        },
-                        'libraryGenerationMaxFragmentSizeRange': record['library_max_fragment_size'],
-                        'libraryGenerationMinFragmentSizeRange': record['library_min_fragment_size']
-                    }
-                    if experiment_target.lower() == 'input dna':
-                        exp_es['ChIP-seq input DNA'] = section_info
-                    else:
-                        section_info['chipAntibodyProvider'] = record['chip_ab_provider']
-                        section_info['chipAntibodyCatalog'] = record['chip_ab_catalog']
-                        section_info['chipAntibodyLot'] = record['chip_ab_lot']
-
-                        section_info['chipTarget'] = record['chip_target']
-                        original_control_experiment = record['control_experiment']
-                        converted_control_experiment = \
-                            replace_alias_with_accession(dataset_id, original_control_experiment)
-                        if not converted_control_experiment:
-                            msg = f'given control experiment value {original_control_experiment} could not ' \
-                                  f'be found with the same study {dataset_id} for experiment {exp_id}'
-                            insert_es_log(es, es_index_prefix, 'experiment', exp_id, 'error', msg)
-                            write_system_log(es, 'import_ena', 'error', get_line_number(), msg, to_es_flag)
-                            continue
-                        section_info['controlExperiment'] = converted_control_experiment
-                        exp_es['ChIP-seq DNA-binding'] = section_info
-                elif assay_type == 'DNase-Hypersensitivity seq"':  # DNase seq
-                    dnase_protocol = None
-                    dnase_protocol_filename = None
-                    if 'dnase_protocol' in record:
-                        dnase_protocol = record['dnase_protocol']
-                        dnase_protocol_filename = get_filename_from_url(dnase_protocol, f"{exp_id} dnase protocol")
-                    exp_es['DNase-seq'] = {
-                        'dnaseProtocol': {
-                            'url': dnase_protocol,
-                            'filename': dnase_protocol_filename
-                        }
-                    }
-                elif assay_type == 'Hi-C':  # Hi-C
-                    hi_c_protocol = None
-                    hi_c_protocol_filename = None
-                    if 'hi_c_protocol' in record:
-                        hi_c_protocol = record['hi_c_protocol']
-                        hi_c_protocol_filename = get_filename_from_url(hi_c_protocol, f"{exp_id} hi-c protocol")
-                    exp_es['Hi-C'] = {
-                        'restrictionEnzyme': record['restriction_enzyme'],
-                        'restrictionSite': record['restriction_site'],
-                        'hi-cProtocol': {
-                            'url': hi_c_protocol,
-                            'filename': hi_c_protocol_filename
-                        }
-                    }
-                elif assay_type == 'whole genome sequencing assay':  # WGS
-                    library_pcr_protocol = record['library_pcr_isolation_protocol']
-                    library_pcr_protocol_filename = get_filename_from_url(library_pcr_protocol,
-                                                                          f"{exp_id} WGS pcr protocol")
-                    library_generation_protocol = record['library_gen_protocol']
-                    library_generation_protocol_filename = get_filename_from_url(library_generation_protocol,
-                                                                                 f"{exp_id} WGS generation protocol")
-                    exp_es['WGS'] = {
-                        'libraryGenerationPcrProductIsolationProtocol': {
-                            'url': library_pcr_protocol,
-                            'filename': library_pcr_protocol_filename
-                        },
-                        'libraryGenerationProtocol': {
-                            'url': library_generation_protocol,
-                            'filename': library_generation_protocol_filename
-                        },
-                        'librarySelection': record['faang_library_selection']
-                    }
-                elif assay_type == 'CAGE-seq':  # CAGE-seq
-                    cage_protocol = record['cage_protocol']
-                    cage_protocol_name = get_filename_from_url(cage_protocol, f"{exp_id} CAGE-seq protocol")
-                    exp_es['CAGE-seq'] = {
-                        'rnaPurity260280ratio': record['rna_purity_280_ratio'],
-                        'rnaPurity260230ratio': record['rna_purity_230_ratio'],
-                        'rnaIntegrityNumber': record['rna_integrity_num'],
-                        'cageProtocol': {
-                            'url': cage_protocol,
-                            'filename': cage_protocol_name
-                        },
-                        'sequencingPrimerProvider': record['sequencing_primer_provider'],
-                        'sequencingPrimerCatalog': record['sequencing_primer_catalog'],
-                        'sequencingPrimerLot': record['sequencing_primer_lot'],
-                        'restrictionEnzymeTargetSequence': record['restriction_enzyme_target_sequence']
-                    }
-                else:  # RNA-seq
-                    rna_3_adapter_protocol = None
-                    rna_3_adapter_protocol_filename = None
-                    rna_5_adapter_protocol = None
-                    rna_5_adapter_protocol_filename = None
-                    library_pcr_protocol = None
-                    library_pcr_protocol_filename = None
-                    rt_protocol = None
-                    rt_protocol_filename = None
-                    library_generation_protocol = None
-                    library_generation_protocol_filename = None
-                    if 'rna_prep_3_protocol' in record:
-                        rna_3_adapter_protocol = record['rna_prep_3_protocol']
-                        rna_3_adapter_protocol_filename = get_filename_from_url(rna_3_adapter_protocol,
-                                                                                f"{exp_id} RNA 3 protocol")
-                    if 'rna_prep_5_protocol' in record:
-                        rna_5_adapter_protocol = record['rna_prep_5_protocol']
-                        rna_5_adapter_protocol_filename = get_filename_from_url(rna_5_adapter_protocol,
-                                                                                f"{exp_id} RNA 5 protocol")
-                    if 'library_pcr_isolation_protocol' in record:
-                        library_pcr_protocol = record['library_pcr_isolation_protocol']
-                        library_pcr_protocol_filename = get_filename_from_url(library_pcr_protocol,
-                                                                              f"{exp_id} RNA pcr protocol")
-                    if 'rt_prep_protocol' in record:
-                        rt_protocol = record['rt_prep_protocol']
-                        rt_protocol_filename = get_filename_from_url(rt_protocol, f"{exp_id} RNA prep protocol")
-                    if 'library_gen_protocol' in record:
-                        library_generation_protocol = record['library_gen_protocol']
-                        library_generation_protocol_filename = get_filename_from_url(library_generation_protocol,
-                                                                                     f"{exp_id} RNA generate protocol")
-                    exp_es['RNA-seq'] = {
-                        'rnaPreparation3AdapterLigationProtocol': {
-                            'url': rna_3_adapter_protocol,
-                            'filename': rna_3_adapter_protocol_filename
-                        },
-                        'rnaPreparation5AdapterLigationProtocol': {
-                            'url': rna_5_adapter_protocol,
-                            'filename': rna_5_adapter_protocol_filename
-                        },
-                        'libraryGenerationPcrProductIsolationProtocol': {
-                            'url': library_pcr_protocol,
-                            'filename': library_pcr_protocol_filename
-                        },
-                        'preparationReverseTranscriptionProtocol': {
-                            'url': rt_protocol,
-                            'filename': rt_protocol_filename
-                        },
-                        'libraryGenerationProtocol': {
-                            'url': library_generation_protocol,
-                            'filename': library_generation_protocol_filename
-                        },
-                        'readStrand': record['read_strand'],
-                        'rnaPurity260280ratio': record['rna_purity_280_ratio'],
-                        'rnaPurity260230ratio': record['rna_purity_230_ratio'],
-                        'rnaIntegrityNumber': record['rna_integrity_num']
-                    }
-                experiments[exp_id] = exp_es
-
-            # if exp_id not in experiments:
-            # dataset (study) has mutliple experiments/runs/files/specimens_list so collection information into datasets
-            # and process it after iteration of all files
-            exps_in_dataset[exp_id] = dataset_id
-            es_doc_dataset = dict()
-            if dataset_id in datasets:
-                es_doc_dataset = datasets[dataset_id]
-            else:
-                es_doc_dataset['accession'] = dataset_id
-                es_doc_dataset['alias'] = record['study_alias']
-                es_doc_dataset['title'] = record['study_title']
-                es_doc_dataset['secondaryAccession'] = record['secondary_study_accession']
-            datasets.setdefault('tmp', {})
-            datasets['tmp'].setdefault(dataset_id, {})
-            datasets['tmp'][dataset_id].setdefault('specimen', {})
-            # noinspection PyTypeChecker
-            datasets['tmp'][dataset_id]['specimen'][specimen_biosample_id] = 1
-
-            datasets['tmp'][dataset_id].setdefault('instrument', {})
-            # noinspection PyTypeChecker
-            datasets['tmp'][dataset_id]['instrument'][record['instrument_model']] = 1
-
-            datasets['tmp'][dataset_id].setdefault('center_name', {})
-            # noinspection PyTypeChecker
-            datasets['tmp'][dataset_id]['center_name'][record['center_name']] = 1
-
-            datasets['tmp'][dataset_id].setdefault('secondaryProject', {})
-            # noinspection PyTypeChecker
-            datasets['tmp'][dataset_id]['secondaryProject'][record['secondary_project']] = 1
-
-            datasets['tmp'][dataset_id].setdefault('archive', {})
-            # noinspection PyTypeChecker
-            datasets['tmp'][dataset_id]['archive'][archive] = 1
-
             tmp_file = {
                 'url': file,
                 'name': fullname,
@@ -535,158 +477,279 @@ def main(es_hosts: str, es_index_prefix: str, to_es: str):
             datasets['tmp'][dataset_id].setdefault('file', {})
             # noinspection PyTypeChecker
             datasets['tmp'][dataset_id]['file'][fullname] = tmp_file
-            tmp_exp = {
-                'accession': record['experiment_accession'],
-                'assayType': assay_type,
-                'target': experiment_target
-            }
-            datasets['tmp'][dataset_id].setdefault('experiment', {})
-            # noinspection PyTypeChecker
-            datasets['tmp'][dataset_id]['experiment'][record['experiment_accession']] = tmp_exp
-            datasets[dataset_id] = es_doc_dataset
-    # end of loop for record in data:
-
-    write_system_log(es, 'import_ena', 'info', get_line_number(), 'The dataset list:', to_es_flag)
-    dataset_ids = sorted(list(studies_from_api.keys()))
-    for index, dataset_id in enumerate(dataset_ids):
-        num_exps = 0
+            
+        tmp_exp = {
+            'accession': record['experiment_accession'],
+            'assayType': assay_type,
+            'target': experiment_target
+        }
+        datasets['tmp'][dataset_id].setdefault('experiment', {})
         # noinspection PyTypeChecker
-        if dataset_id in datasets['tmp'] and 'experiment' in datasets['tmp'][dataset_id]:
-            # noinspection PyTypeChecker
-            num_exps = len(list(datasets['tmp'][dataset_id]["experiment"].keys()))
-        printed_index = index + 1
-        write_system_log(es, 'import_ena', 'info', get_line_number(),
-                         f'{printed_index} {dataset_id} has {studies_from_api[dataset_id]} runs from api '
-                         f'and {num_exps} experiments to be processed', to_es_flag)
-    # datasets contains one artificial value set with the key as 'tmp', so need to -1
-    write_system_log(es, 'import_ena', 'info', get_line_number(),
-                     f'There are {len(list(datasets.keys())) -  1} datasets to be processed', to_es_flag)
+        datasets['tmp'][dataset_id]['experiment'][record['experiment_accession']] = tmp_exp
+        datasets[dataset_id] = es_doc_dataset
 
-    write_system_log(es, 'import_ena', 'info', get_line_number(), 'Start to import Experiments', to_es_flag)
-    validator = validate_experiment_record.ValidateExperimentRecord(experiments, RULESETS)
-    validation_results = validator.validate()
-    exp_validation = dict()
-    for exp_id in sorted(experiments.keys()):
-        exp_es = experiments[exp_id]
-        error_messages = list()
-        status = ''
-        for ruleset in RULESETS:
-            if validation_results[ruleset]['detail'][exp_id]['status'] == 'error':
-                status = 'error'
-                error_messages.append(f"error\t{ruleset}\t{validation_results[ruleset]['detail'][exp_id]['message']}")
-            else:
-                # only indexing when meeting standard
-                exp_validation[exp_id] = STANDARDS[ruleset]
-                exp_es['standardMet'] = STANDARDS[ruleset]
-                if exp_es['standardMet'] == STANDARD_FAANG:
-                    exp_es['versionLastStandardMet'] = ruleset_version
-                body = json.dumps(exp_es)
-                insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
+def get_experiments_data(record):
+    """
+    This function will collect experiment information associated with the given record
+    """
+    exp_id = record['experiment_accession']
+    assay_type = record['assay_type']
+    experiment_target = record['experiment_target']
+    dataset_id = record['study_accession']
+    experiment_protocol = None
+    experiment_protocol_filename = None
+    if 'experimental_protocol' in record and record['experimental_protocol']:
+        experiment_protocol = record['experimental_protocol']
+        experiment_protocol_filename = get_filename_from_url(experiment_protocol,
+                                                                f"{exp_id} experiment protocol")
 
-                status = validation_results[ruleset]['detail'][exp_id]['status']
-                error_messages.append(f"{status}\t{ruleset}\t"
-                                      f"{validation_results[ruleset]['detail'][exp_id]['message']}")
+    extraction_protocol = None
+    extraction_protocol_filename = None
+    if 'extraction_protocol' in record and record['extraction_protocol']:
+        extraction_protocol = record['extraction_protocol']
+        extraction_protocol_filename = get_filename_from_url(extraction_protocol,
+                                                                f"{exp_id} extraction protocol")
 
-                # index into ES so break the loop
-                break
-        insert_es_log(es, es_index_prefix, 'experiment', exp_id, status, ";".join(error_messages))
-
-    write_system_log(es, 'import_ena', 'info', get_line_number(), 'Start to import Files', to_es_flag)
-    for file_id in files_dict.keys():
-        es_file_doc = files_dict[file_id]
-        # noinspection PyTypeChecker
-        exp_id = es_file_doc['experiment']['accession']
-        if exp_id not in exp_validation:
-            continue
-        es_file_doc['experiment']['standardMet'] = exp_validation[exp_id]
-        body = json.dumps(es_file_doc)
-        insert_into_es(es, es_index_prefix, 'file', file_id, body)
-        indexed_files[file_id] = 1
-
-    write_system_log(es, 'import_ena', 'info', get_line_number(), 'Start to import Datasets', to_es_flag)
-    for dataset_id in datasets:
-        if dataset_id == 'tmp':
-            continue
-        es_doc_dataset = datasets[dataset_id]
-        exps = datasets['tmp'][dataset_id]["experiment"]
-        only_valid_exps = dict()
-        dataset_standard = STANDARD_FAANG
-        experiment_type = dict()
-        tech_type = dict()
-        for exp_id in exps:
-            if exp_id in exp_validation:
-                if exp_validation[exp_id] == STANDARD_LEGACY:
-                    dataset_standard = STANDARD_LEGACY
-                only_valid_exps[exp_id] = exps[exp_id]
-                assay_type = exps[exp_id]['assayType']
-                tech_type.setdefault(TECHNOLOGIES[assay_type], 0)
-                tech_type[TECHNOLOGIES[assay_type]] += 1
-                experiment_type.setdefault(assay_type, 0)
-                experiment_type[assay_type] += 1
-            else:
-                pass
-        num_valid_exps = len(only_valid_exps.keys())
-        if num_valid_exps == 0:
-            msg = 'no valid experiments to be imported'
-            if dataset_id in datasets_missing_specimens:
-                missing_specimens = datasets_missing_specimens[dataset_id]
-                msg = msg + "; specimens " + ",".join(missing_specimens) + " missing"
-                datasets_missing_specimens.pop(dataset_id)
-            insert_es_log(es, es_index_prefix, 'dataset', dataset_id, 'warning', msg)
-            write_system_log(es, 'import_ena', 'warning', get_line_number(),
-                             f'dataset {dataset_id} has no valid experiments, skipped.', to_es_flag)
-            continue
-        es_doc_dataset['standardMet'] = dataset_standard
-        specimens_dict = datasets['tmp'][dataset_id]['specimen']
-        species = dict()
-        specimens_list = list()
-        for specimen in specimens_dict:
-            specimen_detail = biosample_ids[specimen]
-            es_doc_specimen = {
-                'biosampleId': specimen_detail['biosampleId'],
-                'material': specimen_detail['material'],
-                'cellType': specimen_detail['cellType'],
-                'organism': specimen_detail['organism']['organism'],
-                'sex': specimen_detail['organism']['sex'],
-                'breed': specimen_detail['organism']['breed']
+    exp_es = {
+        'accession': exp_id,
+        'project': record['project'],
+        'secondaryProject': record['secondary_project'],
+        'assayType': assay_type,
+        'experimentTarget': experiment_target,
+        'libraryName': check_existsence(record, 'library_name'),
+        'sampleStorage': check_existsence(record, 'sample_storage'),
+        'sampleStorageProcessing': record['sample_storage_processing'],
+        'samplingToPreparationInterval': {
+            'text': check_existsence(record, 'sample_prep_interval'),
+            'unit': check_existsence(record, 'sample_prep_interval_units')
+        },
+        'experimentalProtocol': {
+            'url': experiment_protocol,
+            'filename': experiment_protocol_filename
+        },
+        'extractionProtocol': {
+            'url': extraction_protocol,
+            'filename': extraction_protocol_filename
+        },
+        'libraryPreparationLocation': check_existsence(record, 'library_prep_location'),
+        'libraryPreparationDate': {
+            'text': check_existsence(record, 'library_prep_date'),
+            'unit': check_existsence(record, 'library_prep_date_format')
+        },
+        'sequencingLocation': check_existsence(record, 'sequencing_location'),
+        'sequencingDate': {
+            'text': check_existsence(record, 'sequencing_date'),
+            'unit': check_existsence(record, 'sequencing_date_format')
+        }
+    }
+    if 'library_prep_longitude' in record and len(record['library_prep_longitude']) > 0:
+        exp_es['libraryPreparationLocationLongitude'] = {
+            'text': record['library_prep_longitude'],
+            'unit': 'decimal degrees'
+        }
+    if 'library_prep_latitude' in record and len(record['library_prep_latitude']) > 0:
+        exp_es['libraryPreparationLocationLatitude'] = {
+            'text': record['library_prep_latitude'],
+            'unit': 'decimal degrees'
+        }
+    if 'sequencing_longitude' in record and len(record['sequencing_longitude']) > 0:
+        exp_es['sequencingLocationLongitude'] = {
+            'text': record['sequencing_longitude'],
+            'unit': 'decimal degrees'
+        }
+    if 'sequencing_latitude' in record and len(record['sequencing_latitude']) > 0:
+        exp_es['sequencingLocationLatitude'] = {
+            'text': record['sequencing_latitude'],
+            'unit': 'decimal degrees'
+        }
+    # deal with technology specific data
+    if assay_type == 'ATAC-seq':  # ATAC-seq
+        transposase_protocol = record['transposase_protocol']
+        transposase_protocol_filename = get_filename_from_url(transposase_protocol,
+                                                                f"{exp_id} ATAC transposase protocol")
+        exp_es['ATAC-seq'] = {
+            'transposaseProtocol': {
+                'url': transposase_protocol,
+                'filename': transposase_protocol_filename
             }
-            specimens_list.append(es_doc_specimen)
-            species[specimen_detail['organism']['organism']['text']] = specimen_detail['organism']['organism']
-        es_doc_dataset['specimen'] = sorted(specimens_list, key=lambda k: k['biosampleId'])
-        es_doc_dataset['species'] = list(species.values())
-        file_arr = datasets['tmp'][dataset_id]['file'].values()
-        valid_files = list()
-        for file_entry in sorted(file_arr, key=lambda k: k['name']):
-            file_id = file_entry['fileId']
-            if file_id in indexed_files:
-                valid_files.append(file_entry)
-        es_doc_dataset['file'] = valid_files
-        es_doc_dataset['experiment'] = list(only_valid_exps.values())
-        es_doc_dataset['assayType'] = list(experiment_type.keys())
-        es_doc_dataset['tech'] = list(tech_type.keys())
-        es_doc_dataset['instrument'] = list(datasets['tmp'][dataset_id]['instrument'].keys())
-        es_doc_dataset['centerName'] = list(datasets['tmp'][dataset_id]['center_name'].keys())
-        es_doc_dataset['secondaryProject'] = list(datasets['tmp'][dataset_id]['secondaryProject'].keys())
-        es_doc_dataset['archive'] = sorted(list(datasets['tmp'][dataset_id]['archive'].keys()))
-        body = json.dumps(es_doc_dataset)
-        insert_into_es(es, es_index_prefix, 'dataset', dataset_id, body)
-    with open('ena_not_in_biosample.txt', 'a') as w:
-        for study in new_errors:
-            tmp = new_errors[study]
-            for biosample in sorted(tmp.keys()):
-                write_system_log(es, 'import_ena', 'warning', get_line_number(),
-                                 f'{biosample} from {study} does not exist in BioSamples at the moment', to_es_flag)
-                insert_es_log(es, es_index_prefix, 'specimen', biosample, 'warning',
-                              f'referenced in {study} but not found in BioSamples')
-                w.write(f"{study}\t{biosample}\n")
+        }
+    elif assay_type == 'methylation profiling by high throughput sequencing':  # BS-Seq
+        conversion_protocol = None
+        conversion_protocol_filename = None
+        pcr_isolation_protocol = None
+        pcr_isolation_protocol_filename = None
+        if 'bisulfite_protocol' in record:
+            conversion_protocol = record['bisulfite_protocol']
+            conversion_protocol_filename = get_filename_from_url(conversion_protocol,
+                                                                    f"{exp_id} BS conversion protocol")
+        if 'pcr_isolation_protocol' in record:
+            pcr_isolation_protocol = record['pcr_isolation_protocol']
+            pcr_isolation_protocol_filename = get_filename_from_url(pcr_isolation_protocol,
+                                                                    f"{exp_id} BS pcr protocol")
+        exp_es['BS-seq'] = {
+            'librarySelection': record['faang_library_selection'],
+            'bisulfiteConversionProtocol': {
+                'url': conversion_protocol,
+                'filename': conversion_protocol_filename
+            },
+            'pcrProductIsolationProtocol': {
+                'url': pcr_isolation_protocol,
+                'filename': pcr_isolation_protocol_filename
+            },
+            'bisulfiteConversionPercent': record['bisulfite_percent'],
+            'restrictionEnzyme': record['restriction_enzyme']
+        }
+        # in the old ruleset, mistake made to allow RBBS instead of RRBS,
+        # so the statement below must be there until old data gets curated
+        if exp_es['BS-seq']['librarySelection'] == 'RBBS':
+            exp_es['BS-seq']['librarySelection'] = 'RRBS'
+    elif assay_type == 'ChIP-seq':  # ChIP-seq
+        chip_protocol = record['chip_protocol']
+        chip_protocol_filename = get_filename_from_url(chip_protocol, f"{exp_id} chip protocol")
+        section_info = {
+            'chipProtocol': {
+                'url': chip_protocol,
+                'filename': chip_protocol_filename
+            },
+            'libraryGenerationMaxFragmentSizeRange': record['library_max_fragment_size'],
+            'libraryGenerationMinFragmentSizeRange': record['library_min_fragment_size']
+        }
+        if experiment_target.lower() == 'input dna':
+            exp_es['ChIP-seq input DNA'] = section_info
+        else:
+            section_info['chipAntibodyProvider'] = record['chip_ab_provider']
+            section_info['chipAntibodyCatalog'] = record['chip_ab_catalog']
+            section_info['chipAntibodyLot'] = record['chip_ab_lot']
 
-    for dataset_id in datasets_missing_specimens:
-        missing_specimens = datasets_missing_specimens[dataset_id]
-        msg = "specimens " + ",".join(missing_specimens) + " missing"
-        insert_es_log(es, es_index_prefix, 'dataset', dataset_id, 'warning', msg)
-
-    write_system_log(es, 'import_ena', 'info', get_line_number(), 'Finish importing ena', to_es_flag)
-
+            section_info['chipTarget'] = record['chip_target']
+            original_control_experiment = record['control_experiment']
+            converted_control_experiment = \
+                replace_alias_with_accession(dataset_id, original_control_experiment)
+            if not converted_control_experiment:
+                msg = f'given control experiment value {original_control_experiment} could not ' \
+                        f'be found with the same study {dataset_id} for experiment {exp_id}'
+                insert_es_log(es, es_index_prefix, 'experiment', exp_id, 'error', msg)
+                write_system_log(es, 'import_ena', 'error', get_line_number(), msg, to_es_flag)
+                return
+            section_info['controlExperiment'] = converted_control_experiment
+            exp_es['ChIP-seq DNA-binding'] = section_info
+    elif assay_type == 'DNase-Hypersensitivity seq"':  # DNase seq
+        dnase_protocol = None
+        dnase_protocol_filename = None
+        if 'dnase_protocol' in record:
+            dnase_protocol = record['dnase_protocol']
+            dnase_protocol_filename = get_filename_from_url(dnase_protocol, f"{exp_id} dnase protocol")
+        exp_es['DNase-seq'] = {
+            'dnaseProtocol': {
+                'url': dnase_protocol,
+                'filename': dnase_protocol_filename
+            }
+        }
+    elif assay_type == 'Hi-C':  # Hi-C
+        hi_c_protocol = None
+        hi_c_protocol_filename = None
+        if 'hi_c_protocol' in record:
+            hi_c_protocol = record['hi_c_protocol']
+            hi_c_protocol_filename = get_filename_from_url(hi_c_protocol, f"{exp_id} hi-c protocol")
+        exp_es['Hi-C'] = {
+            'restrictionEnzyme': record['restriction_enzyme'],
+            'restrictionSite': record['restriction_site'],
+            'hi-cProtocol': {
+                'url': hi_c_protocol,
+                'filename': hi_c_protocol_filename
+            }
+        }
+    elif assay_type == 'whole genome sequencing assay':  # WGS
+        library_pcr_protocol = record['library_pcr_isolation_protocol']
+        library_pcr_protocol_filename = get_filename_from_url(library_pcr_protocol,
+                                                                f"{exp_id} WGS pcr protocol")
+        library_generation_protocol = record['library_gen_protocol']
+        library_generation_protocol_filename = get_filename_from_url(library_generation_protocol,
+                                                                        f"{exp_id} WGS generation protocol")
+        exp_es['WGS'] = {
+            'libraryGenerationPcrProductIsolationProtocol': {
+                'url': library_pcr_protocol,
+                'filename': library_pcr_protocol_filename
+            },
+            'libraryGenerationProtocol': {
+                'url': library_generation_protocol,
+                'filename': library_generation_protocol_filename
+            },
+            'librarySelection': record['faang_library_selection']
+        }
+    elif assay_type == 'CAGE-seq':  # CAGE-seq
+        cage_protocol = record['cage_protocol']
+        cage_protocol_name = get_filename_from_url(cage_protocol, f"{exp_id} CAGE-seq protocol")
+        exp_es['CAGE-seq'] = {
+            'rnaPurity260280ratio': record['rna_purity_280_ratio'],
+            'rnaPurity260230ratio': record['rna_purity_230_ratio'],
+            'rnaIntegrityNumber': record['rna_integrity_num'],
+            'cageProtocol': {
+                'url': cage_protocol,
+                'filename': cage_protocol_name
+            },
+            'sequencingPrimerProvider': record['sequencing_primer_provider'],
+            'sequencingPrimerCatalog': record['sequencing_primer_catalog'],
+            'sequencingPrimerLot': record['sequencing_primer_lot'],
+            'restrictionEnzymeTargetSequence': record['restriction_enzyme_target_sequence']
+        }
+    else:  # RNA-seq
+        rna_3_adapter_protocol = None
+        rna_3_adapter_protocol_filename = None
+        rna_5_adapter_protocol = None
+        rna_5_adapter_protocol_filename = None
+        library_pcr_protocol = None
+        library_pcr_protocol_filename = None
+        rt_protocol = None
+        rt_protocol_filename = None
+        library_generation_protocol = None
+        library_generation_protocol_filename = None
+        if 'rna_prep_3_protocol' in record:
+            rna_3_adapter_protocol = record['rna_prep_3_protocol']
+            rna_3_adapter_protocol_filename = get_filename_from_url(rna_3_adapter_protocol,
+                                                                    f"{exp_id} RNA 3 protocol")
+        if 'rna_prep_5_protocol' in record:
+            rna_5_adapter_protocol = record['rna_prep_5_protocol']
+            rna_5_adapter_protocol_filename = get_filename_from_url(rna_5_adapter_protocol,
+                                                                    f"{exp_id} RNA 5 protocol")
+        if 'library_pcr_isolation_protocol' in record:
+            library_pcr_protocol = record['library_pcr_isolation_protocol']
+            library_pcr_protocol_filename = get_filename_from_url(library_pcr_protocol,
+                                                                    f"{exp_id} RNA pcr protocol")
+        if 'rt_prep_protocol' in record:
+            rt_protocol = record['rt_prep_protocol']
+            rt_protocol_filename = get_filename_from_url(rt_protocol, f"{exp_id} RNA prep protocol")
+        if 'library_gen_protocol' in record:
+            library_generation_protocol = record['library_gen_protocol']
+            library_generation_protocol_filename = get_filename_from_url(library_generation_protocol,
+                                                                            f"{exp_id} RNA generate protocol")
+        exp_es['RNA-seq'] = {
+            'rnaPreparation3AdapterLigationProtocol': {
+                'url': rna_3_adapter_protocol,
+                'filename': rna_3_adapter_protocol_filename
+            },
+            'rnaPreparation5AdapterLigationProtocol': {
+                'url': rna_5_adapter_protocol,
+                'filename': rna_5_adapter_protocol_filename
+            },
+            'libraryGenerationPcrProductIsolationProtocol': {
+                'url': library_pcr_protocol,
+                'filename': library_pcr_protocol_filename
+            },
+            'preparationReverseTranscriptionProtocol': {
+                'url': rt_protocol,
+                'filename': rt_protocol_filename
+            },
+            'libraryGenerationProtocol': {
+                'url': library_generation_protocol,
+                'filename': library_generation_protocol_filename
+            },
+            'readStrand': record['read_strand'],
+            'rnaPurity260280ratio': record['rna_purity_280_ratio'],
+            'rnaPurity260230ratio': record['rna_purity_230_ratio'],
+            'rnaIntegrityNumber': record['rna_integrity_num']
+        }
+    experiments[exp_id] = exp_es
 
 def get_ena_data(es):
     """
