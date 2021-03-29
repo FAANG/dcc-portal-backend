@@ -5,6 +5,7 @@ from utils import remove_underscore_from_end_prefix, write_system_log, get_line_
     convert_analysis, generate_ena_api_endpoint, process_validation_result
 import requests
 import validate_analysis_record
+import pandas as pd
 
 SCRIPT_NAME = 'import_analysis_legacy'
 
@@ -19,6 +20,9 @@ FIELD_LIST = [
 
 to_es_flag = True
 es = None
+analyses = dict()
+displayed = set()
+existing_datasets = list()
 
 @click.command()
 @click.option(
@@ -29,7 +33,7 @@ es = None
 )
 @click.option(
     '--es_index_prefix',
-    default="",
+    default="faang_build_3",
     help='Specify the Elastic Search index prefix, e.g. '
          'faang_build_1_ then the indices will be faang_build_1_experiment etc.'
          'If not provided, then work on the aliases, e.g. experiment'
@@ -73,7 +77,6 @@ def main(es_hosts, es_index_prefix, to_es: str):
 
     eva_datasets = get_eva_dataset_list()
     field_str = ",".join(FIELD_LIST)
-    analyses = dict()
     try:
         existing_datasets = get_record_ids(hosts[0], es_index_prefix, 'dataset', only_faang=False)
     except KeyError:
@@ -87,9 +90,9 @@ def main(es_hosts, es_index_prefix, to_es: str):
         exit()
 
     for study_accession in eva_datasets:
-        url = f"http://www.ebi.ac.uk/eva/webservices/rest/v1/studies/{study_accession}/summary"
         # expect always to have data from EVA as the list is retrieved live
         # get EVA summary
+        url = f"http://www.ebi.ac.uk/eva/webservices/rest/v1/studies/{study_accession}/summary"
         eva_summary = requests.get(url).json()['response'][0]['result'][0]
 
         # f"https://www.ebi.ac.uk/ena/portal/api/search/?result=analysis&format=JSON&limit=0&" \
@@ -97,49 +100,34 @@ def main(es_hosts, es_index_prefix, to_es: str):
         # extra constraint based on study accession
         optional_str = f"query=study_accession%3D%22{study_accession}%22"
         url = generate_ena_api_endpoint('analysis', 'ena', field_str, optional_str)
+        
+        # get analyses data associated with study accession
         response = requests.get(url)
-        if response.status_code == 204:  # 204 is the status code for no content => the current term does not have match
+        if response.status_code == 204:  # 204 no content => the current term does not have match
             continue
         data = response.json()
-        displayed = set()
-        for record in data:
-            analysis_accession = record['analysis_accession']
-            if analysis_accession in analyses:
-                es_doc = analyses[analysis_accession]
-            else:
-                es_doc = convert_analysis(record, existing_datasets)
-                if not es_doc:
-                    continue
-                # in ENA api, it is description in ena result, different to analysis_description in faang result portal
-                es_doc['description'] = record['description']
-                if eva_summary['experimentType'] != '-':
-                    es_doc['experimentType'] = eva_summary['experimentType'].split(', ')
-                # es_doc['program'] = eva_summary['program']
-                if eva_summary['platform'] != '-':
-                    es_doc['platform'] = eva_summary['platform'].split(', ')
-                # imputation has not been exported in the ENA warehouse
-                # use PRJEB22988 (non farm animal) as example being both imputation and phasing project
-                # es_doc['imputation'] = record['imputation']
-            es_doc['sampleAccessions'].append(record['sample_accession'])
-            analyses[analysis_accession] = es_doc
-            count = len(analyses)
-            if count % 50 == 0 and str(count) not in displayed:
-                displayed.add(str(count))
-                write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
-                                 f'Processed {count} analysis records:', to_es_flag)
-        # end of analysis list for one study loop
-    # end of all studies loop
+
+        # process analyses data associated with the study_accession
+        df = pd.DataFrame(data)
+        df.apply(lambda record: get_processed_analyses_data(record, eva_summary), axis=1)
 
     write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
                      f'Total analyses to be validated: {str(len(analyses))}', to_es_flag)
+    
+    # validate analyses
     validator = validate_analysis_record.ValidateAnalysisRecord(analyses, RULESETS)
     validation_results = validator.validate()
     ruleset_version = validator.get_ruleset_version()
+    
+    # import valid analyses
     process_validation_result(analyses, es, es_index_prefix, validation_results, ruleset_version, RULESETS, to_es_flag)
     write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Finish importing analysis legacy', to_es_flag)
 
 
 def get_eva_dataset_list():
+    '''
+    Returns list of datasets (study_accession) in EVA
+    '''
     species_str = ",".join(EVA_SPECIES)
     write_system_log(es, 'import_analysis_legacy', 'info', get_line_number(),
                      f'Species to retrieve from EVA: {species_str}', to_es_flag)
@@ -151,6 +139,35 @@ def get_eva_dataset_list():
     for record in data['response'][0]['result']:
         eva_datasets.append(record['id'])
     return eva_datasets
+
+
+def get_processed_analyses_data(record, eva_summary):
+    '''
+    Return processed data for the analysis record
+    '''
+    analysis_accession = record['analysis_accession']
+    if analysis_accession in analyses:
+        es_doc = analyses[analysis_accession]
+    else:
+        es_doc = convert_analysis(record, existing_datasets)
+        if not es_doc:
+            return
+        # in ENA api, it is description in ena result, different to analysis_description in faang result portal
+        es_doc['description'] = record['description']
+        if eva_summary['experimentType'] != '-':
+            es_doc['experimentType'] = eva_summary['experimentType'].split(', ')
+        if eva_summary['platform'] != '-':
+            es_doc['platform'] = eva_summary['platform'].split(', ')
+        # imputation has not been exported in the ENA warehouse
+        # use PRJEB22988 (non farm animal) as example being both imputation and phasing project
+        # es_doc['imputation'] = record['imputation']
+    es_doc['sampleAccessions'].append(record['sample_accession'])
+    analyses[analysis_accession] = es_doc
+    count = len(analyses)
+    if count % 50 == 0 and str(count) not in displayed:
+        displayed.add(str(count))
+        write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
+                            f'Processed {count} analysis records:', to_es_flag)
 
 
 if __name__ == "__main__":
