@@ -16,6 +16,7 @@ import os
 import os.path
 import constants
 import pandas as pd
+import math
 
 INDEXED_SAMPLES = dict()
 ORGANISM = dict()
@@ -1057,7 +1058,7 @@ def populate_basic_biosample_info(doc: Dict, item: Dict):
     doc['secondaryProject'] = check_existence(item, 'secondary project', 'text')
     doc['availability'] = check_existence(item, 'availability', 'text')
 
-    if 'organization' in item:
+    if 'organization' in item and not math.isnan(item['organization']):
         for organization in item['organization']:
             # TODO logging to error if name or role or url do not exist
             organization.setdefault('Name', None)
