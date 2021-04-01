@@ -460,7 +460,8 @@ def fetch_single_record(biosample_id):
     :return: json file of sample with biosampleId
     """
     url = f"https://www.ebi.ac.uk/biosamples/samples/{biosample_id}.json?curationdomain=self.FAANG_DCC_curation"
-    result = unify_field_names(requests.get(url).json())
+    response = requests.get(url).json()
+    result = unify_field_names(response)
     result['etag'] = ETAGS_CACHE[biosample_id]
     return result
 
@@ -1058,7 +1059,7 @@ def populate_basic_biosample_info(doc: Dict, item: Dict):
     doc['secondaryProject'] = check_existence(item, 'secondary project', 'text')
     doc['availability'] = check_existence(item, 'availability', 'text')
 
-    if 'organization' in item and not math.isnan(item['organization']):
+    if 'organization' in item and isinstance(item['organization'], list):
         for organization in item['organization']:
             # TODO logging to error if name or role or url do not exist
             organization.setdefault('Name', None)
