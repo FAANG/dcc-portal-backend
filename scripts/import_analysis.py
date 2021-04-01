@@ -6,6 +6,7 @@ from utils import remove_underscore_from_end_prefix, write_system_log, get_line_
 from misc import get_filename_from_url
 import requests
 import validate_analysis_record
+import pandas as pd
 
 SCRIPT_NAME = 'import_analysis'
 
@@ -62,52 +63,56 @@ def main(es_hosts, es_index_prefix, to_es: str):
     url = generate_ena_api_endpoint('analysis', 'faang', 'all')
     write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), f'Getting data from {url}', to_es_flag)
     data = requests.get(url).json()
+    df = pd.DataFrame(data)
     analyses = dict()
     existing_datasets = get_record_ids(hosts[0], es_index_prefix, 'dataset', only_faang=False)
-    for record in data:
-        analysis_accession = record['analysis_accession']
-        if analysis_accession in analyses:
-            es_doc = analyses[analysis_accession]
-        else:
-            es_doc = convert_analysis(record, existing_datasets)
-            if not es_doc:
-                continue
-            es_doc['project'] = record['project_name']
-            es_doc['secondaryProject'] = record['secondary_project']
-            es_doc.setdefault('experimentAccessions', list())
-            es_doc.setdefault('runAccessions', list())
-            es_doc.setdefault('analysisAccessions', list())
-            for elmt in record['experiment_accession'].split(';'):
-                es_doc['experimentAccessions'].append(elmt)
-            for elmt in record['run_accession'].split(';'):
-                es_doc['runAccessions'].append(elmt)
-            for elmt in record['related_analysis_accession'].split(';'):
-                es_doc['analysisAccessions'].append(elmt)
 
-            es_doc['description'] = record['analysis_description']
-            es_doc['assayType'] = record['assay_type']
-            protocol = record['analysis_protocol']
-            es_doc.setdefault('analysisProtocol', dict())
-            es_doc['analysisProtocol']['url'] = protocol
-            es_doc['analysisProtocol']['filename'] = get_filename_from_url(protocol, record['analysis_accession'])
-            es_doc['referenceGenome'] = record['reference_genome']
+    # get analyses
+    df.apply(lambda record: get_analyses(record, analyses, existing_datasets), axis=1)
 
-            analysis_date = record['analysis_date']
-            if analysis_date:
-                es_doc.setdefault('analysisDate', dict())
-                es_doc['analysisDate']['text'] = analysis_date
-                es_doc['analysisDate']['unit'] = 'YYYY-MM-DD'
-            es_doc['analysisCodeRepository'] = record['analysis_code_repository']
-
-        es_doc['sampleAccessions'].append(record['sample_accession'])
-        analyses[record['analysis_accession']] = es_doc
-
+    # validate analyses
     validator = validate_analysis_record.ValidateAnalysisRecord(analyses, RULESETS)
     validation_results = validator.validate()
     ruleset_version = validator.get_ruleset_version()
+
+    # import valid analyses
     process_validation_result(analyses, es, es_index_prefix, validation_results, ruleset_version, RULESETS, to_es_flag)
     write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Finish importing analysis', to_es_flag)
 
+def get_analyses(record, analyses, existing_datasets):
+    '''
+    This function gets analyses information from each record
+    and creates analyses documents to import into elasticsearch
+    '''
+    analysis_accession = record['analysis_accession']
+    if analysis_accession in analyses:
+        es_doc = analyses[analysis_accession]
+    else:
+        es_doc = convert_analysis(record, existing_datasets)
+        if not es_doc:
+            return
+        es_doc['project'] = record['project_name']
+        es_doc['secondaryProject'] = record['secondary_project']
+        es_doc['experimentAccessions'] = record['experiment_accession'].split(';')
+        es_doc['runAccessions'] = record['run_accession'].split(';')
+        es_doc['analysisAccessions'] = record['related_analysis_accession'].split(';')
+        es_doc['description'] = record['analysis_description']
+        es_doc['assayType'] = record['assay_type']
+        protocol = record['analysis_protocol']
+        es_doc.setdefault('analysisProtocol', dict())
+        es_doc['analysisProtocol']['url'] = protocol
+        es_doc['analysisProtocol']['filename'] = get_filename_from_url(protocol, record['analysis_accession'])
+        es_doc['referenceGenome'] = record['reference_genome']
+
+        analysis_date = record['analysis_date']
+        if analysis_date and not isinstance(analysis_date, str):
+            es_doc.setdefault('analysisDate', dict())
+            es_doc['analysisDate']['text'] = analysis_date
+            es_doc['analysisDate']['unit'] = 'YYYY-MM-DD'
+        es_doc['analysisCodeRepository'] = record['analysis_code_repository']
+
+    es_doc['sampleAccessions'].append(record['sample_accession'])
+    analyses[record['analysis_accession']] = es_doc
 
 if __name__ == "__main__":
     main()
