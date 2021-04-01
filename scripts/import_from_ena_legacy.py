@@ -17,11 +17,22 @@ import sys
 import json
 import requests
 from misc import convert_readable, parse_date
+import pandas as pd
+import copy
 
 SCRIPT_NAME = 'import_ena_legacy'
 
 to_es_flag = True
 es = None
+indexed_files = dict()
+datasets = dict()
+experiments = dict()
+files_dict = dict()
+technology = dict()
+todo = dict()
+existing_faang_datasets = set()
+count = dict()
+with_files = dict()
 
 # in FAANG ruleset each technology has mandatory fields in the corresponding section, which is not expected in the
 # general ENA datasets, so only validate against Legacy standard
@@ -59,6 +70,156 @@ FIELD_LIST = [
     'sra_md5', 'sra_ftp', 'sra_aspera', 'sra_galaxy', 'cram_index_ftp',
     'cram_index_aspera', 'cram_index_galaxy', 'project_name'
 ]
+
+@click.command()
+@click.option(
+    '--es_hosts',
+    default=constants.STAGING_NODE1,
+    help='Specify the Elastic Search server(s) (port could be included), e.g. wp-np3-e2:9200. '
+         'If multiple servers are provided, please use ";" to separate them, e.g. "wp-np3-e2;wp-np3-e3"'
+)
+@click.option(
+    '--es_index_prefix',
+    default="faang_build_3",
+    help='Specify the Elastic Search index prefix, e.g. '
+         'faang_build_1_ then the indices will be faang_build_1_experiment etc.'
+         'If not provided, then work on the aliases, e.g. experiment'
+)
+@click.option(
+    '--to_es',
+    default="true",
+    help='Specify how to deal with the system log either writing to es or printing out. '
+         'It only allows two values: true (to es) or false (print to the terminal)'
+)
+
+def main(es_hosts, es_index_prefix, to_es: str):
+    """
+    Main function that will import legacy data (not FAANG labelled) from ena
+    :param es_hosts: elasticsearch hosts where the data import into
+    :param es_index_prefix: the index prefix points to a particular version of data
+    :param to_es: determine whether to output log to Elasticsearch (True) or terminal (False, printing)
+    """
+    global to_es_flag
+    if to_es.lower() == 'false':
+        to_es_flag = False
+    elif to_es.lower() == 'true':
+        pass
+    else:
+        print('to_es parameter can only accept value of true or false')
+        exit(1)
+
+    global es
+    hosts = es_hosts.split(";")
+    es = Elasticsearch(hosts)
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Start importing ena legacy', to_es_flag)
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Command line parameters', to_es_flag)
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), f'Hosts: {str(hosts)}', to_es_flag)
+    es_index_prefix = remove_underscore_from_end_prefix(es_index_prefix)
+    if es_index_prefix:
+        write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), f'Index_prefix: {es_index_prefix}', to_es_flag)
+
+    get_biosamples_records_from_es(hosts[0], es_index_prefix, 'organism')
+    get_biosamples_records_from_es(hosts[0], es_index_prefix, 'specimen')
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
+                     f'There are {len(BIOSAMPLES_RECORDS)} sample records in the ES', to_es_flag)
+    if not BIOSAMPLES_RECORDS:
+        write_system_log(es, SCRIPT_NAME, 'error', get_line_number(),
+                         'No biosamples data found in the given index, please run import_from_biosamles.py first',
+                         to_es_flag)
+        sys.exit(1)
+
+    existing_faang_datasets = get_record_ids(hosts[0], es_index_prefix, 'dataset', only_faang=True)
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
+                     f'There are {len(existing_faang_datasets)} FAANG datasets in the ES', to_es_flag)
+
+    # strings used to build ENA API query
+    field_str = ",".join(FIELD_LIST)
+    species_str = ",".join(SPECIES_TAXONOMY_LIST)
+
+    # get data from ENA
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Retrieving data from ENA', to_es_flag)
+    for term in CATEGORIES.keys():
+        category = CATEGORIES[term]
+        if category not in ASSAY_TYPES_TO_BE_IMPORTED:
+            continue
+        write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
+                         f'term {term} in category {category}', to_es_flag)
+                         
+        # f"https://www.ebi.ac.uk/ena/portal/api/search/?result=read_run&format=JSON&limit=0&" \
+        #    f"query=library_strategy%3D%22{term}%22%20AND%20tax_eq({species_str})&fields={field_str}"
+        # extra constraint based on species and library strategy
+        # debug notes: category in records descending order RNA-Seq (32k), WGS,
+        # miRNA-Seq (4k), and others (around 1k or less)
+        optional_str = f"query=library_strategy%3D%22{term}%22%20AND%20tax_eq({species_str})"
+        url = generate_ena_api_endpoint('read_run', 'ena', field_str, optional_str)
+        response = requests.get(url)
+        if response.status_code == 204:  # 204 is the status code for no content => the current term does not have match
+            continue
+        data = response.json()
+        df = pd.DataFrame(data)
+
+        # ignore records which are already in the FAANG data portal
+        df = df.loc[~df['study_accession'].isin(existing_faang_datasets)]
+
+        # ignore records labelled as FAANG which are supposed to be dealt with import_from _ena script
+        # save to dict where key is the study_accesssion and 
+        # value is dataframe with rows of data related to the study
+        todo[term] = df.loc[df['project_name'] != 'FAANG']
+
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
+                     'Finishing retrieving data from ENA', to_es_flag)
+
+    # get datasets and files for each category
+    for category in todo.keys():
+        df = todo[category] # get dataframe containing data for each category
+        write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
+                            f'{category} has {df.shape[0]} records', to_es_flag)
+        assay_type = ASSAY_TYPES_TO_BE_IMPORTED[CATEGORIES[category]]
+        experiment_target = EXPERIMENT_TARGETS[CATEGORIES[category]]
+        technology[assay_type] = category
+        df.apply(lambda record: get_dataset_files_data(record, assay_type, experiment_target, category, es_index_prefix), axis=1)
+      
+    if not datasets:
+        write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'No datasets have been found', to_es_flag)
+        exit()
+
+    # log datasets and experiments to be processed
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'The dataset list:', to_es_flag)
+    dataset_ids = sorted(list(datasets.keys()))
+    for index, dataset_id in enumerate(dataset_ids):
+        num_exps = 0
+        if dataset_id == 'tmp':
+            continue
+        if dataset_id in datasets['tmp'] and 'experiment' in datasets['tmp'][dataset_id]:
+            num_exps = len(datasets['tmp'][dataset_id]["experiment"])
+        printed_index = index + 1
+        write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
+                         f'{printed_index} {dataset_id} has {num_exps} experiments to be processed', to_es_flag)
+    # datasets contains one artificial value set with the key as 'tmp', so need to -1
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
+                     f'There are {len(datasets) -  1} datasets to be processed', to_es_flag)
+
+    # Validate and Import Experiments
+    validator = validate_experiment_record.ValidateExperimentRecord(experiments, RULESETS)
+    validation_results = validator.validate()
+    exp_validation = dict()
+    experiments_df = pd.DataFrame(list(experiments.values()))
+    experiments_df.apply(lambda exp: import_experiment(exp, validation_results, exp_validation, es_index_prefix), axis=1) 
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'finishing indexing experiments', to_es_flag)
+
+    # Import Files
+    files_df = pd.DataFrame(list(files_dict.values()))
+    files_df.apply(lambda file_doc: import_file(file_doc, exp_validation, es_index_prefix), axis=1)
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'finishing indexing files', to_es_flag)
+
+    # Import Datasets
+    datasets2 = copy.deepcopy(datasets)
+    datasets2.pop('tmp', None) # datasets with key 'tmp' need not be imported
+    dataset_df = pd.DataFrame(list(datasets2.values()))
+    dataset_df.apply(lambda dataset: import_dataset(dataset, exp_validation, es_index_prefix), axis=1)
+    write_system_log(es, SCRIPT_NAME, 'warning', get_line_number(),
+                     f'finishing indexing datasets', to_es_flag)
+    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Finish importing ena legacy', to_es_flag)
 
 
 def get_biosamples_records_from_es(host, es_index_prefix, es_type):
@@ -319,11 +480,11 @@ def retrieve_biosamples_record(es_index_prefix, biosample_id):
     return status
 
 
-def extract_field_info(data, es_doc, found_fields, result_field_name, target_field_name, es_section=None):
+def extract_field_info(data_characterstics, es_doc, found_fields, result_field_name, target_field_name, es_section=None):
     """
-    extract data for particular field :param target_field_name from the BioSamples API record :param data
+    extract data for particular field :param target_field_name from the BioSamples API record Characterstics :param data_characterstics
     and save into the document :param es_doc as field :param result_field_name while adding into found_fields
-    :param data: BioSamples API records
+    :param data_characterstics: Characterstics BioSamples API records
     :param es_doc: Elastic search document
     :param found_fields: list of fields which have been found in the BioSamples record
     :param result_field_name: the field name to store the extract information in the es_doc
@@ -331,432 +492,300 @@ def extract_field_info(data, es_doc, found_fields, result_field_name, target_fie
     :param es_section: indicate which section the field belongs to in the es_doc, if in the root, set to None
     :return:
     """
-    if target_field_name in data['characteristics']:
+    if target_field_name in data_characterstics:
         found_fields.add(target_field_name)
         if es_section:
             es_doc.setdefault(es_section, dict())
             es_doc[es_section].setdefault(result_field_name, dict())
-            es_doc[es_section][result_field_name]['text'] = data['characteristics'][target_field_name][0]['text']
-            if 'ontologyTerms' in data['characteristics'][target_field_name][0]:
+            es_doc[es_section][result_field_name]['text'] = data_characterstics[target_field_name][0]['text']
+            if 'ontologyTerms' in data_characterstics[target_field_name][0]:
                 es_doc[es_section][result_field_name]['ontologyTerms'] = \
-                    data['characteristics'][target_field_name][0]['ontologyTerms'][0]
+                    data_characterstics[target_field_name][0]['ontologyTerms'][0]
         else:
             es_doc.setdefault(result_field_name, dict())
-            es_doc[result_field_name]['text'] = data['characteristics'][target_field_name][0]['text']
-            if 'ontologyTerms' in data['characteristics'][target_field_name][0]:
+            es_doc[result_field_name]['text'] = data_characterstics[target_field_name][0]['text']
+            if 'ontologyTerms' in data_characterstics[target_field_name][0]:
                 es_doc[result_field_name]['ontologyTerms'] = \
-                    data['characteristics'][target_field_name][0]['ontologyTerms'][0]
+                    data_characterstics[target_field_name][0]['ontologyTerms'][0]
     return es_doc, found_fields
 
 
-def get_field_name(data, original_key, alternative_value):
+def get_field_name(data_characterstics, original_key, alternative_value):
     """
     check which column name used in the BioSamples record, if both provided column names not found, return ''
-    :param data: one BioSamples record in JSON format retrieved from API
+    :param data_characterstics: characterstics of one BioSamples record in JSON format retrieved from API
     :param original_key: field name to be checked
     :param alternative_value: alternative field name to be checked
     :return: either original key or alternative value if found in the data, if not found return ''
     """
-    # biosamples record always has characteristics section
-    if original_key not in data['characteristics']:
-        if alternative_value in data['characteristics']:
+    if original_key not in data_characterstics:
+        if alternative_value in data_characterstics:
             return alternative_value
         else:
             return ''
     return original_key
 
+def get_dataset_files_data(record, assay_type, experiment_target, category, es_index_prefix):
+    """
+    This function will collect information about datasets 
+    and files associated with the given record
+    """
+    specimen_biosample_id = record['sample_accession']
 
-@click.command()
-@click.option(
-    '--es_hosts',
-    default=constants.STAGING_NODE1,
-    help='Specify the Elastic Search server(s) (port could be included), e.g. wp-np3-e2:9200. '
-         'If multiple servers are provided, please use ";" to separate them, e.g. "wp-np3-e2;wp-np3-e3"'
-)
-@click.option(
-    '--es_index_prefix',
-    default="",
-    help='Specify the Elastic Search index prefix, e.g. '
-         'faang_build_1_ then the indices will be faang_build_1_experiment etc.'
-         'If not provided, then work on the aliases, e.g. experiment'
-)
-@click.option(
-    '--to_es',
-    default="true",
-    help='Specify how to deal with the system log either writing to es or printing out. '
-         'It only allows two values: true (to es) or false (print to the terminal)'
-)
-def main(es_hosts, es_index_prefix, to_es: str):
-    """
-    Main function that will import legacy data (not FAANG labelled) from ena
-    :param es_hosts: elasticsearch hosts where the data import into
-    :param es_index_prefix: the index prefix points to a particular version of data
-    :param to_es: determine whether to output log to Elasticsearch (True) or terminal (False, printing)
-    """
-    global to_es_flag
-    if to_es.lower() == 'false':
-        to_es_flag = False
-    elif to_es.lower() == 'true':
-        pass
+     # invalid sample accession, which should be SAM[M|D|E]
+    if len(specimen_biosample_id) < 5:
+        return
+    
+    # if failed to get the related sample record, skip the record
+    status = retrieve_biosamples_record(es_index_prefix, specimen_biosample_id)
+    if status != 0 and status != 200:
+        return
+
+    study_accession = record['study_accession']
+    count.setdefault(study_accession, 0)
+    count[study_accession] += 1
+    file_type, source_type = determine_file_and_source(record)
+    if file_type == '':
+        return
+    with_files.setdefault(study_accession, 0)
+    with_files[study_accession] += 1
+    if file_type == 'fastq':
+        archive = 'ENA'
+    elif file_type == 'cram_index':
+        archive = 'ENA'
+        file_type = 'submitted'
+        source_type = 'ftp'
     else:
-        print('to_es parameter can only accept value of true or false')
-        exit(1)
+        archive = 'SRA'
 
-    global es
-    hosts = es_hosts.split(";")
-    es = Elasticsearch(hosts)
-    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Start importing ena legacy', to_es_flag)
-    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Command line parameters', to_es_flag)
-    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), f'Hosts: {str(hosts)}', to_es_flag)
-    es_index_prefix = remove_underscore_from_end_prefix(es_index_prefix)
-    if es_index_prefix:
-        write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), f'Index_prefix: {es_index_prefix}', to_es_flag)
-
-    get_biosamples_records_from_es(hosts[0], es_index_prefix, 'organism')
-    get_biosamples_records_from_es(hosts[0], es_index_prefix, 'specimen')
-    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
-                     f'There are {len(BIOSAMPLES_RECORDS)} sample records in the ES', to_es_flag)
-    if not BIOSAMPLES_RECORDS:
-        write_system_log(es, SCRIPT_NAME, 'error', get_line_number(),
-                         'No biosamples data found in the given index, please run import_from_biosamles.py first',
-                         to_es_flag)
-        sys.exit(1)
-
-    existing_faang_datasets: Set[str] = get_record_ids(hosts[0], es_index_prefix, 'dataset', only_faang=True)
-    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
-                     f'There are {len(existing_faang_datasets)} FAANG datasets in the ES', to_es_flag)
-
-    # strings used to build ENA API query
-    field_str = ",".join(FIELD_LIST)
-    species_str = ",".join(SPECIES_TAXONOMY_LIST)
-
-    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Retrieving data from ENA', to_es_flag)
-    # collect all data from ENA API and saved into local dict which has keys as study accession
-    # and values as array of data related to the study
-    todo: Dict[str, List[Dict]] = dict()
-    for term in CATEGORIES.keys():
-        category = CATEGORIES[term]
-        if category not in ASSAY_TYPES_TO_BE_IMPORTED:
-            continue
-        write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
-                         f'term {term} in category {category}', to_es_flag)
-        # f"https://www.ebi.ac.uk/ena/portal/api/search/?result=read_run&format=JSON&limit=0&" \
-        #    f"query=library_strategy%3D%22{term}%22%20AND%20tax_eq({species_str})&fields={field_str}"
-        # extra constraint based on species and library strategy
-        # debug notes: category in records descending order RNA-Seq (32k), WGS,
-        # miRNA-Seq (4k), and others (around 1k or less)
-        optional_str = f"query=library_strategy%3D%22{term}%22%20AND%20tax_eq({species_str})"
-        url = generate_ena_api_endpoint('read_run', 'ena', field_str, optional_str)
-        response = requests.get(url)
-        if response.status_code == 204:  # 204 is the status code for no content => the current term does not have match
-            continue
-        data = response.json()
-        for hit in data:
-            study_accession = hit['study_accession']
-            if study_accession in existing_faang_datasets:  # already in the data portal
-                continue
-            # not replaced with constants.STANDARD_FAANG because they are separate concepts,
-            # here is a tag used in the ruleset, not a standard
-            if hit['project_name'] == 'FAANG':  # labelled as FAANG which is supposed to be deal with import_from _ena
-                continue
-            todo.setdefault(term, list())
-            todo[term].append(hit)
-    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
-                     'Finishing retrieving data from ENA', to_es_flag)
-
-    indexed_files = dict()
-    datasets = dict()
-    experiments = dict()
-    files_dict = dict()
-    technology = dict()
-
-    for category in todo.keys():
-        write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
-                         f'{category} has {len(todo[category])} records', to_es_flag)
-        assay_type = ASSAY_TYPES_TO_BE_IMPORTED[CATEGORIES[category]]
-        experiment_target = EXPERIMENT_TARGETS[CATEGORIES[category]]
-        technology[assay_type] = category
-
-        count = dict()
-        with_files = dict()
-        for record in todo[category]:
-            # if fail to get the related sample record, skip the record
-            specimen_biosample_id = record['sample_accession']
-            if len(specimen_biosample_id) < 5: # invalid sample accession, which should be SAM[M|D|E]
-                continue
-            status = retrieve_biosamples_record(es_index_prefix, specimen_biosample_id)
-            if status != 0 and status != 200:
-                continue
-
-            study_accession = record['study_accession']
-            count.setdefault(study_accession, 0)
-            count[study_accession] += 1
-
-            file_type, source_type = determine_file_and_source(record)
-
-            if file_type == '':
-                continue
-
-            with_files.setdefault(study_accession, 0)
-            with_files[study_accession] += 1
-            if file_type == 'fastq':
-                archive = 'ENA'
-            elif file_type == 'cram_index':
-                archive = 'ENA'
-                file_type = 'submitted'
-                source_type = 'ftp'
-            else:
-                archive = 'SRA'
-
-            try:
-                files = record[f"{file_type}_{source_type}"].split(";")
-                types = record['submitted_format'].split(";")
-                sizes = record[f"{file_type}_bytes"].split(";")
-            except KeyError:
-                print(f"category {category} record {record}")
-                exit()
-
-            if len(files) != len(sizes):
-                continue
-            # for ENA, it is fixed to MD5 as the checksum method
-            checksums = record[f"{file_type}_md5"].split(";")
-            # logger.info(f"study {study_accession} with sample {specimen_biosample_id} having files {','.join(files)}")
-
-            for index, file in enumerate(files):
-                fullname = file.split("/")[-1]
-                filename = fullname.split(".")[0]
-                type_found = True
-                try:
-                    file_type = types[index]
-                    if len(file_type) == 0:
-                        type_found = False
-                except IndexError:
-                    type_found = False
-                if not type_found:
-                    start_index = len(filename)+1
-                    file_type = fullname[start_index:]
-
-                es_file_doc = {
-                    'specimen': specimen_biosample_id,
-                    'species': {
-                        'text': SPECIES_DICT[record['tax_id']],
-                        'ontologyTerms': f"http://purl.obolibrary.org/obo/NCBITaxon_{record['tax_id']}"
-                    },
-                    'url': file,
-                    'name': fullname,
-                    'type': file_type,
-                    'size': sizes[index],
-                    'readableSize': convert_readable(sizes[index]),
-                    'checksumMethod': 'md5',
-                    'checksum': checksums[index],
-                    'archive': archive,
-                    'baseCount': record['base_count'],
-                    'readCount': record['read_count'],
-                    'releaseDate': record['first_public'],
-                    'updateDate': record['last_updated'],
-                    'submission': record['submission_accession'],
-                    'experiment': {
-                        'accession': record['experiment_accession'],
-                        'assayType': assay_type,
-                        'target': experiment_target
-                    },
-                    'run': {
-                        'accession': record['run_accession'],
-                        'alias': record['run_alias'],
-                        'platform': record['instrument_platform'],
-                        'instrument': record['instrument_model']
-                    },
-                    'study': {
-                        'accession': record['study_accession'],
-                        'alias': record['study_alias'],
-                        'title': record['study_title'],
-                        'type': category,
-                        'secondaryAccession': record['secondary_study_accession']
-                    }
-                }
-                files_dict[filename] = es_file_doc
-
-                exp_id = record['experiment_accession']
-                # one experiment could have multiple runs/files, therefore experiment info needs to be collected once
-                if exp_id not in experiments:
-                    exp_es = {
-                        'accession': exp_id,
-                        'assayType': assay_type,
-                        'experimentTarget': experiment_target
-                    }
-                    experiments[exp_id] = exp_es
-
-                # dataset (study) has mutliple experiments/runs/files/specimens_list
-                # so collection information into datasets
-                # and process it after iteration of all files
-                dataset_id = record['study_accession']
-                es_doc_dataset = dict()
-                if dataset_id in datasets:
-                    es_doc_dataset = datasets[dataset_id]
-                else:
-                    es_doc_dataset['accession'] = dataset_id
-                    es_doc_dataset['alias'] = record['study_alias']
-                    es_doc_dataset['title'] = record['study_title']
-                    es_doc_dataset['secondaryAccession'] = record['secondary_study_accession']
-                datasets.setdefault('tmp', dict())
-                datasets['tmp'].setdefault(dataset_id, dict())
-                datasets['tmp'][dataset_id].setdefault('specimen', set())
-                datasets['tmp'][dataset_id]['specimen'].add(specimen_biosample_id)
-
-                datasets['tmp'][dataset_id].setdefault('instrument', set())
-                datasets['tmp'][dataset_id]['instrument'].add(record['instrument_model'])
-
-                datasets['tmp'][dataset_id].setdefault('archive', set())
-                datasets['tmp'][dataset_id]['archive'].add(archive)
-
-                tmp_file = {
-                    'url': file,
-                    'name': fullname,
-                    'fileId': filename,
-                    'experiment': record['experiment_accession'],
-                    'type': file_type,
-                    'size': sizes[index],
-                    'readableSize': convert_readable(sizes[index]),
-                    'archive': archive,
-                    'baseCount': record['base_count'],
-                    'readCount': record['read_count'],
-                    'checksumMethod': 'md5',
-                    'checksum': checksums[index]
-                }
-                datasets['tmp'][dataset_id].setdefault('file', dict())
-                datasets['tmp'][dataset_id]['file'][fullname] = tmp_file
-
-                tmp_exp = {
-                    'accession': record['experiment_accession'],
-                    'assayType': assay_type,
-                    'target': experiment_target
-                }
-                datasets['tmp'][dataset_id].setdefault('experiment', dict())
-                datasets['tmp'][dataset_id]['experiment'][record['experiment_accession']] = tmp_exp
-                datasets[dataset_id] = es_doc_dataset
-
-    if not datasets:
-        write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'No datasets have been found', to_es_flag)
+    try:
+        files = record[f"{file_type}_{source_type}"].split(";")
+        types = record['submitted_format'].split(";")
+        sizes = record[f"{file_type}_bytes"].split(";")
+    except KeyError:
+        print(f"category {category} record {record}")
         exit()
 
-    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'The dataset list:', to_es_flag)
-    dataset_ids = sorted(list(datasets.keys()))
-    for index, dataset_id in enumerate(dataset_ids):
-        num_exps = 0
-        if dataset_id == 'tmp':
-            continue
-        if dataset_id in datasets['tmp'] and 'experiment' in datasets['tmp'][dataset_id]:
-            num_exps = len(datasets['tmp'][dataset_id]["experiment"])
-        printed_index = index + 1
-        write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
-                         f'{printed_index} {dataset_id} has {num_exps} experiments to be processed', to_es_flag)
-    # datasets contains one artificial value set with the key as 'tmp', so need to -1
-    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
-                     f'There are {len(datasets) -  1} datasets to be processed', to_es_flag)
+    if len(files) != len(sizes):
+        return
+    # for ENA, it is fixed to MD5 as the checksum method
+    checksums = record[f"{file_type}_md5"].split(";")
+    # logger.info(f"study {study_accession} with sample {specimen_biosample_id} having files {','.join(files)}")
 
-    validator = validate_experiment_record.ValidateExperimentRecord(experiments, RULESETS)
-    validation_results = validator.validate()
-    exp_validation = dict()
-    for exp_id in sorted(list(experiments.keys())):
-        exp_es = experiments[exp_id]
-        for ruleset in RULESETS:
-            if validation_results[ruleset]['detail'][exp_id]['status'] == 'error':
-                write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
-                                 f"{exp_id}\tExperiment\terror\t"
-                                 f"{validation_results[ruleset]['detail'][exp_id]['message']}", to_es_flag)
-            else:
-                # only indexing when meeting standard
-                exp_validation[exp_id] = STANDARDS[ruleset]
-                exp_es['standardMet'] = STANDARDS[ruleset]
-                body = json.dumps(exp_es)
-                insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
-                # index into ES so break the loop
-                break
-    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'finishing indexing experiments', to_es_flag)
+    # one experiment could have multiple runs/files, therefore experiment info needs to be collected once
+    exp_id = record['experiment_accession']
+    if exp_id not in experiments:
+        exp_es = {
+            'accession': exp_id,
+            'assayType': assay_type,
+            'experimentTarget': experiment_target
+        }
+        experiments[exp_id] = exp_es
 
-    for file_id in files_dict.keys():
-        es_file_doc = files_dict[file_id]
-        # noinspection PyTypeChecker
-        exp_id = es_file_doc['experiment']['accession']
-        # only files linked to valid experiments are allowed into the data portal
-        if exp_id not in exp_validation:
-            continue
-        es_file_doc['experiment']['standardMet'] = exp_validation[exp_id]
-        body = json.dumps(es_file_doc)
-        insert_into_es(es, es_index_prefix, 'file', file_id, body)
-        indexed_files[file_id] = 1
-    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'finishing indexing files', to_es_flag)
-
-    for dataset_id in datasets:
-        if dataset_id == 'tmp':
-            continue
+    # dataset (study) has mutliple experiments/runs/files/specimens_list
+    # so collect information into datasets and process it after iteration of all files
+    dataset_id = record['study_accession']
+    es_doc_dataset = dict()
+    if dataset_id in datasets:
         es_doc_dataset = datasets[dataset_id]
-        exps = datasets['tmp'][dataset_id]["experiment"]
-        only_valid_exps = dict()
-        dataset_standard = constants.STANDARD_FAANG
-        experiment_type = dict()
-        tech_type = dict()
-        for exp_id in exps:
-            if exp_id in exp_validation:
-                if exp_validation[exp_id] == constants.STANDARD_LEGACY:
-                    dataset_standard = constants.STANDARD_LEGACY
-                only_valid_exps[exp_id] = exps[exp_id]
-                assay_type = exps[exp_id]['assayType']
-                tech_type.setdefault(TECHNOLOGIES[assay_type], 0)
-                tech_type[TECHNOLOGIES[assay_type]] += 1
-                experiment_type.setdefault(assay_type, 0)
-                experiment_type[assay_type] += 1
-            else:
-                pass
-        num_valid_exps = len(only_valid_exps.keys())
-        if num_valid_exps == 0:
-            write_system_log(es, SCRIPT_NAME, 'warning', get_line_number(),
-                             f'dataset {dataset_id} has no valid experiments, skipped.', to_es_flag)
-            continue
-        es_doc_dataset['standardMet'] = dataset_standard
-        specimen_set = datasets['tmp'][dataset_id]['specimen']
-        species = dict()
-        specimens_list = list()
-        for specimen in specimen_set:
-            if specimen not in BIOSAMPLES_RECORDS:
-                write_system_log(es, SCRIPT_NAME, 'warning', get_line_number(),
-                                 f'BioSamples record {specimen} required by dataset {dataset_id} could not be found',
-                                 to_es_flag)
-                continue
-            specimen_detail = BIOSAMPLES_RECORDS[specimen]
-            es_doc_specimen = dict()
-            es_doc_specimen['biosampleId'] = check_existsence(specimen_detail, 'biosampleId')
-            es_doc_specimen['material'] = check_existsence(specimen_detail, 'material')
-            es_doc_specimen['cellType'] = check_existsence(specimen_detail, 'cellType')
-            es_doc_specimen['organism'] = check_existsence(specimen_detail['organism'], 'organism')
-            es_doc_specimen['sex'] = check_existsence(specimen_detail['organism'], 'sex')
-            es_doc_specimen['breed'] = check_existsence(specimen_detail['organism'], 'breed')
-            specimens_list.append(es_doc_specimen)
-            species[specimen_detail['organism']['organism']['text']] = specimen_detail['organism']['organism']
-        if not specimens_list:  # no sepcimen found for the dataset, skip
-            write_system_log(es, SCRIPT_NAME, 'warning', get_line_number(),
-                             f'Dataset {dataset_id} could not find any related specimen, skipped', to_es_flag)
-            continue
-        es_doc_dataset['specimen'] = sorted(specimens_list, key=lambda k: k['biosampleId'])
-        es_doc_dataset['species'] = list(species.values())
-        file_arr = datasets['tmp'][dataset_id]['file'].values()
-        valid_files = list()
-        for file_entry in sorted(file_arr, key=lambda k: k['name']):
-            file_id = file_entry['fileId']
-            if file_id in indexed_files:
-                valid_files.append(file_entry)
-        es_doc_dataset['file'] = valid_files
-        es_doc_dataset['experiment'] = list(only_valid_exps.values())
-        es_doc_dataset['assayType'] = list(experiment_type.keys())
-        es_doc_dataset['tech'] = list(tech_type.keys())
-        es_doc_dataset['instrument'] = list(datasets['tmp'][dataset_id]['instrument'])
-        es_doc_dataset['archive'] = sorted(list(datasets['tmp'][dataset_id]['archive']))
-        body = json.dumps(es_doc_dataset)
-        insert_into_es(es, es_index_prefix, 'dataset', dataset_id, body)
-    write_system_log(es, SCRIPT_NAME, 'warning', get_line_number(),
-                     f'finishing indexing datasets', to_es_flag)
-    write_system_log(es, SCRIPT_NAME, 'info', get_line_number(), 'Finish importing ena legacy', to_es_flag)
+    else:
+        es_doc_dataset['accession'] = dataset_id
+        es_doc_dataset['alias'] = record['study_alias']
+        es_doc_dataset['title'] = record['study_title']
+        es_doc_dataset['secondaryAccession'] = record['secondary_study_accession']
+    
+    datasets.setdefault('tmp', dict())
+    datasets['tmp'].setdefault(dataset_id, dict())
+    datasets['tmp'][dataset_id].setdefault('specimen', set())
+    datasets['tmp'][dataset_id]['specimen'].add(specimen_biosample_id)
 
+    datasets['tmp'][dataset_id].setdefault('instrument', set())
+    datasets['tmp'][dataset_id]['instrument'].add(record['instrument_model'])
 
+    datasets['tmp'][dataset_id].setdefault('archive', set())
+    datasets['tmp'][dataset_id]['archive'].add(archive)
+
+    tmp_exp = {
+        'accession': record['experiment_accession'],
+        'assayType': assay_type,
+        'target': experiment_target
+    }
+    datasets['tmp'][dataset_id].setdefault('experiment', dict())
+    datasets['tmp'][dataset_id]['experiment'][record['experiment_accession']] = tmp_exp
+    datasets[dataset_id] = es_doc_dataset
+
+    # collect file data
+    for index, file in enumerate(files):
+        fullname = file.split("/")[-1]
+        filename = fullname.split(".")[0]
+        type_found = True
+        try:
+            file_type = types[index]
+            if len(file_type) == 0:
+                type_found = False
+        except IndexError:
+            type_found = False
+        if not type_found:
+            start_index = len(filename)+1
+            file_type = fullname[start_index:]
+
+        es_file_doc = {
+            'specimen': specimen_biosample_id,
+            'species': {
+                'text': SPECIES_DICT[record['tax_id']],
+                'ontologyTerms': f"http://purl.obolibrary.org/obo/NCBITaxon_{record['tax_id']}"
+            },
+            'url': file,
+            'name': fullname,
+            'type': file_type,
+            'size': sizes[index],
+            'readableSize': convert_readable(sizes[index]),
+            'checksumMethod': 'md5',
+            'checksum': checksums[index],
+            'archive': archive,
+            'baseCount': record['base_count'],
+            'readCount': record['read_count'],
+            'releaseDate': record['first_public'],
+            'updateDate': record['last_updated'],
+            'submission': record['submission_accession'],
+            'experiment': {
+                'accession': record['experiment_accession'],
+                'assayType': assay_type,
+                'target': experiment_target
+            },
+            'run': {
+                'accession': record['run_accession'],
+                'alias': record['run_alias'],
+                'platform': record['instrument_platform'],
+                'instrument': record['instrument_model']
+            },
+            'study': {
+                'accession': record['study_accession'],
+                'alias': record['study_alias'],
+                'title': record['study_title'],
+                'type': category,
+                'secondaryAccession': record['secondary_study_accession']
+            }
+        }
+        files_dict[filename] = es_file_doc
+        tmp_file = {
+            'url': file,
+            'name': fullname,
+            'fileId': filename,
+            'experiment': record['experiment_accession'],
+            'type': file_type,
+            'size': sizes[index],
+            'readableSize': convert_readable(sizes[index]),
+            'archive': archive,
+            'baseCount': record['base_count'],
+            'readCount': record['read_count'],
+            'checksumMethod': 'md5',
+            'checksum': checksums[index]
+        }
+        datasets['tmp'][dataset_id].setdefault('file', dict())
+        datasets['tmp'][dataset_id]['file'][fullname] = tmp_file
+
+def import_experiment(exp_es, validation_results, exp_validation, es_index_prefix):
+    '''
+    This function indexes experiment if it meets standards
+    and imports the experiment into elasticsearch
+    '''
+    exp_id = exp_es['accession']
+    for ruleset in RULESETS:
+        if validation_results[ruleset]['detail'][exp_id]['status'] == 'error':
+            write_system_log(es, SCRIPT_NAME, 'info', get_line_number(),
+                                f"{exp_id}\tExperiment\terror\t"
+                                f"{validation_results[ruleset]['detail'][exp_id]['message']}", to_es_flag)
+        else:
+            # only indexing when meeting standard
+            exp_validation[exp_id] = STANDARDS[ruleset]
+            exp_es['standardMet'] = STANDARDS[ruleset]
+            body = json.dumps(exp_es)
+            insert_into_es(es, es_index_prefix, 'experiment', exp_id, body)
+            # index into ES so break the loop
+            break
+
+def import_file(es_file_doc, exp_validation, es_index_prefix):
+    '''
+    This function imports file into elasticsearch
+    '''    
+    file_id = es_file_doc['name'].split(".")[0]
+    exp_id = es_file_doc['experiment']['accession']
+    # only files linked to valid experiments are allowed into the data portal
+    if exp_id not in exp_validation:
+        return
+    es_file_doc['experiment']['standardMet'] = exp_validation[exp_id]
+    body = json.dumps(es_file_doc)
+    insert_into_es(es, es_index_prefix, 'file', file_id, body)
+    indexed_files[file_id] = 1
+
+def import_dataset(es_doc_dataset, exp_validation, es_index_prefix):
+    '''
+    This function imports dataset into elasticsearch
+    '''
+    dataset_id = es_doc_dataset['accession']
+    exps = datasets['tmp'][dataset_id]["experiment"]
+    only_valid_exps = dict()
+    dataset_standard = constants.STANDARD_FAANG
+    experiment_type = dict()
+    tech_type = dict()
+    for exp_id in exps:
+        if exp_id in exp_validation:
+            if exp_validation[exp_id] == constants.STANDARD_LEGACY:
+                dataset_standard = constants.STANDARD_LEGACY
+            only_valid_exps[exp_id] = exps[exp_id]
+            assay_type = exps[exp_id]['assayType']
+            tech_type.setdefault(TECHNOLOGIES[assay_type], 0)
+            tech_type[TECHNOLOGIES[assay_type]] += 1
+            experiment_type.setdefault(assay_type, 0)
+            experiment_type[assay_type] += 1
+    num_valid_exps = len(only_valid_exps.keys())
+    if num_valid_exps == 0:
+        write_system_log(es, SCRIPT_NAME, 'warning', get_line_number(),
+                            f'dataset {dataset_id} has no valid experiments, skipped.', to_es_flag)
+        return
+    es_doc_dataset['standardMet'] = dataset_standard
+    specimen_set = datasets['tmp'][dataset_id]['specimen']
+    species = dict()
+    specimens_list = list()
+    for specimen in specimen_set:
+        if specimen not in BIOSAMPLES_RECORDS:
+            write_system_log(es, SCRIPT_NAME, 'warning', get_line_number(),
+                                f'BioSamples record {specimen} required by dataset {dataset_id} could not be found',
+                                to_es_flag)
+            return
+        specimen_detail = BIOSAMPLES_RECORDS[specimen]
+        es_doc_specimen = dict()
+        es_doc_specimen['biosampleId'] = check_existsence(specimen_detail, 'biosampleId')
+        es_doc_specimen['material'] = check_existsence(specimen_detail, 'material')
+        es_doc_specimen['cellType'] = check_existsence(specimen_detail, 'cellType')
+        es_doc_specimen['organism'] = check_existsence(specimen_detail['organism'], 'organism')
+        es_doc_specimen['sex'] = check_existsence(specimen_detail['organism'], 'sex')
+        es_doc_specimen['breed'] = check_existsence(specimen_detail['organism'], 'breed')
+        specimens_list.append(es_doc_specimen)
+        species[specimen_detail['organism']['organism']['text']] = specimen_detail['organism']['organism']
+    
+    # no specimen found for the dataset, skip record
+    if not specimens_list:  
+        write_system_log(es, SCRIPT_NAME, 'warning', get_line_number(),
+                            f'Dataset {dataset_id} could not find any related specimen, skipped', to_es_flag)
+        return
+    es_doc_dataset['specimen'] = sorted(specimens_list, key=lambda k: k['biosampleId'])
+    es_doc_dataset['species'] = list(species.values())
+    file_arr = datasets['tmp'][dataset_id]['file'].values()
+    valid_files = list()
+    for file_entry in sorted(file_arr, key=lambda k: k['name']):
+        file_id = file_entry['fileId']
+        if file_id in indexed_files:
+            valid_files.append(file_entry)
+    es_doc_dataset['file'] = valid_files
+    es_doc_dataset['experiment'] = list(only_valid_exps.values())
+    es_doc_dataset['assayType'] = list(experiment_type.keys())
+    es_doc_dataset['tech'] = list(tech_type.keys())
+    es_doc_dataset['instrument'] = list(datasets['tmp'][dataset_id]['instrument'])
+    es_doc_dataset['archive'] = sorted(list(datasets['tmp'][dataset_id]['archive']))
+    body = json.dumps(es_doc_dataset)
+    insert_into_es(es, es_index_prefix, 'dataset', dataset_id, body)
+  
 if __name__ == "__main__":
     main()
