@@ -105,7 +105,7 @@ def get_analyses(record, analyses, existing_datasets):
         es_doc['referenceGenome'] = record['reference_genome']
 
         analysis_date = record['analysis_date']
-        if analysis_date:
+        if analysis_date and not isinstance(analysis_date, str):
             es_doc.setdefault('analysisDate', dict())
             es_doc['analysisDate']['text'] = analysis_date
             es_doc['analysisDate']['unit'] = 'YYYY-MM-DD'
