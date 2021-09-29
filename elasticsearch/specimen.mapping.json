@@ -630,6 +630,9 @@
           "type": "keyword"
         }
       }
+    },
+    "track_hub_url": {
+      "type": "keyword"
     }
   }
 }
