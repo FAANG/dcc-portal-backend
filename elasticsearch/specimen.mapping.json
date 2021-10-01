@@ -631,7 +631,7 @@
         }
       }
     },
-    "track_hub_url": {
+    "trackhubUrl": {
       "type": "keyword"
     }
   }
