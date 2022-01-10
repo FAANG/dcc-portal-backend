@@ -168,6 +168,9 @@
           "type": "keyword"
         }
       }
+    },
+    "submitterEmail": {
+      "type": "text"
     }
   }
 }
