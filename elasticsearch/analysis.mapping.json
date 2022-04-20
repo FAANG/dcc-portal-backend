@@ -3,7 +3,14 @@
   "date_detection": false,
   "properties": {
     "accession": {
-      "type": "keyword"
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
     },
     "project": {
       "type": "keyword"
@@ -12,7 +19,14 @@
       "type": "keyword"
     },
     "title": {
-      "type": "keyword"
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
     },
     "alias": {
       "type": "keyword"
@@ -21,7 +35,14 @@
       "type": "keyword"
     },
     "standardMet": {
-      "type": "keyword"
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
     },
     "versionLastStandardMet": {
       "type": "keyword"
@@ -39,7 +60,8 @@
           "fields": {
             "autocomp": {
               "type": "text",
-              "analyzer": "autocomp"
+              "analyzer": "autocomp",
+              "search_analyzer": "autocomplete_search"
             }
           }
         },
@@ -52,7 +74,14 @@
       "type": "keyword"
     },
     "datasetAccession": {
-      "type": "keyword"
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
     },
     "datasetInPortal": {
       "type": "boolean"
@@ -102,7 +131,14 @@
       }
     },
     "assayType": {
-      "type": "keyword"
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
     },
     "analysisProtocol": {
       "properties": {
@@ -115,7 +151,14 @@
       }
     },
     "analysisType": {
-      "type": "keyword"
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
     },
     "referenceGenome": {
       "type": "keyword"

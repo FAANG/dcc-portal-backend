@@ -5,14 +5,22 @@
     "accession": {
       "type": "keyword",
       "fields": {
-        "std": {
+        "autocomp": {
           "type": "text",
-          "analyzer": "standard"
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
         }
       }
     },
     "standardMet": {
-      "type": "keyword"
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
     },
     "secondaryProject": {
       "type": "keyword"
@@ -22,7 +30,8 @@
       "fields": {
         "autocomp": {
           "type": "text",
-          "analyzer": "autocomp"
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
         }
       }
     },
@@ -30,7 +39,14 @@
       "type": "keyword"
     },
     "assayType": {
-      "type": "keyword"
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
     },
     "tech": {
       "type": "keyword"
@@ -45,7 +61,14 @@
       }
     },
     "archive": {
-      "type": "keyword"
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
     },
     "specimen": {
       "properties": {
@@ -75,7 +98,8 @@
               "fields": {
                 "autocomp": {
                   "type": "text",
-                  "analyzer": "autocomp"
+                  "analyzer": "autocomp",
+                  "search_analyzer": "autocomplete_search"
                 }
               }
             },
@@ -101,7 +125,8 @@
               "fields": {
                 "autocomp": {
                   "type": "text",
-                  "analyzer": "autocomp"
+                  "analyzer": "autocomp",
+                  "search_analyzer": "autocomplete_search"
                 }
               }
             },
@@ -117,7 +142,8 @@
               "fields": {
                 "autocomp": {
                   "type": "text",
-                  "analyzer": "autocomp"
+                  "analyzer": "autocomp",
+                  "search_analyzer": "autocomplete_search"
                 },
                 "lower_case_sort": {
                   "type": "text",
@@ -139,7 +165,8 @@
           "fields": {
             "autocomp": {
               "type": "text",
-              "analyzer": "autocomp"
+              "analyzer": "autocomp",
+              "search_analyzer": "autocomplete_search"
             }
           }
         },
@@ -218,7 +245,8 @@
       "fields": {
         "autocomp": {
           "type": "text",
-          "analyzer": "autocomp"
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
         }
       }
     },
@@ -245,7 +273,7 @@
       }
     },
     "submitterEmail": {
-      "type": "text"
+      "type": "keyword"
     }
   }
 }

@@ -1,16 +1,7 @@
 {
   "dynamic": "strict",
   "properties": {
-    "pmcId": {
-      "type": "keyword"
-    },
-    "pubmedId": {
-      "type": "keyword"
-    },
-    "doi": {
-      "type": "keyword"
-    },
-    "title": {
+    "name": {
       "type": "keyword",
       "fields": {
         "autocomp": {
@@ -20,10 +11,7 @@
         }
       }
     },
-    "authorString": {
-      "type": "keyword"
-    },
-    "journal": {
+    "experimentTarget": {
       "type": "keyword",
       "fields": {
         "autocomp": {
@@ -33,13 +21,7 @@
         }
       }
     },
-    "issue": {
-      "type": "keyword"
-    },
-    "volume": {
-      "type": "keyword"
-    },
-    "year": {
+    "assayType": {
       "type": "keyword",
       "fields": {
         "autocomp": {
@@ -49,13 +31,13 @@
         }
       }
     },
-    "pages": {
+    "key": {
       "type": "keyword"
     },
-    "isOpenAccess": {
+    "url": {
       "type": "keyword"
     },
-    "datasetSource": {
+    "filename": {
       "type": "keyword",
       "fields": {
         "autocomp": {
@@ -65,21 +47,18 @@
         }
       }
     },
-    "relatedDatasets": {
+    "experiments": {
       "properties": {
         "accession": {
           "type": "keyword"
         },
-        "standardMet": {
+        "sampleStorage": {
           "type": "keyword"
         },
-        "species": {
+        "sampleStorageProcessing": {
           "type": "keyword"
         }
       }
-    },
-    "secondaryProject": {
-      "type": "keyword"
     }
   }
 }

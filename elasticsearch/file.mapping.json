@@ -5,9 +5,10 @@
     "specimen": {
       "type": "keyword",
       "fields": {
-        "std": {
+        "autocomp": {
           "type": "text",
-          "analyzer": "standard"
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
         }
       }
     },
@@ -27,7 +28,8 @@
           "fields": {
             "autocomp": {
               "type": "text",
-              "analyzer": "autocomp"
+              "analyzer": "autocomp",
+              "search_analyzer": "autocomplete_search"
             }
           }
         },
@@ -46,7 +48,14 @@
       }
     },
     "name": {
-      "type": "keyword"
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
     },
     "secondaryProject": {
       "type": "keyword"
@@ -87,23 +96,58 @@
     "experiment": {
       "properties": {
         "accession": {
-          "type": "keyword"
+          "type": "keyword",
+          "fields": {
+            "autocomp": {
+              "type": "text",
+              "analyzer": "autocomp",
+              "search_analyzer": "autocomplete_search"
+            }
+          }
         },
         "target": {
-          "type": "keyword"
+          "type": "keyword",
+          "fields": {
+            "autocomp": {
+              "type": "text",
+              "analyzer": "autocomp",
+              "search_analyzer": "autocomplete_search"
+            }
+          }
         },
         "assayType": {
-          "type": "keyword"
+          "type": "keyword",
+          "fields": {
+            "autocomp": {
+              "type": "text",
+              "analyzer": "autocomp",
+              "search_analyzer": "autocomplete_search"
+            }
+          }
         },
         "standardMet": {
-          "type": "keyword"
+          "type": "keyword",
+          "fields": {
+            "autocomp": {
+              "type": "text",
+              "analyzer": "autocomp",
+              "search_analyzer": "autocomplete_search"
+            }
+          }
         }
       }
     },
     "study": {
       "properties": {
         "accession": {
-          "type": "keyword"
+          "type": "keyword",
+          "fields": {
+            "autocomp": {
+              "type": "text",
+              "analyzer": "autocomp",
+              "search_analyzer": "autocomplete_search"
+            }
+          }
         },
         "alias": {
           "type": "keyword"
@@ -131,7 +175,14 @@
           "type": "keyword"
         },
         "instrument": {
-          "type": "keyword"
+          "type": "keyword",
+          "fields": {
+            "autocomp": {
+              "type": "text",
+              "analyzer": "autocomp",
+              "search_analyzer": "autocomplete_search"
+            }
+          }
         },
         "centerName": {
           "type": "keyword"
@@ -166,11 +217,17 @@
         },
         "journal": {
           "type": "keyword"
+        },
+        "pubmedId": {
+          "type": "keyword"
+        },
+        "doi": {
+          "type": "keyword"
         }
       }
     },
     "submitterEmail": {
-      "type": "text"
+      "type": "keyword"
     }
   }
 }

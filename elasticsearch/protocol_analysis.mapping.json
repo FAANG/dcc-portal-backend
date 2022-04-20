@@ -1,13 +1,13 @@
 {
   "dynamic": "strict",
   "properties": {
-    "name": {
+    "universityName": {
       "type": "keyword"
     },
-    "experimentTarget": {
+    "protocolDate": {
       "type": "keyword"
     },
-    "assayType": {
+    "protocolName": {
       "type": "keyword"
     },
     "key": {
@@ -16,18 +16,18 @@
     "url": {
       "type": "keyword"
     },
-    "filename": {
-      "type": "keyword"
-    },
-    "experiments": {
+    "analyses": {
       "properties": {
         "accession": {
           "type": "keyword"
         },
-        "sampleStorage": {
+        "organism": {
           "type": "keyword"
         },
-        "sampleStorageProcessing": {
+        "datasetAccession": {
+          "type": "keyword"
+        },
+        "analysisType": {
           "type": "keyword"
         }
       }
