@@ -2,13 +2,34 @@
   "dynamic": "strict",
   "properties": {
     "universityName": {
-      "type": "keyword"
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
     },
     "protocolDate": {
-      "type": "keyword"
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
     },
     "protocolName": {
-      "type": "keyword"
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
     },
     "key": {
       "type": "keyword"
