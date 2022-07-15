@@ -37,6 +37,9 @@
     "url": {
       "type": "keyword"
     },
+    "secondaryProject": {
+      "type": "keyword"
+    },
     "analyses": {
       "properties": {
         "accession": {
