@@ -1,0 +1,153 @@
+{
+  "dynamic": "strict",
+  "properties": {
+    "accession": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    },
+    "annotation": {
+      "properties": {
+        "annotation": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "fileUrl": {
+          "type": "text"
+        }
+      }
+    },
+    "assembly_submitter": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    },
+    "browser_view": {
+      "properties": {
+        "browserView": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "fileUrl": {
+          "type": "text"
+        }
+      }
+    },
+    "other_data": {
+      "properties": {
+        "fileUrl": {
+          "type": "text"
+        },
+        "otherData": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        }
+      }
+    },
+    "project": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    },
+    "proteins": {
+      "properties": {
+        "fileType": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "fileUrl": {
+          "type": "text"
+        }
+      }
+    },
+    "repeat_library": {
+      "properties": {
+        "fileUrl": {
+          "type": "text"
+        },
+        "library": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        }
+      }
+    },
+    "softmasked_genome": {
+      "properties": {
+        "fileType": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "fileUrl": {
+          "type": "text"
+        }
+      }
+    },
+    "species": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    },
+    "transcripts": {
+      "properties": {
+        "fileType": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "fileUrl": {
+          "type": "text"
+        }
+      }
+    }
+  }
+}
