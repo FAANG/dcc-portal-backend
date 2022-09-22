@@ -41,20 +41,14 @@ ES_PASSWORD = os.getenv('es_password')
 
 ES_HOST = os.environ.get("ES_NODE")
 
-es = None
-
+es = Elasticsearch([ES_HOST],
+                   connection_class=RequestsHttpConnection,
+                   http_auth=(ES_USERNAME, ES_PASSWORD))
 
 def main():
     """
     Main function that will import publications for all entities
-    :return:
     """
-
-    global es
-
-    es = Elasticsearch([ES_HOST],
-                       connection_class=RequestsHttpConnection,
-                       http_auth=(ES_USERNAME, ES_PASSWORD))
 
     print('Start fetching articles')
 
