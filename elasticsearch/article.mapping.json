@@ -80,6 +80,9 @@
     },
     "secondaryProject": {
       "type": "keyword"
+    },
+    "source":  {
+      "type": "keyword"
     }
   }
 }

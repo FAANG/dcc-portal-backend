@@ -290,6 +290,22 @@
           "type": "keyword"
         }
       }
+    },
+    "preprintArticles": {
+      "properties": {
+        "articleId": {
+          "type": "keyword"
+        },
+        "doi": {
+          "type": "keyword"
+        },
+        "title": {
+          "type": "keyword"
+        },
+        "year": {
+          "type": "keyword"
+        }
+      }
     }
   }
 }
