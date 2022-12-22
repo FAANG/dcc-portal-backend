@@ -1,0 +1,57 @@
+{
+    "date_detection": false,
+    "properties": {
+        "name": {
+            "type": "keyword"
+        },
+        "shortLabel": {
+            "type": "keyword"
+        },
+        "longLabel": {
+            "type": "keyword"
+        },
+        "email": {
+            "type": "keyword"
+        },
+        "project": {
+          "type": "keyword"
+        },
+        "genome": {
+            "properties": {
+                "gcaAccession": {
+                    "type": "keyword"
+                },
+                "ensemblAssemblyName": {
+                    "type": "keyword"
+                }
+            }
+        },
+        "subdirectories": {
+            "properties": {
+                "name": {
+                    "type": "keyword"
+                },
+                "tracks": {
+                    "properties": {
+                        "track": {
+                            "type": "keyword"
+                        },
+                        "shortLabel": {
+                            "type": "keyword"
+                        },
+                        "longLabel": {
+                            "type": "keyword"
+                        },
+                        "type": {
+                            "type": "keyword"
+                        },
+                        "bigDataUrl": {
+                            "type": "keyword"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+  
