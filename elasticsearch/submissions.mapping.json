@@ -1,0 +1,76 @@
+{
+    "date_detection": false,
+    "properties": {
+        "alias": {
+            "type": "keyword"
+        },
+        "accession": {
+            "type": "keyword"
+        },
+        "experiments": {
+            "properties": {
+                "alias": {
+                    "type": "keyword"
+                },
+                "accession": {
+                    "type": "keyword"
+                },
+                "status": {
+                    "type": "keyword"
+                }
+            }
+        },
+        "analyses": {
+            "properties": {
+                "alias": {
+                    "type": "keyword"
+                },
+                "accession": {
+                    "type": "keyword"
+                },
+                "status": {
+                    "type": "keyword"
+                }
+            }
+        },
+        "runs": {
+            "properties": {
+                "alias": {
+                    "type": "keyword"
+                },
+                "accession": {
+                    "type": "keyword"
+                },
+                "status": {
+                    "type": "keyword"
+                }
+            }
+        },
+        "studies": {
+            "properties": {
+                "alias": {
+                    "type": "keyword"
+                },
+                "accession": {
+                    "type": "keyword"
+                },
+                "status": {
+                    "type": "keyword"
+                }
+            }
+        },
+        "samples": {
+            "properties": {
+                "alias": {
+                    "type": "keyword"
+                },
+                "accession": {
+                    "type": "keyword"
+                },
+                "status": {
+                    "type": "keyword"
+                }
+            }
+        }
+    }
+}
