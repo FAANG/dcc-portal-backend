@@ -8,7 +8,14 @@
             "type": "keyword"
         },
         "assay_type": {
-            "type": "keyword"
+            "type": "keyword",
+            "fields": {
+              "autocomp": {
+                "type": "text",
+                "analyzer": "autocomp",
+                "search_analyzer": "autocomplete_search"
+              }
+            }
         },
         "experiments": {
             "properties": {
