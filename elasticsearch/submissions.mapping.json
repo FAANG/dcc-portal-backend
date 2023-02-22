@@ -42,10 +42,7 @@
         },
         "files": {
             "properties": {
-                "alias": {
-                    "type": "keyword"
-                },
-                "accession": {
+                "name": {
                     "type": "keyword"
                 }
             }
