@@ -1,10 +1,13 @@
 {
     "date_detection": false,
     "properties": {
-        "alias": {
+        "study_alias": {
             "type": "keyword"
         },
-        "accession": {
+        "study_id": {
+            "type": "keyword"
+        },
+        "assay_type": {
             "type": "keyword"
         },
         "experiments": {
@@ -13,9 +16,6 @@
                     "type": "keyword"
                 },
                 "accession": {
-                    "type": "keyword"
-                },
-                "status": {
                     "type": "keyword"
                 }
             }
@@ -27,9 +27,6 @@
                 },
                 "accession": {
                     "type": "keyword"
-                },
-                "status": {
-                    "type": "keyword"
                 }
             }
         },
@@ -40,34 +37,15 @@
                 },
                 "accession": {
                     "type": "keyword"
-                },
-                "status": {
-                    "type": "keyword"
                 }
             }
         },
-        "studies": {
+        "files": {
             "properties": {
                 "alias": {
                     "type": "keyword"
                 },
                 "accession": {
-                    "type": "keyword"
-                },
-                "status": {
-                    "type": "keyword"
-                }
-            }
-        },
-        "samples": {
-            "properties": {
-                "alias": {
-                    "type": "keyword"
-                },
-                "accession": {
-                    "type": "keyword"
-                },
-                "status": {
                     "type": "keyword"
                 }
             }
