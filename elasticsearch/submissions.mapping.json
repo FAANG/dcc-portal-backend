@@ -10,6 +10,19 @@
         "available_in_portal": {
             "type": "keyword"
         },
+        "submission_date": {
+            "type": "keyword"
+        },
+        "update_date": {
+            "type": "keyword"
+        },
+        "subscribers": {
+            "properties": {
+                "email": {
+                    "type": "keyword"
+                }
+            }
+        },
         "assay_type": {
             "type": "keyword",
             "fields": {
