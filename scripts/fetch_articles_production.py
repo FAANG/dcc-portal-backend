@@ -41,7 +41,7 @@ ES_PASSWORD = os.getenv('es_password')
 
 ES_HOST = os.environ.get("ES_NODE")
 
-es = Elasticsearch([ES_HOST],
+es = Elasticsearch(['https://prj-ext-dev-faang-gcp-dr.es.europe-west2.gcp.elastic-cloud.com/'],
                    connection_class=RequestsHttpConnection,
                    http_auth=(ES_USERNAME, ES_PASSWORD))
 

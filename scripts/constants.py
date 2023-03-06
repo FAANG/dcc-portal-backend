@@ -14,6 +14,7 @@ FALLBACK_NODE1 = 'wp-p2m-e2:9200'
 FALLBACK_NODE2 = 'wp-p2m-e3:9200'
 PRODUCTION_NODE1 = 'wp-p1m-e2:9200'
 PRODUCTION_NODE2 = 'wp-p1m-e3:9200'
+PRODUCTION__NODE_ELASTIC_CLOUD = 'https://prj-ext-dev-faang-gcp-dr.es.europe-west2.gcp.elastic-cloud.com'
 DEFAULT_PREFIX = 'faang_build_3'
 
 ALIASES_IN_USE = {
