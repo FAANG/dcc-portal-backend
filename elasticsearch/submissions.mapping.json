@@ -50,6 +50,9 @@
                 },
                 "accession": {
                     "type": "keyword"
+                },
+                "available_in_portal": {
+                    "type": "keyword"
                 }
             }
         },
@@ -60,22 +63,8 @@
                 },
                 "accession": {
                     "type": "keyword"
-                }
-            }
-        },
-        "runs": {
-            "properties": {
-                "alias": {
-                    "type": "keyword"
                 },
-                "accession": {
-                    "type": "keyword"
-                }
-            }
-        },
-        "files": {
-            "properties": {
-                "name": {
+                "available_in_portal": {
                     "type": "keyword"
                 }
             }
