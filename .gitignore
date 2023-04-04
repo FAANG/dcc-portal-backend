@@ -46,3 +46,5 @@ scripts/navigate_ena.py
 scripts/__pycache__/*
 # initialize ES commands
 elasticsearch/initialze_test_es_server.sh
+
+*.log
