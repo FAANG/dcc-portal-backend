@@ -138,7 +138,7 @@ class CreateProtocols:
                 protocol_data['protocolName'] = id
             else:
                 id = protocol_name
-            if es_staging.exists('protocol_samples_test', id=id):
+            if es_staging.exists('protocol_samples', id=id):
                 es_staging.update(
                     'protocol_samples', id=id,
                     body={
