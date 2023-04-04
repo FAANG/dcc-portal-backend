@@ -1,10 +1,12 @@
 import os
 import datetime
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, RequestsHttpConnection
 
 from constants import *
 from utils import *
 
+ES_USER = os.getenv('ES_USER')
+ES_PASSWORD = os.getenv('ES_PASSWORD')
 
 class CreateProtocols:
     """
@@ -88,14 +90,16 @@ class CreateProtocols:
                     else:
                         protocol_name = " ".join(parsed[1:-1])
                     # Parsing date
-                    for fmt in ['%Y%m%d', '%d%m%Y']:
+                    for fmt in ['%Y%m%d']:
                         try:
                             date = datetime.strptime(
                                 parsed[-1].split(".pdf")[0], fmt)
+                            date = date.year
                         except ValueError:
                             date = None
 
                 # Adding information about specimens
+                key = requests.utils.unquote(key)
                 entries.setdefault(key, {"specimens": [], "universityName": "",
                                          "protocolDate": "",
                                          "protocolName": "", "key": "",
@@ -116,21 +120,36 @@ class CreateProtocols:
                 entries[key]["specimens"].append(specimen)
                 entries[key]['universityName'] = university_name
                 entries[key]['protocolDate'] = date
-                entries[key]["protocolName"] = protocol_name
+                entries[key]["protocolName"] = requests.utils.unquote(protocol_name)
                 entries[key]["key"] = key
                 entries[key]["url"] = url
 
         for protocol_name, protocol_data in entries.items():
-            if es_staging.exists('protocols_samples', id=protocol_name):
+            if protocol_name == 'restricted access':
+                continue
+            # handle special cases for external protocols
+            if protocol_name == protocol_data['url']:
+                parsed_name = protocol_name.split('/')
+                if len(parsed_name) > 1:
+                    id = ' '.join(parsed_name[-2:])
+                else:
+                    id = parsed_name[-1]
+                protocol_data['key'] = id
+                protocol_data['protocolName'] = id
+            else:
+                id = protocol_name
+            if es_staging.exists('protocol_samples_test', id=id):
                 es_staging.update(
-                    'protocols_samples', id=protocol_name,
+                    'protocol_samples', id=id,
                     body={
-                        'doc': protocol_data
+                        'doc': {
+                            'specimens': protocol_data["specimens"]
+                        }
                     }
                 )
             else:
                 es_staging.create(
-                    'protocols_samples', id=protocol_name,
+                    'protocol_samples', id=id,
                     body=protocol_data
                 )
 
@@ -150,7 +169,7 @@ class CreateProtocols:
 
 if __name__ == "__main__":
     # Create elasticsearch object
-    es_staging = Elasticsearch([STAGING_NODE1, STAGING_NODE2])
+    es_staging = Elasticsearch([PRODUCTION__NODE_ELASTIC_CLOUD], connection_class=RequestsHttpConnection, http_auth=(ES_USER, ES_PASSWORD), use_ssl=True, verify_certs=False)
 
     # Create logger to log info
     logger = create_logging_instance('create_protocols')
