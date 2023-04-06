@@ -1,16 +1,19 @@
 import os
 import datetime
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, RequestsHttpConnection
 
 from constants import *
 from utils import *
 
+ES_USER = os.getenv('ES_USER')
+ES_PASSWORD = os.getenv('ES_PASSWORD')
 
 class CreateProtocols:
     """
-    This class will create indexes for http://data.faang.org/protocol/samples
-    (create_sample_protocol) and http://data.faang.org/protocol/experiments
-    (create_experiment_protocol)
+    This class will create indexes for 
+    http://data.faang.org/protocol/samples (create_sample_protocol), 
+    http://data.faang.org/protocol/experiments (create_experiment_protocol) 
+    and http://data.faang.org/protocol/analysis (create_analysis_protocol)
     """
     def __init__(self, es_staging, logger):
         """
@@ -27,8 +30,8 @@ class CreateProtocols:
         Main function that will run function to create protocols
         """
         self.create_sample_protocol()
-        # self.create_experiment_protocol()
-        # self.create_analysis_protocol()
+        self.create_experiment_protocol()
+        self.create_analysis_protocol()
 
     def create_sample_protocol(self):
         """
@@ -88,14 +91,16 @@ class CreateProtocols:
                     else:
                         protocol_name = " ".join(parsed[1:-1])
                     # Parsing date
-                    for fmt in ['%Y%m%d', '%d%m%Y']:
+                    for fmt in ['%Y%m%d']:
                         try:
                             date = datetime.strptime(
                                 parsed[-1].split(".pdf")[0], fmt)
+                            date = date.year
                         except ValueError:
                             date = None
 
                 # Adding information about specimens
+                key = requests.utils.unquote(key)
                 entries.setdefault(key, {"specimens": [], "universityName": "",
                                          "protocolDate": "",
                                          "protocolName": "", "key": "",
@@ -116,21 +121,36 @@ class CreateProtocols:
                 entries[key]["specimens"].append(specimen)
                 entries[key]['universityName'] = university_name
                 entries[key]['protocolDate'] = date
-                entries[key]["protocolName"] = protocol_name
+                entries[key]["protocolName"] = requests.utils.unquote(protocol_name)
                 entries[key]["key"] = key
                 entries[key]["url"] = url
 
         for protocol_name, protocol_data in entries.items():
-            if es_staging.exists('protocols_samples', id=protocol_name):
+            if protocol_name == 'restricted access':
+                continue
+            # handle special cases for external protocols
+            if protocol_name == protocol_data['url']:
+                parsed_name = protocol_name.split('/')
+                if len(parsed_name) > 1:
+                    id = ' '.join(parsed_name[-2:])
+                else:
+                    id = parsed_name[-1]
+                protocol_data['key'] = id
+                protocol_data['protocolName'] = id
+            else:
+                id = protocol_name
+            if es_staging.exists('protocol_samples', id=id):
                 es_staging.update(
-                    'protocols_samples', id=protocol_name,
+                    'protocol_samples', id=id,
                     body={
-                        'doc': protocol_data
+                        'doc': {
+                            'specimens': protocol_data["specimens"]
+                        }
                     }
                 )
             else:
                 es_staging.create(
-                    'protocols_samples', id=protocol_name,
+                    'protocol_samples', id=id,
                     body=protocol_data
                 )
 
@@ -139,18 +159,193 @@ class CreateProtocols:
         """
         This function will create protocols data for experiments
         """
-        pass
+        self.logger.info("Creating experiments protocols")
+        results = self.es_staging.search(index="experiment", size=1000000)
+        entries = {}
+        assay_types = {
+            "ATAC-seq": ["transposaseProtocol"],
+            "BS-seq": [
+                "bisulfiteConversionProtocol", 
+                "pcrProductIsolationProtocol"
+            ],
+            "ChIP-seq DNA-binding": ["chipProtocol"],
+            "ChIP-seq input DNA": ["chipProtocol"],
+            "DNase-seq": ["dnaseProtocol"],
+            "Hi-C": ["hi-cProtocol"],
+            "RNA-seq": [
+                "rnaPreparation3AdapterLigationProtocol", 
+                "rnaPreparation5AdapterLigationProtocol",
+                "libraryGenerationPcrProductIsolationProtocol",
+                "preparationReverseTranscriptionProtocol",
+                "libraryGenerationProtocol"
+            ],
+            "WGS": [
+                "libraryGenerationPcrProductIsolationProtocol",
+                "libraryGenerationProtocol"
+            ],
+            "CAGE-seq": ["cageProtocol"],
+
+        }
+        for result in results["hits"]["hits"]:
+            # Choose field name for specimen type and protocol
+            if "experimentalProtocol" in result["_source"]:
+                protocol = "experimentalProtocol"
+                filename = result['_source'][protocol]['filename']
+                url = result['_source'][protocol]['url']
+            elif "extractionProtocol" in result["_source"]:
+                protocol = "extractionProtocol"
+                filename = result['_source'][protocol]['filename']
+                url = result['_source'][protocol]['url']
+            else:
+                protocol = None
+                for assay in assay_types:
+                    if assay in result["_source"]:
+                        for prot in assay_types[assay]:
+                            if prot in result["_source"][assay]:
+                                protocol = prot
+                                filename = result['_source'][assay][prot]['filename']
+                                url = result['_source'][assay][prot]['url']
+                            if protocol:
+                                break
+                    if protocol:
+                        break 
+
+            exp_target = result["_source"]["experimentTarget"]
+            assay_type = result["_source"]["assayType"]
+
+            # Adding information about experiments
+            if protocol and exp_target and assay_type:
+                key = f"{protocol}-{assay_type}-{exp_target}"
+                entries.setdefault(key, {"experiments": [], "experimentTarget": "",
+                                         "assayType": "", "name": "",
+                                         "filename": "", "key": "",
+                                         "url": ""})
+                experiments = dict()
+                experiments["accession"] = result["_source"]["accession"]
+                experiments["sampleStorage"] = result["_source"]["sampleStorage"] \
+                    if result["_source"]["sampleStorage"] else None
+                experiments["sampleStorageProcessing"] = result["_source"]["sampleStorageProcessing"] \
+                    if result["_source"]["sampleStorageProcessing"] else None
+
+                entries[key]["experiments"].append(experiments)
+                entries[key]['experimentTarget'] = exp_target
+                entries[key]['assayType'] = assay_type
+                entries[key]["name"] = protocol
+                entries[key]["filename"] = filename
+                entries[key]["key"] = key
+                entries[key]["url"] = url
+
+        for key, protocol_data in entries.items():
+            if es_staging.exists('protocol_files_test', id=key):
+                es_staging.update(
+                    'protocol_files_test', id=key,
+                    body={
+                        'doc': {
+                            'experiments': protocol_data["experiments"]
+                        }
+                    }
+                )
+            else:
+                es_staging.create(
+                    'protocol_files_test', id=key,
+                    body=protocol_data
+                )
 
     def create_analysis_protocol(self):
         """
         This function will create protocols data for analyses
         """
-        pass
+        self.logger.info("Creating analysis protocols")
+        results = self.es_staging.search(index="analysis", size=1000000)
+        entries = {}
+        for result in results["hits"]["hits"]:
+            if "analysisProtocol" in result["_source"] and \
+                    result["_source"]["analysisProtocol"]:
+                key = result['_source']['analysisProtocol']['filename']
+                url = result['_source']['analysisProtocol']['url']
+                if not url:
+                    continue
+                parsed = key.strip().split("_")
+                # Custom protocols, only protocol_name is known
+                if parsed[0] not in UNIVERSITIES and parsed[0] != 'WUR':
+                    protocol_name = key
+                    university_name = None
+                    date = None
+                else:
+                    # Parsing university name
+                    if parsed[0] == 'WUR':
+                        university_name = 'WUR'
+                    else:
+                        university_name = UNIVERSITIES[parsed[0]]
+                    # Parsing protocol name
+                    if 'SOP' in parsed:
+                        protocol_name = " ".join(parsed[2:-1])
+                    else:
+                        protocol_name = " ".join(parsed[1:-1])
+                    # Parsing date
+                    for fmt in ['%Y%m%d']:
+                        try:
+                            date = datetime.strptime(
+                                parsed[-1].split(".pdf")[0], fmt)
+                            date = date.year
+                        except ValueError:
+                            date = None
+
+                # Adding information about analyses
+                key = requests.utils.unquote(key)
+                entries.setdefault(key, {"analyses": [], "universityName": "",
+                                         "protocolDate": "",
+                                         "protocolName": "", "key": "",
+                                         "url": ""})
+                analyses = dict()
+                analyses["accession"] = result["_source"]["accession"]
+                if result["_source"]['organism'] and result["_source"]['organism']['text']:
+                    analyses['organism'] = result["_source"]['organism']['text']
+                if result["_source"]['datasetAccession']:
+                    analyses['datasetAccession'] = result["_source"]['datasetAccession']
+                if result["_source"]['analysisType']:
+                    analyses['analysisType'] = result["_source"]['analysisType']
+
+                entries[key]["analyses"].append(analyses)
+                entries[key]["universityName"] = university_name
+                entries[key]["protocolDate"] = date
+                entries[key]["protocolName"] = requests.utils.unquote(protocol_name)
+                entries[key]["key"] = key
+                entries[key]["url"] = url
+
+        for protocol_name, protocol_data in entries.items():
+            if protocol_name == 'restricted access':
+                continue
+            # handle special cases for external protocols
+            if protocol_name == protocol_data['url']:
+                parsed_name = protocol_name.split('/')
+                if len(parsed_name) > 1:
+                    id = ' '.join(parsed_name[-2:])
+                else:
+                    id = parsed_name[-1]
+                protocol_data['key'] = id
+                protocol_data['protocolName'] = id
+            else:
+                id = protocol_name
+            if es_staging.exists('protocol_analysis', id=id):
+                es_staging.update(
+                    'protocol_analysis', id=id,
+                    body={
+                        'doc': {
+                            'analyses': protocol_data["analyses"]
+                        }
+                    }
+                )
+            else:
+                es_staging.create(
+                    'protocol_analysis', id=id,
+                    body=protocol_data
+                )
 
 
 if __name__ == "__main__":
     # Create elasticsearch object
-    es_staging = Elasticsearch([STAGING_NODE1, STAGING_NODE2])
+    es_staging = Elasticsearch([PRODUCTION__NODE_ELASTIC_CLOUD], connection_class=RequestsHttpConnection, http_auth=(ES_USER, ES_PASSWORD), use_ssl=True, verify_certs=False)
 
     # Create logger to log info
     logger = create_logging_instance('create_protocols')
