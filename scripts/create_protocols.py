@@ -30,7 +30,7 @@ class CreateProtocols:
         Main function that will run function to create protocols
         """
         self.create_sample_protocol()
-        # self.create_experiment_protocol()
+        self.create_experiment_protocol()
         self.create_analysis_protocol()
 
     def create_sample_protocol(self):
@@ -159,7 +159,97 @@ class CreateProtocols:
         """
         This function will create protocols data for experiments
         """
-        pass
+        self.logger.info("Creating experiments protocols")
+        results = self.es_staging.search(index="experiment", size=1000000)
+        entries = {}
+        assay_types = {
+            "ATAC-seq": ["transposaseProtocol"],
+            "BS-seq": [
+                "bisulfiteConversionProtocol", 
+                "pcrProductIsolationProtocol"
+            ],
+            "ChIP-seq DNA-binding": ["chipProtocol"],
+            "ChIP-seq input DNA": ["chipProtocol"],
+            "DNase-seq": ["dnaseProtocol"],
+            "Hi-C": ["hi-cProtocol"],
+            "RNA-seq": [
+                "rnaPreparation3AdapterLigationProtocol", 
+                "rnaPreparation5AdapterLigationProtocol",
+                "libraryGenerationPcrProductIsolationProtocol",
+                "preparationReverseTranscriptionProtocol",
+                "libraryGenerationProtocol"
+            ],
+            "WGS": [
+                "libraryGenerationPcrProductIsolationProtocol",
+                "libraryGenerationProtocol"
+            ],
+            "CAGE-seq": ["cageProtocol"],
+
+        }
+        for result in results["hits"]["hits"]:
+            # Choose field name for specimen type and protocol
+            if "experimentalProtocol" in result["_source"]:
+                protocol = "experimentalProtocol"
+                filename = result['_source'][protocol]['filename']
+                url = result['_source'][protocol]['url']
+            elif "extractionProtocol" in result["_source"]:
+                protocol = "extractionProtocol"
+                filename = result['_source'][protocol]['filename']
+                url = result['_source'][protocol]['url']
+            else:
+                protocol = None
+                for assay in assay_types:
+                    if assay in result["_source"]:
+                        for prot in assay_types[assay]:
+                            if prot in result["_source"][assay]:
+                                protocol = prot
+                                filename = result['_source'][assay][prot]['filename']
+                                url = result['_source'][assay][prot]['url']
+                            if protocol:
+                                break
+                    if protocol:
+                        break 
+
+            exp_target = result["_source"]["experimentTarget"]
+            assay_type = result["_source"]["assayType"]
+
+            # Adding information about experiments
+            if protocol and exp_target and assay_type:
+                key = f"{protocol}-{assay_type}-{exp_target}"
+                entries.setdefault(key, {"experiments": [], "experimentTarget": "",
+                                         "assayType": "", "name": "",
+                                         "filename": "", "key": "",
+                                         "url": ""})
+                experiments = dict()
+                experiments["accession"] = result["_source"]["accession"]
+                experiments["sampleStorage"] = result["_source"]["sampleStorage"] \
+                    if result["_source"]["sampleStorage"] else None
+                experiments["sampleStorageProcessing"] = result["_source"]["sampleStorageProcessing"] \
+                    if result["_source"]["sampleStorageProcessing"] else None
+
+                entries[key]["experiments"].append(experiments)
+                entries[key]['experimentTarget'] = exp_target
+                entries[key]['assayType'] = assay_type
+                entries[key]["name"] = protocol
+                entries[key]["filename"] = filename
+                entries[key]["key"] = key
+                entries[key]["url"] = url
+
+        for key, protocol_data in entries.items():
+            if es_staging.exists('protocol_files_test', id=key):
+                es_staging.update(
+                    'protocol_files_test', id=key,
+                    body={
+                        'doc': {
+                            'experiments': protocol_data["experiments"]
+                        }
+                    }
+                )
+            else:
+                es_staging.create(
+                    'protocol_files_test', id=key,
+                    body=protocol_data
+                )
 
     def create_analysis_protocol(self):
         """
