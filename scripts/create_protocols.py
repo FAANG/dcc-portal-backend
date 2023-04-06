@@ -10,9 +10,10 @@ ES_PASSWORD = os.getenv('ES_PASSWORD')
 
 class CreateProtocols:
     """
-    This class will create indexes for http://data.faang.org/protocol/samples
-    (create_sample_protocol) and http://data.faang.org/protocol/experiments
-    (create_experiment_protocol)
+    This class will create indexes for 
+    http://data.faang.org/protocol/samples (create_sample_protocol), 
+    http://data.faang.org/protocol/experiments (create_experiment_protocol) 
+    and http://data.faang.org/protocol/analysis (create_analysis_protocol)
     """
     def __init__(self, es_staging, logger):
         """
@@ -30,7 +31,7 @@ class CreateProtocols:
         """
         self.create_sample_protocol()
         # self.create_experiment_protocol()
-        # self.create_analysis_protocol()
+        self.create_analysis_protocol()
 
     def create_sample_protocol(self):
         """
@@ -164,7 +165,92 @@ class CreateProtocols:
         """
         This function will create protocols data for analyses
         """
-        pass
+        self.logger.info("Creating analysis protocols")
+        results = self.es_staging.search(index="analysis", size=1000000)
+        entries = {}
+        for result in results["hits"]["hits"]:
+            if "analysisProtocol" in result["_source"] and \
+                    result["_source"]["analysisProtocol"]:
+                key = result['_source']['analysisProtocol']['filename']
+                url = result['_source']['analysisProtocol']['url']
+                if not url:
+                    continue
+                parsed = key.strip().split("_")
+                # Custom protocols, only protocol_name is known
+                if parsed[0] not in UNIVERSITIES and parsed[0] != 'WUR':
+                    protocol_name = key
+                    university_name = None
+                    date = None
+                else:
+                    # Parsing university name
+                    if parsed[0] == 'WUR':
+                        university_name = 'WUR'
+                    else:
+                        university_name = UNIVERSITIES[parsed[0]]
+                    # Parsing protocol name
+                    if 'SOP' in parsed:
+                        protocol_name = " ".join(parsed[2:-1])
+                    else:
+                        protocol_name = " ".join(parsed[1:-1])
+                    # Parsing date
+                    for fmt in ['%Y%m%d']:
+                        try:
+                            date = datetime.strptime(
+                                parsed[-1].split(".pdf")[0], fmt)
+                            date = date.year
+                        except ValueError:
+                            date = None
+
+                # Adding information about analyses
+                key = requests.utils.unquote(key)
+                entries.setdefault(key, {"analyses": [], "universityName": "",
+                                         "protocolDate": "",
+                                         "protocolName": "", "key": "",
+                                         "url": ""})
+                analyses = dict()
+                analyses["accession"] = result["_source"]["accession"]
+                if result["_source"]['organism'] and result["_source"]['organism']['text']:
+                    analyses['organism'] = result["_source"]['organism']['text']
+                if result["_source"]['datasetAccession']:
+                    analyses['datasetAccession'] = result["_source"]['datasetAccession']
+                if result["_source"]['analysisType']:
+                    analyses['analysisType'] = result["_source"]['analysisType']
+
+                entries[key]["analyses"].append(analyses)
+                entries[key]["universityName"] = university_name
+                entries[key]["protocolDate"] = date
+                entries[key]["protocolName"] = requests.utils.unquote(protocol_name)
+                entries[key]["key"] = key
+                entries[key]["url"] = url
+
+        for protocol_name, protocol_data in entries.items():
+            if protocol_name == 'restricted access':
+                continue
+            # handle special cases for external protocols
+            if protocol_name == protocol_data['url']:
+                parsed_name = protocol_name.split('/')
+                if len(parsed_name) > 1:
+                    id = ' '.join(parsed_name[-2:])
+                else:
+                    id = parsed_name[-1]
+                protocol_data['key'] = id
+                protocol_data['protocolName'] = id
+            else:
+                id = protocol_name
+            if es_staging.exists('protocol_analysis', id=id):
+                es_staging.update(
+                    'protocol_analysis', id=id,
+                    body={
+                        'doc': {
+                            'analyses': protocol_data["analyses"]
+                        }
+                    }
+                )
+            else:
+                es_staging.create(
+                    'protocol_analysis', id=id,
+                    body=protocol_data
+                )
 
 
 if __name__ == "__main__":
