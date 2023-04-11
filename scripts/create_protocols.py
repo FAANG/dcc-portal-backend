@@ -236,9 +236,9 @@ class CreateProtocols:
                 entries[key]["url"] = url
 
         for key, protocol_data in entries.items():
-            if es_staging.exists('protocol_files_test', id=key):
+            if es_staging.exists('protocol_files', id=key):
                 es_staging.update(
-                    'protocol_files_test', id=key,
+                    'protocol_files', id=key,
                     body={
                         'doc': {
                             'experiments': protocol_data["experiments"]
@@ -247,7 +247,7 @@ class CreateProtocols:
                 )
             else:
                 es_staging.create(
-                    'protocol_files_test', id=key,
+                    'protocol_files', id=key,
                     body=protocol_data
                 )
 
