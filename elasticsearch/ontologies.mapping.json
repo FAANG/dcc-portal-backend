@@ -1,0 +1,51 @@
+{
+    "date_detection": false,
+    "properties": {
+        "key": {
+            "type": "keyword"
+        },
+        "term": {
+            "type": "keyword"
+        },
+        "id": {
+            "type": "keyword"
+        },
+        "type": {
+            "type": "keyword"
+        },
+        "support": {
+            "type": "keyword"
+        },
+        "projects": {
+            "type": "keyword"
+        },
+        "tags": {
+            "type": "keyword"
+        },
+        "species": {
+            "type": "keyword"
+        },
+        "status_activity": {
+            "properties": {
+                "user": {
+                    "type": "keyword"
+                },
+                "status": {
+                    "type": "keyword"
+                },
+                "project": {
+                    "type": "keyword"
+                },
+                "timestamp": {
+                    "type": "keyword"
+                }
+            }
+        },
+        "upvotes_count": {
+            "type": "keyword"
+        },
+        "downvotes_count": {
+            "type": "keyword"
+        }
+    }
+}
