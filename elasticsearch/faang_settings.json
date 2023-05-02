@@ -8,6 +8,10 @@
                     "tokenizer": "alphanumeric",
                     "filter": ["lowercase", "file_stopwords"]
                 },
+                "special_chars": {
+                    "tokenizer": "special",
+                    "filter": ["lowercase"]
+                },
                 "autocomp": {
                     "tokenizer" : "autocomplete",
                     "filter": ["lowercase"]
@@ -24,6 +28,12 @@
                 "alphanumeric": {
                     "type": "pattern",
                     "pattern": "[^A-Za-z0-9]([^A-Za-z]*([^A-Za-z0-9]|$))?"
+                },
+                "special": {
+                    "type": "edge_ngram",
+                    "min_gram": 1,
+                    "max_gram": 20,
+                    "token_chars": [ "letter", "digit", "whitespace", "symbol", "punctuation" ]
                 },
                 "autocomplete": {
                     "type": "edge_ngram",
