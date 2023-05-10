@@ -1,0 +1,36 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: submission-pubsub-status
+spec:
+  schedule: "*/10 * * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Replace
+  jobTemplate:
+    spec:
+      template:
+        spec:
+
+          containers:
+          - name: submission-pubsub-status
+            image: yroochun/submission_pubsub_status:latest
+            volumeMounts:
+              - mountPath: /etc/gcp
+                name: service-account-credentials-volume
+                readOnly: true
+            envFrom:
+              - secretRef:
+                  name: secret-es
+              - secretRef:
+                  name: secret-gcp-credentials
+            imagePullPolicy: Always
+            command: ["python", "pub_sub_subscribe.py"]
+          volumes:
+            - name: service-account-credentials-volume
+              secret:
+                secretName: secret-gcp-credentials
+                items:
+                  - key: prj-ext-dev-faang-gcp-dr-6712304182f1
+                    path: service-account-credentials.json
+          restartPolicy: OnFailure
