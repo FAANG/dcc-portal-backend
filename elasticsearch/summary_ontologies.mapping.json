@@ -1,0 +1,31 @@
+{
+    "date_detection": false,
+    "properties": {
+        "project": {
+          "type": "keyword"
+        },
+        "species": {
+          "type": "keyword"
+        },
+        "type_counts": {
+          "properties": {
+              "type": {
+                  "type": "keyword"
+              },
+              "count": {
+                  "type": "keyword"
+              }
+            }
+        },
+        "activity": {
+            "properties": {
+                "created_count": {
+                    "type": "keyword"
+                },
+                "validated_count": {
+                    "type": "keyword"
+                }
+            }
+        }
+    }
+}
