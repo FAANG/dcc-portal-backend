@@ -19,7 +19,7 @@
         },
         "activity": {
             "properties": {
-                "created_count": {
+                "created_edited_count": {
                     "type": "keyword"
                 },
                 "validated_count": {
