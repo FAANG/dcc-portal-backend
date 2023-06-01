@@ -34,6 +34,16 @@
               }
             }
         },
+        "synonyms": {
+          "type": "keyword",
+          "fields": {
+            "autocomp": {
+              "type": "text",
+              "analyzer": "autocomp",
+              "search_analyzer": "autocomplete_search"
+            }
+          }
+        },
         "support": {
             "type": "keyword"
         },
