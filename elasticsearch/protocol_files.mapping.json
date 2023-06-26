@@ -40,6 +40,13 @@
     "secondaryProject": {
       "type": "keyword"
     },
+    "subscribers": {
+      "properties": {
+        "email": {
+          "type": "keyword"
+        }
+      }
+    },
     "filename": {
       "type": "keyword",
       "fields": {

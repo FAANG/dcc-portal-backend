@@ -81,6 +81,13 @@
     "secondaryProject": {
       "type": "keyword"
     },
+    "subscribers": {
+      "properties": {
+        "email": {
+          "type": "keyword"
+        }
+      }
+    },
     "source":  {
       "type": "keyword"
     }
