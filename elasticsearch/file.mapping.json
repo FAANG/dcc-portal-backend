@@ -242,6 +242,13 @@
         }
       }
     },
+    "subscribers": {
+      "properties": {
+        "email": {
+          "type": "keyword"
+        }
+      }
+    },
     "submitterEmail": {
       "type": "keyword"
     }

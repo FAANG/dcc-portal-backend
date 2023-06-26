@@ -40,6 +40,13 @@
     "secondaryProject": {
       "type": "keyword"
     },
+    "subscribers": {
+      "properties": {
+        "email": {
+          "type": "keyword"
+        }
+      }
+    },
     "analyses": {
       "properties": {
         "accession": {
