@@ -275,6 +275,13 @@
     "paperPublished": {
       "type": "keyword"
     },
+    "subscribers": {
+      "properties": {
+        "email": {
+          "type": "keyword"
+        }
+      }
+    },
     "publishedArticles": {
       "properties": {
         "articleId": {
