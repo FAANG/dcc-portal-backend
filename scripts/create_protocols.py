@@ -125,12 +125,12 @@ class CreateProtocols:
                 entries[key]["key"] = key
                 entries[key]["url"] = url
 
-        for protocol_name, protocol_data in entries.items():
-            if protocol_name == 'restricted access':
+        for key, protocol_data in entries.items():
+            if key == 'restricted access':
                 continue
             # handle special cases for external protocols
-            if protocol_name == protocol_data['url']:
-                parsed_name = protocol_name.split('/')
+            if key == protocol_data['url']:
+                parsed_name = key.split('/')
                 if len(parsed_name) > 1:
                     id = ' '.join(parsed_name[-2:])
                 else:
@@ -138,7 +138,7 @@ class CreateProtocols:
                 protocol_data['key'] = id
                 protocol_data['protocolName'] = id
             else:
-                id = protocol_name
+                id = key
             if es_staging.exists('protocol_samples', id=id):
                 es_staging.update(
                     'protocol_samples', id=id,
@@ -313,12 +313,12 @@ class CreateProtocols:
                 entries[key]["key"] = key
                 entries[key]["url"] = url
 
-        for protocol_name, protocol_data in entries.items():
-            if protocol_name == 'restricted access':
+        for key, protocol_data in entries.items():
+            if key == 'restricted access':
                 continue
             # handle special cases for external protocols
-            if protocol_name == protocol_data['url']:
-                parsed_name = protocol_name.split('/')
+            if key == protocol_data['url']:
+                parsed_name = key.split('/')
                 if len(parsed_name) > 1:
                     id = ' '.join(parsed_name[-2:])
                 else:
@@ -326,7 +326,7 @@ class CreateProtocols:
                 protocol_data['key'] = id
                 protocol_data['protocolName'] = id
             else:
-                id = protocol_name
+                id = key
             if es_staging.exists('protocol_analysis', id=id):
                 es_staging.update(
                     'protocol_analysis', id=id,
