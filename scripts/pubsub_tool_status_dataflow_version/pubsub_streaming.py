@@ -17,6 +17,7 @@ PROJECT = os.getenv("PROJECT")
 REPO = os.getenv("REPO")
 IMAGE = os.getenv("IMAGE")
 REGION = os.getenv("REGION")
+SERVICE_ACCOUNT = os.getenv("SERVICE_ACCOUNT")
 
 
 def get_secret_data(project_id, secret_id, version_id):
@@ -24,7 +25,6 @@ def get_secret_data(project_id, secret_id, version_id):
     secret_detail = f"projects/{project_id}/secrets/{secret_id}/versions/{version_id}"
     response = client.access_secret_version(request={"name": secret_detail})
     data = response.payload.data.decode("UTF-8")
-    print("get_secret_data: ", data)
     return data
 
 
@@ -92,6 +92,7 @@ def run():
     pipeline_options = PipelineOptions(
         project=PROJECT,
         region=REGION,
+        service_account_email=SERVICE_ACCOUNT,
         runner='DataflowRunner',
         experiments=['use_runner_v2'],
         sdk_container_image=f'europe-west2-docker.pkg.dev/{PROJECT}/{REPO}/{IMAGE}:tag1',
@@ -100,7 +101,9 @@ def run():
         save_main_session=True
     )
 
-    input_subscription = 'projects/prj-ext-dev-faang-gcp-dr/subscriptions/faang-new-test-sub'
+    input_subscription = 'projects/prj-int-prod-omics-apps-mon/subscriptions/uptime-checks-sub'
+
+
 
     with Pipeline(options=pipeline_options) as pipeline:
         (

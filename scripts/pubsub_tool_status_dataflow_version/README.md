@@ -16,7 +16,7 @@ Simply run the script and this will launch a Dataflow pipeline job.
 
 **Command:**
 
-*python pubsub_streaming.py*
+*nohup python pubsub_streaming.py &*
 
 
 
