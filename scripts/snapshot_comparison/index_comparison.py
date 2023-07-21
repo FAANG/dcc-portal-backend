@@ -309,15 +309,15 @@ if __name__ == '__main__':
     delete_restored_indices()
     restore_snapshot(indices_str)
 
-    # Step2: reset transform - all checkpoints, states, and the destination index are deleted
+    # Step 2: reset transform - all checkpoints, states, and the destination index are deleted
     stop_reset_transform(indices_list)
 
-    # Step3: Start transform process - creates transform if it does not exist, otherwise just start the existing
+    # Step 3: Start transform process - creates transform if it does not exist, otherwise just start the existing
     # transform.
     # The destination index is recreated
     run_transform(indices_list)
 
-    # Step4: Check transform statuses for all transforms created
+    # Step 4: Check transform statuses for all transforms created
     transform_status_dict = get_transforms_status(indices_list)
 
     # transform has finished running for all indices
