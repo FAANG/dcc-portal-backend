@@ -1,0 +1,163 @@
+{
+  "dynamic": "strict",
+  "date_detection": false,
+  "properties": {
+    "index_subscribers": {
+      "properties": {
+        "dataset": {
+          "properties": {
+            "subscribers": {
+              "properties": {
+                "email": {
+                  "type": "keyword",
+                  "fields": {
+                    "std": {
+                      "type": "text",
+                      "analyzer": "standard"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "organism": {
+          "properties": {
+            "subscribers": {
+              "properties": {
+                "email": {
+                  "type": "keyword",
+                  "fields": {
+                    "std": {
+                      "type": "text",
+                      "analyzer": "standard"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "file": {
+          "properties": {
+            "subscribers": {
+              "properties": {
+                "email": {
+                  "type": "keyword",
+                  "fields": {
+                    "std": {
+                      "type": "text",
+                      "analyzer": "standard"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "analysis": {
+          "properties": {
+            "subscribers": {
+              "properties": {
+                "email": {
+                  "type": "keyword",
+                  "fields": {
+                    "std": {
+                      "type": "text",
+                      "analyzer": "standard"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "article": {
+          "properties": {
+            "subscribers": {
+              "properties": {
+                "email": {
+                  "type": "keyword",
+                  "fields": {
+                    "std": {
+                      "type": "text",
+                      "analyzer": "standard"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "specimen": {
+          "properties": {
+            "subscribers": {
+              "properties": {
+                "email": {
+                  "type": "keyword",
+                  "fields": {
+                    "std": {
+                      "type": "text",
+                      "analyzer": "standard"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "protocol_samples": {
+          "properties": {
+            "subscribers": {
+              "properties": {
+                "email": {
+                  "type": "keyword",
+                  "fields": {
+                    "std": {
+                      "type": "text",
+                      "analyzer": "standard"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "protocol_files": {
+          "properties": {
+            "subscribers": {
+              "properties": {
+                "email": {
+                  "type": "keyword",
+                  "fields": {
+                    "std": {
+                      "type": "text",
+                      "analyzer": "standard"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "protocol_analysis": {
+          "properties": {
+            "subscribers": {
+              "properties": {
+                "email": {
+                  "type": "keyword",
+                  "fields": {
+                    "std": {
+                      "type": "text",
+                      "analyzer": "standard"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
