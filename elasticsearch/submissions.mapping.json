@@ -1,73 +1,90 @@
 {
-    "date_detection": false,
-    "properties": {
-        "study_alias": {
-            "type": "keyword"
-        },
-        "study_id": {
-            "type": "keyword"
-        },
-        "available_in_portal": {
-            "type": "keyword"
-        },
-        "submission_date": {
-            "type": "keyword"
-        },
-        "update_date": {
-            "type": "keyword"
-        },
-        "subscribers": {
-            "properties": {
-                "email": {
-                    "type": "keyword"
-                }
-            }
-        },
-        "assay_type": {
-            "type": "keyword",
-            "fields": {
-              "autocomp": {
-                "type": "text",
-                "analyzer": "autocomp",
-                "search_analyzer": "autocomplete_search"
-              }
-            }
-        },
-        "secondary_project": {
-            "type": "keyword",
-            "fields": {
-              "autocomp": {
-                "type": "text",
-                "analyzer": "autocomp",
-                "search_analyzer": "autocomplete_search"
-              }
-            }
-        },
-        "experiments": {
-            "properties": {
-                "alias": {
-                    "type": "keyword"
-                },
-                "accession": {
-                    "type": "keyword"
-                },
-                "available_in_portal": {
-                    "type": "keyword"
-                }
-            }
-        },
-        "analyses": {
-            "properties": {
-                "alias": {
-                    "type": "keyword"
-                },
-                "accession": {
-                    "type": "keyword"
-                },
-                "available_in_portal": {
-                    "type": "keyword"
-                }
-            }
-        }
-    }
+	"date_detection": false,
+	"properties": {
+		"analyses": {
+			"properties": {
+				"accession": {
+					"type": "keyword"
+				},
+				"alias": {
+					"type": "keyword"
+				},
+				"available_in_portal": {
+					"type": "keyword"
+				}
+			}
+		},
+		"assay_type": {
+			"type": "keyword",
+			"fields": {
+				"autocomp": {
+					"type": "text",
+					"analyzer": "autocomp",
+					"search_analyzer": "autocomplete_search"
+				}
+			}
+		},
+		"available_in_portal": {
+			"type": "keyword"
+		},
+		"experiments": {
+			"properties": {
+				"accession": {
+					"type": "keyword"
+				},
+				"alias": {
+					"type": "keyword"
+				},
+				"available_in_portal": {
+					"type": "keyword"
+				}
+			}
+		},
+		"files": {
+			"properties": {
+				"name": {
+					"type": "keyword"
+				}
+			}
+		},
+		"runs": {
+			"properties": {
+				"accession": {
+					"type": "keyword"
+				},
+				"alias": {
+					"type": "keyword"
+				}
+			}
+		},
+		"secondary_project": {
+			"type": "keyword",
+			"fields": {
+				"autocomp": {
+					"type": "text",
+					"analyzer": "autocomp",
+					"search_analyzer": "autocomplete_search"
+				}
+			}
+		},
+		"study_alias": {
+			"type": "keyword"
+		},
+		"study_id": {
+			"type": "keyword"
+		},
+		"submission_date": {
+			"type": "keyword"
+		},
+		"subscribers": {
+			"properties": {
+				"email": {
+					"type": "keyword"
+				}
+			}
+		},
+		"update_date": {
+			"type": "keyword"
+		}
+	}
 }
