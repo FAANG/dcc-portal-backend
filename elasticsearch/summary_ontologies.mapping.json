@@ -1,31 +1,34 @@
 {
-    "date_detection": false,
-    "properties": {
-        "project": {
+  "date_detection": false,
+  "properties": {
+    "project": {
+      "type": "keyword"
+    },
+    "species": {
+      "type": "keyword"
+    },
+    "type_counts": {
+      "properties": {
+        "type": {
           "type": "keyword"
         },
-        "species": {
+        "count": {
           "type": "keyword"
-        },
-        "type_counts": {
-          "properties": {
-              "type": {
-                  "type": "keyword"
-              },
-              "count": {
-                  "type": "keyword"
-              }
-            }
-        },
-        "activity": {
-            "properties": {
-                "created_edited_count": {
-                    "type": "keyword"
-                },
-                "validated_count": {
-                    "type": "keyword"
-                }
-            }
         }
+      }
+    },
+    "activity": {
+      "properties": {
+        "created_edited_count": {
+          "type": "keyword"
+        },
+        "validated_count": {
+          "type": "keyword"
+        },
+        "downvoted_count": {
+          "type": "keyword"
+        }
+      }
     }
+  }
 }

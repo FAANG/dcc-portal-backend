@@ -1,153 +1,156 @@
 {
-    "date_detection": false,
-    "properties": {
-        "key": {
-            "type": "keyword"
-        },
-        "term": {
-            "type": "keyword",
-            "fields": {
-              "autocomp": {
-                "type": "text",
-                "analyzer": "autocomp",
-                "search_analyzer": "autocomplete_search"
-              }
-            }
-        },
-        "id": {
-            "type": "keyword",
-            "fields": {
-              "special_chars": {
-                "type": "text",
-                "analyzer": "special_chars",
-                "search_analyzer": "autocomplete_search"
-              }
-            }
-        },
-        "type": {
-            "type": "keyword",
-            "fields": {
-              "autocomp": {
-                "type": "text",
-                "analyzer": "autocomp",
-                "search_analyzer": "autocomplete_search"
-              }
-            }
-        },
-        "support": {
-            "type": "keyword"
-        },
-        "projects": {
-            "type": "keyword",
-            "fields": {
-              "special_chars": {
-                "type": "text",
-                "analyzer": "special_chars",
-                "search_analyzer": "autocomplete_search"
-              }
-            }
-        },
-        "tags": {
-            "type": "keyword",
-            "fields": {
-              "autocomp": {
-                "type": "text",
-                "analyzer": "autocomp",
-                "search_analyzer": "autocomplete_search"
-              }
-            }
-        },
-        "species": {
-            "type": "keyword",
-            "fields": {
-              "autocomp": {
-                "type": "text",
-                "analyzer": "autocomp",
-                "search_analyzer": "autocomplete_search"
-              }
-            }
-        },
-        "status_activity": {
-            "properties": {
-                "user": {
-                    "type": "keyword"
-                },
-                "status": {
-                    "type": "keyword"
-                },
-                "project": {
-                    "type": "keyword"
-                },
-                "timestamp": {
-                    "type": "keyword"
-                }
-            }
-        },
-        "upvotes_count": {
-            "type": "keyword"
-        },
-        "downvotes_count": {
-            "type": "keyword"
-        },
-        "iri": {
-            "type": "keyword",
-            "fields": {
-              "special_chars": {
-                "type": "text",
-                "analyzer": "special_chars",
-                "search_analyzer": "autocomplete_search"
-              }
-            }
-        },
-        "synonyms": {
-          "type": "keyword",
-          "fields": {
-            "autocomp": {
-              "type": "text",
-              "analyzer": "autocomp",
-              "search_analyzer": "autocomplete_search"
-            }
-          }
-        },
-        "summary": {
-          "type": "keyword",
-          "fields": {
-            "autocomp": {
-              "type": "text",
-              "analyzer": "autocomp",
-              "search_analyzer": "autocomplete_search"
-            }
-          }
-        },
-        "related_synonyms": {
-          "type": "keyword",
-          "fields": {
-            "autocomp": {
-              "type": "text",
-              "analyzer": "autocomp",
-              "search_analyzer": "autocomplete_search"
-            }
-          }
-        },
-        "alternative_id": {
-            "type": "keyword",
-            "fields": {
-              "special_chars": {
-                "type": "text",
-                "analyzer": "special_chars",
-                "search_analyzer": "autocomplete_search"
-              }
-            }
-        },
-        "database_cross_reference": {
-          "type": "keyword",
-          "fields": {
-            "autocomp": {
-              "type": "text",
-              "analyzer": "autocomp",
-              "search_analyzer": "autocomplete_search"
-            }
-          }
+  "date_detection": false,
+  "properties": {
+    "key": {
+      "type": "keyword"
+    },
+    "term": {
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
         }
+      }
+    },
+    "id": {
+      "type": "keyword",
+      "fields": {
+        "special_chars": {
+          "type": "text",
+          "analyzer": "special_chars",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
+    },
+    "type": {
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
+    },
+    "support": {
+      "type": "keyword"
+    },
+    "projects": {
+      "type": "keyword",
+      "fields": {
+        "special_chars": {
+          "type": "text",
+          "analyzer": "special_chars",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
+    },
+    "tags": {
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
+    },
+    "species": {
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
+    },
+    "status_activity": {
+      "properties": {
+        "user": {
+          "type": "keyword"
+        },
+        "status": {
+          "type": "keyword"
+        },
+        "project": {
+          "type": "keyword"
+        },
+        "timestamp": {
+          "type": "keyword"
+        },
+        "comments": {
+          "type": "keyword"
+        }
+      }
+    },
+    "upvotes_count": {
+      "type": "keyword"
+    },
+    "downvotes_count": {
+      "type": "keyword"
+    },
+    "iri": {
+      "type": "keyword",
+      "fields": {
+        "special_chars": {
+          "type": "text",
+          "analyzer": "special_chars",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
+    },
+    "synonyms": {
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
+    },
+    "summary": {
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
+    },
+    "related_synonyms": {
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
+    },
+    "alternative_id": {
+      "type": "keyword",
+      "fields": {
+        "special_chars": {
+          "type": "text",
+          "analyzer": "special_chars",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
+    },
+    "database_cross_reference": {
+      "type": "keyword",
+      "fields": {
+        "autocomp": {
+          "type": "text",
+          "analyzer": "autocomp",
+          "search_analyzer": "autocomplete_search"
+        }
+      }
     }
+  }
 }
