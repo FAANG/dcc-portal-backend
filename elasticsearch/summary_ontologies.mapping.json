@@ -24,6 +24,9 @@
                 },
                 "validated_count": {
                     "type": "keyword"
+                },
+                "downvoted_count": {
+                  "type": "keyword"
                 }
             }
         }

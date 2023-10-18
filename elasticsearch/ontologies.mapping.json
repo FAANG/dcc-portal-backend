@@ -89,6 +89,9 @@
                 },
                 "timestamp": {
                     "type": "keyword"
+                },
+                "comments": {
+                  "type": "keyword"
                 }
             }
         },
