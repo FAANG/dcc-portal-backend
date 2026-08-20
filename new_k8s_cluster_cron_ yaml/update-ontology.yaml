@@ -1,0 +1,49 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: update-ontology
+
+spec:
+  schedule: "0 6 * * *"
+  failedJobsHistoryLimit: 1
+  successfulJobsHistoryLimit: 1
+
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          containers:
+            - name: update-ontology
+              image: yroochun/update-ontology:latest
+              imagePullPolicy: Always
+              command:
+                - ./nextflow
+                - main.nf
+
+              env:
+                - name: ES_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: gcp-es-credentials
+                      key: es_user
+
+                - name: ES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: gcp-es-credentials
+                      key: es_password
+
+              volumeMounts:
+                - name: files
+                  mountPath: /usr/share/nginx/html
+
+          imagePullSecrets:
+            - name: regcred
+
+          volumes:
+            - name: files
+              persistentVolumeClaim:
+                claimName: local-storage-pvc
+
+          restartPolicy: OnFailure

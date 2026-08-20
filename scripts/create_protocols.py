@@ -112,10 +112,25 @@ class CreateProtocols:
                         "cellType"]["text"]
                 else:
                     specimen['organismPartCellType'] = None
-                specimen["organism"] = result["_source"]["organism"][
-                    "organism"]["text"]
-                specimen["breed"] = result["_source"]["organism"]["breed"][
-                    "text"]
+
+                organism = result["_source"].get("organism")
+
+                if organism:
+                    specimen["organism"] = (
+                        organism.get("organism", {}).get("text")
+                        if organism.get("organism")
+                        else None
+                    )
+                    specimen["breed"] = (
+                        organism.get("breed", {}).get("text")
+                        if organism.get("breed")
+                        else None
+                    )
+                else:
+                    specimen["organism"] = None
+                    specimen["breed"] = None
+
+
                 specimen["derivedFrom"] = result["_source"]["derivedFrom"]
 
                 entries[key]["specimens"].append(specimen)
