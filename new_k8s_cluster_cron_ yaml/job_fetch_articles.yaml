@@ -1,0 +1,27 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: fetch-articles-job
+
+spec:
+  schedule: "0 1 1 * *"
+  concurrencyPolicy: Replace
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: fetch-articles-job
+              image: yroochun/fetch_articles:latest
+              imagePullPolicy: Always
+              command:
+                - python
+                - fetch_articles_production.py
+              envFrom:
+                - secretRef:
+                    name: gcp-es-credentials
+
+          restartPolicy: OnFailure
