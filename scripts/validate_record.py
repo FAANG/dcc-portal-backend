@@ -230,7 +230,8 @@ class ValidateRecord:
             logger.error("Validation Error!!!")
             sys.exit(0)
         with open(tmp_validation_result_file, 'r') as f:
-            data = json.load(f)
+            file_data = f.read()
+            data = json.loads(file_data)
         return self.parse_validation_results(data['entities'])
 
     def parse_validation_results(self, entities):
